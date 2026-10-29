@@ -1,98 +1,27 @@
-﻿using System;
-using System.Diagnostics;
-using System.Reflection;
-using System.Windows.Forms;
-using AutoUpdaterDotNET;
+﻿using System.Windows.Forms;
 
 namespace ConfigMgr.QuickTools
 {
+    /// <summary>
+    /// Update checks are turned off in Layer8.
+    /// The original Quick Tools updater used AutoUpdater.NET (which has a known critical
+    /// vulnerability) and pulled its update feed from the upstream author's GitHub repo.
+    /// The public methods stay so existing callers still compile; they no longer reach out anywhere.
+    /// </summary>
     public class Updater
     {
-        private static readonly ModifyRegistry registry = new ModifyRegistry();
-        private static bool check = false;
-
         public static void CheckUpdates()
         {
-            CheckOptions();
-
-            if (registry.ReadBool("UpdateEnabled"))
-            {
-                DateTime date1 = DateTime.Now;
-                DateTime date2 = DateTime.Parse(registry.ReadString("UpdateLastCheck")).AddDays(registry.ReadInt("UpdateInterval"));
-                int result = DateTime.Compare(date1, date2);
-
-                if (result > 0 && !check)
-                {
-                    AutoUpdater.Start("https://raw.githubusercontent.com/Flowman/ConfigMgr-Quick-Tools/master/ConfigMgr.QuickTools/AutoUpdate.xml", Assembly.GetExecutingAssembly());
-                    AutoUpdater.CheckForUpdateEvent += AutoUpdaterOnCheckForUpdateEvent;
-
-                    // update last check so we dont hammer the poor user with update checks.
-                    registry.Write("UpdateLastCheck", DateTime.Now.ToString());
-
-                    check = true;
-                }
-            }
+            // Intentionally empty: Layer8 does not check for updates automatically.
         }
 
         public static void CheckUpdatesNow()
         {
-            CheckOptions();
-
-            AutoUpdater.Start("https://raw.githubusercontent.com/Flowman/ConfigMgr-Quick-Tools/master/ConfigMgr.QuickTools/AutoUpdate.xml", Assembly.GetExecutingAssembly());
-            AutoUpdater.CheckForUpdateEvent += AutoUpdaterOnCheckForUpdateEvent;
-
-            // update last check so we dont hammer the poor user with update checks.
-            registry.Write("UpdateLastCheck", DateTime.Now.ToString());
-        }
-
-        private static void CheckOptions()
-        {
-            if (string.IsNullOrEmpty(registry.ReadString("UpdateEnabled")))
-            {
-                registry.Write("UpdateEnabled", true);
-            }
-
-            if (string.IsNullOrEmpty(registry.ReadString("UpdateLastCheck")))
-            {
-                registry.Write("UpdateLastCheck", DateTime.Now.ToString());
-            }
-
-            if (registry.ReadInt("UpdateInterval") == 0)
-            {
-                registry.Write("UpdateInterval", 7);
-            }
-        }
-
-        private static void AutoUpdaterOnCheckForUpdateEvent(UpdateInfoEventArgs args)
-        {
-            if (args != null)
-            {
-                if (args.IsUpdateAvailable)
-                {
-                    DialogResult dialogResult =
-                        MessageBox.Show(
-                            string.Format("There is new version {0} available. You are using version {1}. Do you want to update the application now?", args.CurrentVersion, args.InstalledVersion),
-                            "ConfigMgr Quick Tools Update Available",
-                            MessageBoxButtons.YesNo,
-                            MessageBoxIcon.Information
-                        );
-
-                    if (dialogResult.Equals(DialogResult.Yes))
-                    {
-                        try
-                        {
-                            if (AutoUpdater.DownloadUpdate())
-                            {
-                                Process.GetCurrentProcess().Kill();
-                            }
-                        }
-                        catch (Exception exception)
-                        {
-                            MessageBox.Show(exception.Message, exception.GetType().ToString(), MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        }
-                    }
-                }
-            }
+            MessageBox.Show(
+                "Automatic update checks are turned off in Layer8. Get new versions from the Layer8 releases on GitHub.",
+                "Layer8",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
         }
     }
 }

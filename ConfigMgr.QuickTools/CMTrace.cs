@@ -26,7 +26,7 @@ namespace ConfigMgr.QuickTools.CMTrace
 
     public class AssemblyNamePatternConverter : log4net.Util.PatternConverter
     {
-        override protected void Convert(TextWriter writer, object state)
+        public override void Convert(TextWriter writer, object state)
         {
             string ProgramName;
             try
@@ -43,7 +43,7 @@ namespace ConfigMgr.QuickTools.CMTrace
 
     public class UTCOffsetPatternConverter : log4net.Util.PatternConverter
     {
-        override protected void Convert(TextWriter writer, object state)
+        public override void Convert(TextWriter writer, object state)
         {
             TimeSpan delta = (TimeSpan.Zero);
             try
