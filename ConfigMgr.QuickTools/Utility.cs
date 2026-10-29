@@ -534,7 +534,7 @@ namespace ConfigMgr.QuickTools
 
     public class ModifyRegistry
     {
-        public string SubKey { get; set; } = "SOFTWARE\\Microsoft\\ConfigMgr10\\QuickTools";
+        public string SubKey { get; set; } = "SOFTWARE\\Layer8";
         public RegistryKey BaseRegistryKey { get; set; } = Registry.CurrentUser;
 
         protected object Read(string KeyName)

@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
-<ActionDescription Class="Group" GroupAsRegion="true" SelectionMode="Both" DisplayName="Quick Tools" MnemonicDisplayName="Quick Tools Root" Description="A collection of tools to enhance ConfigMgr." NodeInConsole="23e7a3fe-b0f0-4b24-813a-dc425239f9a2">
+<ActionDescription Class="Group" GroupAsRegion="true" SelectionMode="Both" DisplayName="Layer8" MnemonicDisplayName="Layer8 Root" Description="A collection of tools to enhance ConfigMgr." NodeInConsole="23e7a3fe-b0f0-4b24-813a-dc425239f9a2">
   <ShowOn>
     <string>DefaultHomeTab</string>
     <string>ContextMenu</string>
@@ -12,7 +12,7 @@
     <ImageResourceName>tools</ImageResourceName>
   </ImagesDescription>
   <ActionGroups>
-    <ActionDescription Class="Group" SelectionMode="Both" DisplayName="Quick Tools" MnemonicDisplayName="Quick Tools" Description="A collection of tools to enhance ConfigMgr.">
+    <ActionDescription Class="Group" SelectionMode="Both" DisplayName="Layer8" MnemonicDisplayName="Layer8" Description="A collection of tools to enhance ConfigMgr.">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>

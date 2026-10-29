@@ -1,41 +1,29 @@
+# Layer8
 
-# ConfigMgr Quick Tools
+Open-source right-click actions for the ConfigMgr (MECM) console. Because it's always layer 8.
 
-ConfigMgr Quick Tools is a compilation of tools to simplify your daily usage of ConfigMgr. Guess you have been in the same boat as me when you think some implementations are a bit wonky and you want to work faster. 
+Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-Quick-Tools) by Peter Szalatnay and builds on it. It's an independent project and isn't affiliated with Microsoft or Recast Software.
 
-There is a bunch of excellent tools out there, but most of them are written in PowerShell and are slow compared to c#. I tried to create something that looks and feel like it would be a part of ConfigMgr.
+## What's in it
 
-Improvement to the console:
- - Driver Manager (grabber, importer)
-	 - Dell Driver Pack Downloader
- - Extended Device properties (update compliance, dell warranty, client health, collection membership)
- - Collection management (add resources from list)
- - Client Actions (quicker than right click tools)
- - LAPS password
- - Software Update (clean-up groups, phased deployments)
+- Client actions on devices and collections
+- Extended device properties: update compliance, client health, collection membership, Dell warranty
+- Collection management: add resources from a list
+- Driver Manager: grabber, importer, Dell and HP driver packs
+- LAPS password lookup
+- Software update clean-up and phased deployments
 
-## Install Quick Tools
+## Building
 
-Download the latest release, run the MSI installer and read the [Wiki](https://github.com/Flowman/ConfigMgr-Quick-Tools/wiki) for documentation.
+1. Install the ConfigMgr console and Visual Studio with the .NET desktop development workload (.NET Framework 4.8).
+2. Open `ConfigMgr.QuickTools.sln` and build.
 
-## How to build
+Console references resolve automatically (see `Directory.Build.props`). If your console is installed somewhere unusual, build with `-p:ConfigMgrConsoleBin=<path to AdminConsole\bin>`. The WiX installer project needs WiX Toolset v3 and is being reworked.
 
-- Install ConfigMgr Console
-- Install Visual Studio
-- Load up the project and check the all references are OK
-- Build 
+## Status
 
-## Wiki
+Early days. The rebrand is happening in stages, so the code still uses the Quick Tools project and namespace names for now. Automatic update checks have been removed.
 
-See the [Wiki](https://github.com/Flowman/ConfigMgr-Quick-Tools/wiki) for documentation.
+## Credits and license
 
-## How to contribute
-
-- Report bugs
-- If you want to contribute fork the code and create a pull request
-
-## License
-
-[MIT](http://opensource.org/licenses/MIT)
-
-Copyright (c) Peter Szalatnay
+Based on ConfigMgr Quick Tools by Peter Szalatnay. Released under the MIT license; see [LICENSE](LICENSE).
