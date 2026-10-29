@@ -1,0 +1,14 @@
+<Project>
+  <!--
+    Where the ConfigMgr console's assemblies live. Layer8 builds against them but never ships them.
+    Resolution order:
+      1. ConfigMgrConsoleBin passed in explicitly (msbuild -p:ConfigMgrConsoleBin=...)
+      2. The console's own SMS_ADMIN_UI_PATH environment variable (set by the console installer; points at bin\i386)
+      3. The default install location under Program Files (x86)
+  -->
+  <PropertyGroup>
+    <ConfigMgrConsoleBin Condition="'$(ConfigMgrConsoleBin)' == '' and '$(SMS_ADMIN_UI_PATH)' != ''">$([System.IO.Path]::GetFullPath('$(SMS_ADMIN_UI_PATH)\..'))</ConfigMgrConsoleBin>
+    <ConfigMgrConsoleBin Condition="'$(ConfigMgrConsoleBin)' == ''">$(MSBuildProgramFiles32)\Microsoft Configuration Manager\AdminConsole\bin</ConfigMgrConsoleBin>
+    <ConfigMgrConsoleBin>$([MSBuild]::EnsureTrailingSlash('$(ConfigMgrConsoleBin)'))</ConfigMgrConsoleBin>
+  </PropertyGroup>
+</Project>

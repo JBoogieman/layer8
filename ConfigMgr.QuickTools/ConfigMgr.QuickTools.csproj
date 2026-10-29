@@ -35,36 +35,36 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="AdminUI.Common">
-      <HintPath>..\..\..\..\..\..\Program Files (x86)\Microsoft Configuration Manager\AdminConsole\bin\AdminUI.Common.dll</HintPath>
+      <HintPath>$(ConfigMgrConsoleBin)AdminUI.Common.dll</HintPath>
     </Reference>
     <Reference Include="AdminUI.Controls">
-      <HintPath>..\..\..\..\..\..\Program Files (x86)\Microsoft Configuration Manager\AdminConsole\bin\AdminUI.Controls.dll</HintPath>
+      <HintPath>$(ConfigMgrConsoleBin)AdminUI.Controls.dll</HintPath>
     </Reference>
     <Reference Include="AdminUI.DialogFoundation">
-      <HintPath>..\..\..\..\..\..\Program Files (x86)\Microsoft Configuration Manager\AdminConsole\bin\AdminUI.DialogFoundation.dll</HintPath>
+      <HintPath>$(ConfigMgrConsoleBin)AdminUI.DialogFoundation.dll</HintPath>
     </Reference>
     <Reference Include="AdminUI.OsdCommon, Version=5.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\Program Files (x86)\Microsoft Configuration Manager\AdminConsole\bin\AdminUI.OsdCommon.dll</HintPath>
+      <HintPath>$(ConfigMgrConsoleBin)AdminUI.OsdCommon.dll</HintPath>
     </Reference>
     <Reference Include="AdminUI.WqlQueryEngine">
-      <HintPath>..\..\..\..\..\..\Program Files (x86)\Microsoft Configuration Manager\AdminConsole\bin\AdminUI.WqlQueryEngine.dll</HintPath>
+      <HintPath>$(ConfigMgrConsoleBin)AdminUI.WqlQueryEngine.dll</HintPath>
     </Reference>
     <Reference Include="log4net, Version=3.5.0.0, Culture=neutral, PublicKeyToken=669e0ddf0bb1aa2a, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\packages\log4net.3.5.0\lib\net462\log4net.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.ConfigurationManagement">
-      <HintPath>..\..\..\..\..\..\Program Files (x86)\Microsoft Configuration Manager\AdminConsole\bin\Microsoft.ConfigurationManagement.exe</HintPath>
+      <HintPath>$(ConfigMgrConsoleBin)Microsoft.ConfigurationManagement.exe</HintPath>
     </Reference>
     <Reference Include="Microsoft.ConfigurationManagement.DialogFramework">
-      <HintPath>..\..\..\..\..\..\Program Files (x86)\Microsoft Configuration Manager\AdminConsole\bin\Microsoft.ConfigurationManagement.DialogFramework.dll</HintPath>
+      <HintPath>$(ConfigMgrConsoleBin)Microsoft.ConfigurationManagement.DialogFramework.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.ConfigurationManagement.ManagementProvider">
-      <HintPath>..\..\..\..\..\..\Program Files (x86)\Microsoft Configuration Manager\AdminConsole\bin\Microsoft.ConfigurationManagement.ManagementProvider.dll</HintPath>
+      <HintPath>$(ConfigMgrConsoleBin)Microsoft.ConfigurationManagement.ManagementProvider.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.EnterpriseManagement.UI.ConsoleFramework">
-      <HintPath>..\..\..\..\..\..\Program Files (x86)\Microsoft Configuration Manager\AdminConsole\bin\Microsoft.EnterpriseManagement.UI.ConsoleFramework.dll</HintPath>
+      <HintPath>$(ConfigMgrConsoleBin)Microsoft.EnterpriseManagement.UI.ConsoleFramework.dll</HintPath>
     </Reference>
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
