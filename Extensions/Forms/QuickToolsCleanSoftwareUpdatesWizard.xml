@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<SmsFormData FormatVersion="1.0" xmlns="http://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework">
+<SmsFormData FormatVersion="1.0" xmlns="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework">
   <Form Id="{E7A6DDFF-910C-4089-A46A-D2F15D24B7D1}" FormType="Wizard" DisableSkippable="true">
     <Assembly Name="ConfigMgr.QuickTools" Namespace="ConfigMgr.QuickTools" />
     <Pages>
