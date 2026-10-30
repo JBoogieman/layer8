@@ -18,7 +18,7 @@ namespace Layer8.Device
         private static bool fullScan = false;
         private static string method;
 
-        private static readonly log4net.ILog log = Layer8.Layer8Log.GetLogger(typeof(ClientActions));
+        private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(typeof(ClientActions));
         private static SynchronizationContext uiContext;
 
         // A single-device action has no progress dialog, so nothing can cancel it.

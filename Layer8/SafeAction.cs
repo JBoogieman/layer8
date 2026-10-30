@@ -1,8 +1,6 @@
 ﻿using System;
-using System.IO;
 using System.Reflection;
 using System.Windows.Forms;
-using log4net;
 
 namespace Layer8
 {
@@ -14,7 +12,7 @@ namespace Layer8
     /// </summary>
     public static class SafeAction
     {
-        private static readonly ILog Log = Layer8Log.GetLogger(typeof(SafeAction));
+        private static readonly Logger Log = Layer8Log.GetLogger(typeof(SafeAction));
 
         public static void Run(string actionName, Action body)
         {
@@ -56,7 +54,7 @@ namespace Layer8
             {
                 MessageBox.Show(
                     owner,
-                    string.Format("{0} failed.{1}{1}{2}{1}{1}Details are in {3}.", actionName, Environment.NewLine, root.Message, Path.Combine(Layer8Log.LogFolder, "Layer8.log")),
+                    string.Format("{0} failed.{1}{1}{2}{1}{1}Details are in {3}.", actionName, Environment.NewLine, root.Message, Layer8Log.LogFile),
                     "Layer8",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);

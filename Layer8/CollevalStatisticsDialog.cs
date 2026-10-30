@@ -16,7 +16,7 @@ namespace Layer8
 {
     public partial class CollevalStatisticsDialog : SmsCustomDialog
     {
-        private static readonly log4net.ILog log = Layer8.Layer8Log.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+        private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
         private BackgroundWorker backgroundWorker;
         private readonly ConnectionManagerBase connectionManager;
 

@@ -28,7 +28,7 @@ namespace Layer8.Device
         private int offline;
         private int failed;
         private int other;
-        private static readonly log4net.ILog log = Layer8.Layer8Log.GetLogger(typeof(DeviceProgressDialog));
+        private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(typeof(DeviceProgressDialog));
 
         public DeviceProgressDialog()
         {

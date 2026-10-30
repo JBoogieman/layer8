@@ -13,7 +13,7 @@ namespace Layer8.DriverManager
     internal class Driver
     {
         #region Private
-        private static readonly log4net.ILog log = Layer8.Layer8Log.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+        private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
         private readonly IniData data;
         #endregion
 
