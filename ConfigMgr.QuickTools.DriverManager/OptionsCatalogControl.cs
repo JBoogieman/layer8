@@ -5,6 +5,10 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 
+// Microsoft marked ControlsValidator obsolete, but the console's own BrowseFolderControl.SetValidator
+// (AdminUI.OsdCommon, checked on console 2509) still only accepts a ControlsValidator, so this file has to keep using it.
+#pragma warning disable CS0618 // ControlsValidator is obsolete
+
 namespace ConfigMgr.QuickTools.DriverManager
 {
     public partial class OptionsCatalogControl : SmsPageControl
