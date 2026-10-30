@@ -37,7 +37,13 @@ namespace ConfigMgr.QuickTools
             listViewListCollections.IsLoading = true;
         }
 
+        /// <summary>Console entry point: runs ShowCore behind Layer8's crash guard.</summary>
         public static void Show(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObject, PropertyDataUpdated dataUpdatedDelegate, Status Status)
+        {
+            SafeAction.Run(action?.DisplayName ?? "Show", () => ShowCore(sender, scopeNode, action, selectedObject, dataUpdatedDelegate, Status));
+        }
+
+        private static void ShowCore(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObject, PropertyDataUpdated dataUpdatedDelegate, Status Status)
         {
             using (CollevalStatisticsDialog dialog = new CollevalStatisticsDialog(action, scopeNode))
             {

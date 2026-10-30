@@ -28,6 +28,7 @@ namespace ConfigMgr.QuickTools.Device
         private int offline;
         private int failed;
         private int other;
+        private static readonly log4net.ILog log = ConfigMgr.QuickTools.Layer8Log.GetLogger(typeof(DeviceProgressDialog));
 
         public DeviceProgressDialog()
         {
@@ -78,44 +79,65 @@ namespace ConfigMgr.QuickTools.Device
         {
             if (CancellationTokenSource.IsCancellationRequested)
             {
-                item.SubItems[1].Text = "Canceled";
+                SetStatus(item, "Canceled");
                 return;
             }
 
+            string status;
             try
             {
-                item.SubItems[1].Text = "Connecting";
+                SetStatus(item, "Connecting");
 
-                method.Invoke(null, new object[] { resultObject });
+                object result = method.Invoke(null, new object[] { resultObject });
+                // Async actions (like restarting the client service) return a Task; wait for it so
+                // their errors are reported here instead of being lost.
+                (result as System.Threading.Tasks.Task)?.GetAwaiter().GetResult();
 
-                completed++;
-                item.SubItems[1].Text = "Completed";
+                Interlocked.Increment(ref completed);
+                status = "Completed";
             }
-            catch (TargetInvocationException ex)
+            catch (Exception ex)
             {
-                if (ex.InnerException.GetType().IsAssignableFrom(typeof(ManagementException)))
+                Exception root = SafeAction.Unwrap(ex);
+                if (root is ManagementException)
                 {
-                    item.SubItems[1].Text = "WMI error: " + ex.InnerException.Message;
-                    failed++;
-                    other++;
+                    status = "WMI error: " + root.Message;
+                    Interlocked.Increment(ref failed);
                 }
-                else if (ex.InnerException.GetType().IsAssignableFrom(typeof(COMException)))
+                else if (root is COMException)
                 {
-                    item.SubItems[1].Text = "Offline";
-                    offline++;
-                    other++;
+                    status = "Offline";
+                    Interlocked.Increment(ref offline);
                 }
                 else
                 {
-                    item.SubItems[1].Text = "Error: " + ex.InnerException.Message;
-                    failed++;
-                    other++;
+                    status = "Error: " + root.Message;
+                    Interlocked.Increment(ref failed);
                 }
-            } 
-            finally
-            {
-                Invoke((MethodInvoker)delegate { UpdateProgress(); });
+                Interlocked.Increment(ref other);
+                log.Warn(string.Format("{0} on {1}: {2}", method.Name, item.Text, status), root);
             }
+
+            SetStatus(item, status);
+            OnUiThread(UpdateProgress);
+        }
+
+        // The work runs on background threads. Anything that touches the window goes back to the
+        // UI thread, and does nothing once the window has been closed.
+        private void SetStatus(ListViewItem item, string text)
+        {
+            OnUiThread(() => item.SubItems[1].Text = text);
+        }
+
+        private void OnUiThread(Action update)
+        {
+            try
+            {
+                if (IsDisposed || !IsHandleCreated) return;
+                if (InvokeRequired) BeginInvoke(update); else update();
+            }
+            catch (ObjectDisposedException) { }
+            catch (InvalidOperationException) { }
         }
 
         internal void UpdateProgress()

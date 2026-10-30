@@ -10,7 +10,13 @@ namespace ConfigMgr.QuickTools
 {
     class TaskSequenceImportExport
     {
+        /// <summary>Console entry point: runs RunTaskSequenceExportCore behind Layer8's crash guard.</summary>
         public static void RunTaskSequenceExport(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
+        {
+            SafeAction.Run(action?.DisplayName ?? "RunTaskSequenceExport", () => RunTaskSequenceExportCore(sender, scopeNode, action, selectedResultObjects, dataUpdatedDelegate, status));
+        }
+
+        private static void RunTaskSequenceExportCore(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
         {
             using (XmlReader readerFromString = SecureXml.CreateXmlReaderFromString(selectedResultObjects["Sequence"].StringValue))
             {

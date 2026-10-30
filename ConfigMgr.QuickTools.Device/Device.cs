@@ -12,7 +12,13 @@ namespace ConfigMgr.QuickTools.Device
 {
     public static class Device
     {
+        /// <summary>Console entry point: runs AddMulitDeviceCollectionCore behind Layer8's crash guard.</summary>
         public static void AddMulitDeviceCollection(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObject, PropertyDataUpdated dataUpdatedDelegate, Status Status)
+        {
+            SafeAction.Run(action?.DisplayName ?? "AddMulitDeviceCollection", () => AddMulitDeviceCollectionCore(sender, scopeNode, action, selectedObject, dataUpdatedDelegate, Status));
+        }
+
+        private static void AddMulitDeviceCollectionCore(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObject, PropertyDataUpdated dataUpdatedDelegate, Status Status)
         {
             try
             {

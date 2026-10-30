@@ -18,7 +18,19 @@ namespace ConfigMgr.QuickTools.Device
         private static bool fullScan = false;
         private static string method;
 
+        private static readonly log4net.ILog log = ConfigMgr.QuickTools.Layer8Log.GetLogger(typeof(ClientActions));
+        private static SynchronizationContext uiContext;
+
+        // A single-device action has no progress dialog, so nothing can cancel it.
+        private static CancellationToken CancelToken => deviceProgressDialog?.CancellationTokenSource?.Token ?? CancellationToken.None;
+
+        /// <summary>Console entry point: runs RunClientActionCore behind Layer8's crash guard.</summary>
         public static void RunClientAction(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
+        {
+            SafeAction.Run(action?.DisplayName ?? "RunClientAction", () => RunClientActionCore(sender, scopeNode, action, selectedResultObjects, dataUpdatedDelegate, status));
+        }
+
+        private static void RunClientActionCore(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
         {
             // set the thread pool method to run
             method = "ClientAction";
@@ -33,7 +45,13 @@ namespace ConfigMgr.QuickTools.Device
             ProcessAction(scopeNode, action, selectedResultObjects);
         }
 
+        /// <summary>Console entry point: runs RunClientActionRestartServiceCore behind Layer8's crash guard.</summary>
         public static void RunClientActionRestartService(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
+        {
+            SafeAction.Run(action?.DisplayName ?? "RunClientActionRestartService", () => RunClientActionRestartServiceCore(sender, scopeNode, action, selectedResultObjects, dataUpdatedDelegate, status));
+        }
+
+        private static void RunClientActionRestartServiceCore(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
         {
             // set the thread pool method to run
             method = "RestartServiceAsync";
@@ -84,9 +102,12 @@ namespace ConfigMgr.QuickTools.Device
             }
             else
             {
+                deviceProgressDialog = null;
+                uiContext = SynchronizationContext.Current;
                 foreach (IResultObject resultObject in resultObjects)
                 {
-                    ThreadPool.QueueUserWorkItem(arg => { RunAction(resultObject); });
+                    IResultObject target = resultObject;
+                    Task.Run(() => RunAction(target));
                 }
             }
 
@@ -95,17 +116,38 @@ namespace ConfigMgr.QuickTools.Device
 
         private static void RunAction(IResultObject resultObject)
         {
+            string device = "(unknown device)";
             try
             {
-                Type type = typeof(ClientActions);
-                MethodInfo methodInfo = type.GetMethod(method);
-
-                methodInfo.Invoke(null, new object[] { resultObject });
+                device = resultObject["Name"].StringValue;
+                object result = typeof(ClientActions).GetMethod(method).Invoke(null, new object[] { resultObject });
+                // Async actions (like restarting the client service) return a Task; wait for it so errors aren't lost.
+                (result as Task)?.GetAwaiter().GetResult();
+                log.InfoFormat("{0} on {1}: done", method, device);
             }
-            catch (TargetInvocationException ex)
+            catch (Exception ex)
             {
-                SccmExceptionDialog.ShowDialog(SnapIn.Console, ex.InnerException);
+                Exception root = SafeAction.Unwrap(ex);
+                log.Error(string.Format("{0} on {1} failed", method, device), root);
+                ShowError(root);
             }
+        }
+
+        // Single-device actions run on a background thread; show any error back on the console's UI thread.
+        private static void ShowError(Exception error)
+        {
+            SendOrPostCallback show = state =>
+            {
+                try
+                {
+                    SccmExceptionDialog.ShowDialog(SnapIn.Console, error);
+                }
+                catch (Exception ex)
+                {
+                    log.Error("Could not show the error dialog", ex);
+                }
+            };
+            if (uiContext != null) uiContext.Post(show, null); else show(null);
         }
 
         public static void ClientAction(IResultObject resultObject)
@@ -141,7 +183,7 @@ namespace ConfigMgr.QuickTools.Device
                 {
                     service.Stop();
 
-                    await service.WaitForStatusAsync(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(20), deviceProgressDialog.CancellationTokenSource.Token);
+                    await service.WaitForStatusAsync(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(20), CancelToken);
 
                     service.Start();
                 }

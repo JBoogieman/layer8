@@ -24,7 +24,13 @@ namespace ConfigMgr.QuickTools.Device
             Updater.CheckUpdates();
         }
 
+        /// <summary>Console entry point: runs ShowCore behind Layer8's crash guard.</summary>
         public static void Show(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObject, PropertyDataUpdated dataUpdatedDelegate, Status Status)
+        {
+            SafeAction.Run(action?.DisplayName ?? "Show", () => ShowCore(sender, scopeNode, action, selectedObject, dataUpdatedDelegate, Status));
+        }
+
+        private static void ShowCore(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObject, PropertyDataUpdated dataUpdatedDelegate, Status Status)
         {
             using (LAPSDialog dialog = new LAPSDialog(selectedObject, action))
             {

@@ -11,7 +11,13 @@ namespace ConfigMgr.QuickTools.Device
     {
         //private static DeviceProgressDialog deviceProgressDialog;
 
+        /// <summary>Console entry point: runs ChangeClientCacheCore behind Layer8's crash guard.</summary>
         public static void ChangeClientCache(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
+        {
+            SafeAction.Run(action?.DisplayName ?? "ChangeClientCache", () => ChangeClientCacheCore(sender, scopeNode, action, selectedResultObjects, dataUpdatedDelegate, status));
+        }
+
+        private static void ChangeClientCacheCore(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
         {
             bool showProgressDialog = false;
             if (selectedResultObjects.ObjectClass == "SMS_Collection" || selectedResultObjects.Count > 1)
