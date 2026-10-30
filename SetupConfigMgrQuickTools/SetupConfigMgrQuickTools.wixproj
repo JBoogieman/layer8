@@ -43,7 +43,6 @@
     <Content Include="XSLT\XslRegisterForCOM.xslt" />
     <Content Include="XSLT\_ConfigMgr.QuickTools.Device.xml" />
     <Content Include="XSLT\_ConfigMgr.QuickTools.DriverManager.xml" />
-    <Content Include="XSLT\_ConfigMgr.QuickTools.Warranty.xml" />
     <Content Include="XSLT\_ConfigMgr.QuickTools.xml" />
     <Content Include="XSLT\_INIFileParser.xml" />
   </ItemGroup>
@@ -60,15 +59,6 @@
     <ProjectReference Include="..\ConfigMgr.QuickTools.DriverManager\ConfigMgr.QuickTools.DriverManager.csproj">
       <Name>ConfigMgr.QuickTools.DriverManager</Name>
       <Project>{51F57A27-809B-43BB-92FF-FE39F9AD87F6}</Project>
-      <Private>True</Private>
-      <DoNotHarvest>
-      </DoNotHarvest>
-      <RefProjectOutputGroups>Binaries</RefProjectOutputGroups>
-      <RefTargetDir>INSTALLDIR</RefTargetDir>
-    </ProjectReference>
-    <ProjectReference Include="..\ConfigMgr.QuickTools.Warranty\ConfigMgr.QuickTools.Warranty.csproj">
-      <Name>ConfigMgr.QuickTools.Warranty</Name>
-      <Project>{4109FB03-1AC5-42D3-B46D-505B207B6091}</Project>
       <Private>True</Private>
       <DoNotHarvest>
       </DoNotHarvest>

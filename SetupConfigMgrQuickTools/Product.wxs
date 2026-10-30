@@ -17,7 +17,6 @@
     <MediaTemplate EmbedCab="yes" />
     <Feature Id="ProductFeature" Title="$(var.Name)" Level="1" ConfigurableDirectory="TARGETDIR" Display="expand" Absent="disallow" AllowAdvertise="no">
       <ComponentGroupRef Id="ConfigMgr.QuickTools.Binaries" />
-      <ComponentGroupRef Id="ConfigMgr.QuickTools.Warranty.Binaries" />
       <ComponentGroupRef Id="ConfigMgr.QuickTools.Device.Binaries" />
       <ComponentGroupRef Id="ConfigMgr.QuickTools.DriverManager.Binaries" />
       <ComponentGroupRef Id="INIFileParser.Binaries" />
@@ -59,9 +58,6 @@
       <Feature Id="DellTools" Title="Dell Tools" Level="1" Absent="allow" AllowAdvertise="no" Description="A set of tools that help support Dell devices.">
         <ComponentRef Id="comp_FEB5B608_8FD2_41B1_8CD8_6863A6C2453B" />
         <ComponentRef Id="comp_8586C663_1750_4E6C_9504_EA8E76DBDF04" />
-        <ComponentRef Id="comp_EBBD2AAC_24F1_4826_BF6A_EB20C36EE268" />
-        <ComponentRef Id="comp_99DBF020_FA1F_47A5_8166_9E1D3CD991CC" />
-        <ComponentRef Id="comp_818F7E89_65EC_4CDF_B060_F0C5AB3A5891" />
         <ComponentRef Id="comp_241C67AD_54E3_4A1A_A1B2_141450E2EBA1" />
       </Feature>
       <Feature Id="HPTools" Title="HP Tools" Level="1" Absent="allow" AllowAdvertise="no" Description="A set of tools that help support HP devices.">
@@ -101,7 +97,6 @@
           <File Id="_7FF7D825_CB2F_44C2_8593_C99F663DCD98" DiskId="1" Hidden="no" ReadOnly="no" TrueType="no" System="no" Vital="yes" Name="SmartThreadPool.dll" Source="..\packages\SmartThreadPool.dll.2.2.4\lib\net45\SmartThreadPool.dll" KeyPath="yes" />
         </Component>
         <Directory Id="ConfigMgr.QuickTools.Binaries" />
-        <Directory Id="ConfigMgr.QuickTools.Warranty.Binaries" />
         <Directory Id="ConfigMgr.QuickTools.Device.Binaries" />
         <Directory Id="ConfigMgr.QuickTools.DriverManager.Binaries" />
         <Directory Id="INIFileParser.Binaries" />
@@ -135,9 +130,6 @@
             </Component>
             <Component Id="comp_8B28205A_F246_43F2_AD22_9CB0CB6666A7" Guid="15A97E72-3DCA-43F3-8301-0376DE9E458F" Permanent="no" SharedDllRefCount="no" Transitive="no">
               <File Id="_06CC7ACF_BBDE_42F9_9E85_E25EB8E9D2B0" DiskId="1" Hidden="no" ReadOnly="no" TrueType="no" System="no" Vital="yes" Name="QuickToolsRemoveRetiredContentWizard.xml" Source="..\Extensions\Forms\QuickToolsRemoveRetiredContentWizard.xml" KeyPath="yes" />
-            </Component>
-            <Component Id="comp_99DBF020_FA1F_47A5_8166_9E1D3CD991CC" Guid="5D7B2949-2435-4092-89CA-D8CBEAA65BC4" Permanent="no" SharedDllRefCount="no" Transitive="no">
-              <File Id="_8BE0C66E_5046_463F_A89F_6B9F0D1DF5BC" DiskId="1" Hidden="no" ReadOnly="no" TrueType="no" System="no" Vital="yes" Name="QuickToolsDellWarranty.xml" Source="..\Extensions\Forms\QuickToolsDellWarranty.xml" KeyPath="yes" />
             </Component>
             <Component Id="comp_88130D29_81FB_48B1_A7DE_103B60EBB5B6" Guid="5C850966-FF52-464A-B6B6-51121160484A" Permanent="no" SharedDllRefCount="no" Transitive="no">
               <File Id="_A67E39C7_A139_42AD_BF5C_E9B1A2B5FD52" DiskId="1" Hidden="no" ReadOnly="no" TrueType="no" System="no" Vital="yes" Name="QuickToolsDeviceCache.xml" Source="..\Extensions\Forms\QuickToolsDeviceCache.xml" KeyPath="yes" />
@@ -184,9 +176,6 @@
               </Component>
               <Component Id="comp_BE4B2C52_29E8_4567_B8C9_C0115E5C3F46" Guid="56E12EA4-A98D-4B70-A2C2-B36C9E1BDEF5" Permanent="no" SharedDllRefCount="no" Transitive="no">
                 <File Id="_47E04710_4A3E_4E3D_B10F_1797A2CECF15" DiskId="1" Hidden="no" ReadOnly="no" TrueType="no" System="no" Vital="yes" Name="QuickToolsDevicesLAPS.xml" Source="..\Extensions\Actions\3fd01cd1-9e01-461e-92cd-94866b8d1f39\QuickToolsDevicesLAPS.xml" KeyPath="yes" />
-              </Component>
-              <Component Id="comp_818F7E89_65EC_4CDF_B060_F0C5AB3A5891" Guid="CB81F6AF-1C7E-4C83-B1BF-F74255C3E9CD" Permanent="no" SharedDllRefCount="no" Transitive="no">
-                <File Id="_9A1D410C_5F9F_4D5D_A03F_B8F8627B807B" DiskId="1" Hidden="no" ReadOnly="no" TrueType="no" System="no" Vital="yes" Name="QuickToolsDevicesDellWarranty.xml" Source="..\Extensions\Actions\3fd01cd1-9e01-461e-92cd-94866b8d1f39\QuickToolsDevicesDellWarranty.xml" KeyPath="yes" />
               </Component>
               <Component Id="comp_DF195432_6C40_450B_A0C5_0A9D925E4B67" Guid="7CC775BC-91A5-498C-AAAF-071D728A1D14" Permanent="no" SharedDllRefCount="no" Transitive="no">
                 <File Id="_3C1B6819_BF5F_4EE2_A947_5B1BA29564DA" DiskId="1" Hidden="no" ReadOnly="no" TrueType="no" System="no" Vital="yes" Name="QuickToolsDevicesCollections.xml" Source="..\Extensions\Actions\3fd01cd1-9e01-461e-92cd-94866b8d1f39\QuickToolsDevicesCollections.xml" KeyPath="yes" />
@@ -252,9 +241,6 @@
               </Component>
               <Component Id="comp_5C6A231A_3F9F_4B9B_B5FF_B2C325FA4647" Guid="F8E88AB2-CEC3-47B0-B924-2E6E3CCCF841" Permanent="no" SharedDllRefCount="no" Transitive="no">
                 <File Id="_D050D25A_BDE6_4414_8588_7479A4EEC59A" DiskId="1" Hidden="no" ReadOnly="no" TrueType="no" System="no" Vital="yes" Name="QuickToolsDevicesLAPS.xml" Source="..\Extensions\Actions\ed9dee86-eadd-4ac8-82a1-7234a4646e62\QuickToolsDevicesLAPS.xml" KeyPath="yes" />
-              </Component>
-              <Component Id="comp_EBBD2AAC_24F1_4826_BF6A_EB20C36EE268" Guid="00E63409-C83F-4F3D-9F66-0D5B1ABA7F03" Permanent="no" SharedDllRefCount="no" Transitive="no">
-                <File Id="_C6BE3701_5600_481A_9B1A_ABFA1D06E33E" DiskId="1" Hidden="no" ReadOnly="no" TrueType="no" System="no" Vital="yes" Name="QuickToolsDevicesDellWarranty.xml" Source="..\Extensions\Actions\ed9dee86-eadd-4ac8-82a1-7234a4646e62\QuickToolsDevicesDellWarranty.xml" KeyPath="yes" />
               </Component>
               <Component Id="comp_A8780BC4_3FC5_408D_B6B1_B2A8B87E5547" Guid="CA6277D5-F6E2-4442-A753-82FDD4119959" Permanent="no" SharedDllRefCount="no" Transitive="no">
                 <File Id="_94B7A8E2_EF6C_4628_A06C_3FC2FAF7876F" DiskId="1" Hidden="no" ReadOnly="no" TrueType="no" System="no" Vital="yes" Name="QuickToolsDevicesCollections.xml" Source="..\Extensions\Actions\ed9dee86-eadd-4ac8-82a1-7234a4646e62\QuickToolsDevicesCollections.xml" KeyPath="yes" />

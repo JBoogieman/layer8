@@ -7,7 +7,7 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 ## What's in it
 
 - Client actions on devices and collections
-- Extended device properties: update compliance, client health, collection membership, Dell warranty
+- Extended device properties: update compliance, client health, collection membership
 - Collection management: add resources from a list
 - Driver Manager: grabber, importer, Dell and HP driver packs
 - LAPS password lookup

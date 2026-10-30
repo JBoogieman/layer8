@@ -7,7 +7,9 @@
       - copies Layer8's DLLs and the libraries they use into the console's bin folder
       - copies the menu (Actions) and window (Forms) XML into AdminConsole\XmlStorage\Extensions
       - records every file it placed in %ProgramData%\Layer8\install-manifest.txt,
-        so Uninstall-Layer8Dev.ps1 can remove exactly those files and nothing else.
+        so Uninstall-Layer8Dev.ps1 can remove exactly those files and nothing else
+      - removes files an earlier install placed that this build no longer ships
+        (for example a feature that was deleted), so the console never loads leftovers.
 
     Run it from an elevated PowerShell with the ConfigMgr console closed. The console only
     picks up extensions at startup, so reopen it afterwards.
@@ -56,8 +58,7 @@ if (-not $NoBuild) {
     $projects = 'IniFileParser\INIFileParser.csproj',
                 'ConfigMgr.QuickTools\ConfigMgr.QuickTools.csproj',
                 'ConfigMgr.QuickTools.Device\ConfigMgr.QuickTools.Device.csproj',
-                'ConfigMgr.QuickTools.DriverManager\ConfigMgr.QuickTools.DriverManager.csproj',
-                'ConfigMgr.QuickTools.Warranty\ConfigMgr.QuickTools.Warranty.csproj'
+                'ConfigMgr.QuickTools.DriverManager\ConfigMgr.QuickTools.DriverManager.csproj'
     foreach ($p in $projects) {
         Write-Host "Building $p ($Configuration)"
         & $msbuild (Join-Path $repo $p) -restore -t:Build -p:RestorePackagesConfig=true -p:Configuration=$Configuration "-p:SolutionDir=$repo/" -nologo -v:quiet
@@ -67,7 +68,7 @@ if (-not $NoBuild) {
 
 $build = Join-Path $repo "Build\$Configuration"
 $libraries = 'ConfigMgr.QuickTools.dll', 'ConfigMgr.QuickTools.Device.dll', 'ConfigMgr.QuickTools.DriverManager.dll',
-             'ConfigMgr.QuickTools.Warranty.dll', 'INIFileParser.dll', 'log4net.dll', 'log4net.config', 'ByteSize.dll',
+             'INIFileParser.dll', 'log4net.dll', 'log4net.config', 'ByteSize.dll',
              'Microsoft.Deployment.Compression.dll', 'Microsoft.Deployment.Compression.Cab.dll', 'SmartThreadPool.dll'
 
 $placed = New-Object System.Collections.Generic.List[string]
@@ -94,9 +95,15 @@ Get-ChildItem $extensionSource -Recurse -File | ForEach-Object {
 $manifestFolder = Join-Path $env:ProgramData 'Layer8'
 $manifest = Join-Path $manifestFolder 'install-manifest.txt'
 New-Item $manifestFolder -ItemType Directory -Force | Out-Null
-$all = @($placed)
-if (Test-Path $manifest) { $all += Get-Content $manifest }   # keep files from earlier installs on the list
-$all | Sort-Object -Unique | Set-Content $manifest
+# Clean up anything an earlier install placed that this build no longer ships.
+if (Test-Path $manifest) {
+    foreach ($old in Get-Content $manifest) {
+        if (-not $old -or $placed -contains $old) { continue }
+        if (-not $old.StartsWith($console + '\', [StringComparison]::OrdinalIgnoreCase)) { continue }
+        if (Test-Path $old) { Remove-Item $old -Force; Write-Host "Removed leftover from an earlier install: $old" }
+    }
+}
+$placed | Sort-Object -Unique | Set-Content $manifest
 
 Write-Host "Installed $($placed.Count) files into $console"
 Write-Host "Manifest: $manifest"
