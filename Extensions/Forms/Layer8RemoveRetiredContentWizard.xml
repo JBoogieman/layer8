@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SmsFormData FormatVersion="1.0" xmlns="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework">
+  <Form Id="{A107FF4C-17CD-4569-84E0-806DC89274FF}" FormType="Wizard" DisableSkippable="true">
+    <Assembly Name="Layer8" Namespace="Layer8" />
+    <Pages>
+      <Page VendorId="Layer8" Id="{09A6F910-C4FB-412D-B4C2-8BDF03064120}" Assembly="Layer8" Namespace="Layer8" Type="RemoveRetiredContentPage" />
+    </Pages>
+  </Form>
+</SmsFormData>

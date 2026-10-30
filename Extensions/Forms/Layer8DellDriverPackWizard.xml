@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<SmsFormData FormatVersion="1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework" xsi:schemaLocation="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework">
+  <Form Id="{8F0AAAED-4E2F-4F7C-9B03-28DA18B8AC65}" FormType="Wizard" DisableSkippable="true">
+    <Assembly Name="Layer8.DriverManager" Namespace="Layer8.DriverManager" />
+    <Pages>
+      <Page VendorId="Layer8" Id="{D1B372CA-5646-4BA1-A87D-A893E62A54CF}" Type="DellDriverPackGeneralPage" />
+      <Page VendorId="Layer8" Id="{A9BB30B8-1189-4D36-AAB8-4A85B5F9CA21}" Type="DellDriverPackCatalogPage" />
+    </Pages>
+  </Form>
+</SmsFormData>

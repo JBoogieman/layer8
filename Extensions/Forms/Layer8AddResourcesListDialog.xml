@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<SmsFormData FormatVersion="1.0" xmlns="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework">
+  <Form Id="{1628ED61-9E73-400D-97FC-16193C6309B5}" CustomData="AddResourcesList" FormType="CustomDialog">
+    <Assembly Name="Layer8" Namespace="Layer8.CollectionManagement" ClassType="AddResourcesListDialog" />
+  </Form>
+</SmsFormData>

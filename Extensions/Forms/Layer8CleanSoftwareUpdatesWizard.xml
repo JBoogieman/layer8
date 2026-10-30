@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SmsFormData FormatVersion="1.0" xmlns="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework">
+  <Form Id="{6619D544-D46B-4A4B-AE27-17752728F0BA}" FormType="Wizard" DisableSkippable="true">
+    <Assembly Name="Layer8" Namespace="Layer8" />
+    <Pages>
+      <Page VendorId="Layer8" Id="{7D96179B-E451-4914-97B0-69B6EF818F9E}" Assembly="Layer8" Namespace="Layer8.SoftwareUpdates" Type="CleanSoftwareUpdatesPage" />
+    </Pages>
+  </Form>
+</SmsFormData>

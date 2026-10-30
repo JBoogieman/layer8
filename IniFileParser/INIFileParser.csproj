@@ -9,7 +9,7 @@
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>IniParser</RootNamespace>
-    <AssemblyName>INIFileParser</AssemblyName>
+    <AssemblyName>Layer8.IniFileParser</AssemblyName>
     <SignAssembly>True</SignAssembly>
     <AssemblyOriginatorKeyFile>Properties\publickey.snk</AssemblyOriginatorKeyFile>
     <FileUpgradeFlags>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<SmsFormData FormatVersion="1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework" xsi:schemaLocation="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework">
+  <Form Id="{EA6AF73F-3BCA-414E-A1FD-D153D640D537}" FormType="Wizard" DisableSkippable="true">
+    <Assembly Name="Layer8.DriverManager" Namespace="Layer8.DriverManager" />
+    <Pages>
+      <Page VendorId="Layer8" Id="{EDE3D538-926E-4036-A91B-A9396F73DB15}" Type="LegacyPackageGeneralPage" />
+      <Page VendorId="Layer8" Id="{EC316178-5AA2-4DC7-AC39-B6D4C005C727}" Type="LegacyPackageImportPage" />
+    </Pages>
+  </Form>
+</SmsFormData>

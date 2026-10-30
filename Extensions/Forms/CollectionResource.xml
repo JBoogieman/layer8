@@ -5,13 +5,13 @@
     <Pages>
       <Page VendorId="Microsoft Corporation" Id="{C49C90AD-D3BD-4325-A76A-F1D7A70C6C5C}" Type="ResultGeneralControl" ReadOnly="false" MultiSelection="false" Visible="false" />
       <Page VendorId="Microsoft Corporation" Id="{48359DD0-9EE2-4e5e-B22C-9F8F82A9F994}" Type="ResultAdvertisementControl" ReadOnly="false" MultiSelection="false" Visible="false" />
-      <Page VendorId="Otherland" Id="{B2F63AD4-3F5C-4366-BAA4-FF5246836EA9}" Assembly="ConfigMgr.QuickTools.Device" Namespace="ConfigMgr.QuickTools.Device.PropertiesDialog" Type="ResultCollectionsControl" ReadOnly="false" MultiSelection="false" Visible="false"  />
-      <Page VendorId="Otherland" Id="{FAE0F2A2-3901-48DF-9B3F-5B24AEBB3185}" Assembly="ConfigMgr.QuickTools.Device" Namespace="ConfigMgr.QuickTools.Device.PropertiesDialog" Type="ResultMaintenanceWindowsControl" ReadOnly="false" MultiSelection="false" Visible="false"  />      
+      <Page VendorId="Layer8" Id="{91F54A49-09DC-4FC6-B82B-7B467FE424DB}" Assembly="Layer8.Device" Namespace="Layer8.Device.PropertiesDialog" Type="ResultCollectionsControl" ReadOnly="false" MultiSelection="false" Visible="false"  />
+      <Page VendorId="Layer8" Id="{0C9D6C59-59B5-4DB8-AB39-CF638D5C7E98}" Assembly="Layer8.Device" Namespace="Layer8.Device.PropertiesDialog" Type="ResultMaintenanceWindowsControl" ReadOnly="false" MultiSelection="false" Visible="false"  />      
       <Page VendorId="Microsoft Corporation" Id="{69AFA715-621F-443a-AFBB-17FBAD383C9D}" Type="ResultVariableControl" ReadOnly="false" MultiSelection="false" Visible="false" />
-      <Page VendorId="Otherland" Id="{C8838A1C-211F-4FEB-B25E-2EC197771D14}" Assembly="ConfigMgr.QuickTools.Device" Namespace="ConfigMgr.QuickTools.Device.PropertiesDialog" Type="ResultSoftwareUpdatesControl" ReadOnly="false" MultiSelection="false" Visible="false" />
-      <Page VendorId="Otherland" Id="{A93AD205-2EA1-4596-9EA6-921DEBB5C7DD}" Assembly="ConfigMgr.QuickTools.Device" Namespace="ConfigMgr.QuickTools.Device.PropertiesDialog" Type="ResultSUComplianceControl" ReadOnly="false" MultiSelection="false" Visible="false" />
-      <Page VendorId="Otherland" Id="{7139BB0A-D9BF-4925-9ACA-3E03C8C33375}" Assembly="ConfigMgr.QuickTools.Device" Namespace="ConfigMgr.QuickTools.Device.PropertiesDialog" Type="ResultClientHealthControl" ReadOnly="false" MultiSelection="false" Visible="false" />
-      <Page VendorId="Otherland" Id="{6168E295-0F68-4239-9CFF-68E06F738351}" Assembly="ConfigMgr.QuickTools.DriverManager" Namespace="ConfigMgr.QuickTools.DriverManager.PropertiesDialog" Type="ResultDriverComplianceControl" ReadOnly="false" MultiSelection="false" Visible="false" />         
+      <Page VendorId="Layer8" Id="{5020578F-AA67-469A-B1F9-97F240F430D6}" Assembly="Layer8.Device" Namespace="Layer8.Device.PropertiesDialog" Type="ResultSoftwareUpdatesControl" ReadOnly="false" MultiSelection="false" Visible="false" />
+      <Page VendorId="Layer8" Id="{DBF7A50F-9DF3-4666-88D3-FE823F2AC47F}" Assembly="Layer8.Device" Namespace="Layer8.Device.PropertiesDialog" Type="ResultSUComplianceControl" ReadOnly="false" MultiSelection="false" Visible="false" />
+      <Page VendorId="Layer8" Id="{CF524DB2-D212-47F7-B125-175E55770448}" Assembly="Layer8.Device" Namespace="Layer8.Device.PropertiesDialog" Type="ResultClientHealthControl" ReadOnly="false" MultiSelection="false" Visible="false" />
+      <Page VendorId="Layer8" Id="{E2E0C30F-5EAB-4D03-AB67-DCA23A9E7E1C}" Assembly="Layer8.DriverManager" Namespace="Layer8.DriverManager.PropertiesDialog" Type="ResultDriverComplianceControl" ReadOnly="false" MultiSelection="false" Visible="false" />         
     </Pages>
   </Form>
 </SmsFormData>

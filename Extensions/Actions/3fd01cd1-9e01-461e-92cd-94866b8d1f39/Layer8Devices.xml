@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription NamespaceGuid="518D79A0-4A4C-4985-8318-8BCB1D329C0F" Class="Group" SelectionMode="Both" DisplayName="Layer8" MnemonicDisplayName="Layer8" Description="A collection of tools to enhance ConfigMgr." InsertBefore="824d5805-baa4-41bc-8fc3-85cc8d26c98c">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <ImagesDescription>
+    <ResourceAssembly>
+      <Assembly>Layer8.dll</Assembly>
+      <Type>Layer8.Properties.Resources.resources</Type>
+    </ResourceAssembly>
+    <ImageResourceName>tools</ImageResourceName>
+  </ImagesDescription>
+  <MatchPattern>[^2]</MatchPattern>
+  <MatchValueToTest>##SUB:ResourceType##</MatchValueToTest>
+  <ActionGroups>
+    <ActionDescription NamespaceGuid="915FA5D4-D0B2-4C56-A8AE-235D4C84C37D" Class="ShowDialog" DisplayName="Driver Grabber" MnemonicDisplayName="Driver Grabber" Description="Grab drivers from selected device">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <DialogId>Layer8DriverGrabberWizard</DialogId>
+    </ActionDescription>
+    <ActionDescription NamespaceGuid="9D4F1D1A-FAD0-478C-B441-D5A6CD05FCD0" Class="AssemblyType" DisplayName="Client Cache" MnemonicDisplayName="Client Cache" Description="Manage the client cache settings">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientCache</Type>
+        <Method>ChangeClientCache</Method>
+      </ActionAssembly>
+    </ActionDescription>    
+    <ActionDescription NamespaceGuid="B7009279-2666-45EF-9935-1FB3D3ED2ABF" Class="None" />
+  </ActionGroups>
+</ActionDescription>

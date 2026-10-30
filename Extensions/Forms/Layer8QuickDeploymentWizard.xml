@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SmsFormData FormatVersion="1.0" xmlns="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework">
+  <Form Id="{95E3B29B-334C-4519-B361-FA996EF17CD2}" FormType="Wizard" DisableSkippable="true">
+    <Assembly Name="Layer8" Namespace="Layer8" />
+    <Resources>
+      <Icon Name="icon" />
+    </Resources>
+    <Pages>
+      <Page VendorId="Layer8" Id="{DA05F4B7-0074-46E2-8F26-BB687A8B4AC9}" Type="QuickDeploymentGeneralPage" />
+      <Page VendorId="Layer8" Id="{94B9C296-E675-4043-BEC2-FFD9A27BB925}" Type="QuickDeploymentSettingsPage" />
+    </Pages>
+  </Form>
+</SmsFormData>
+

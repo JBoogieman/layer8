@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<SmsFormData FormatVersion="1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework" xsi:schemaLocation="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework">
+  <Form Id="{476A0D8C-A0DD-4C3D-84C6-060F3A93C89D}" FormType="Wizard" DisableSkippable="true">
+    <Assembly Name="Layer8.DriverManager" Namespace="Layer8.DriverManager" />
+    <Pages>
+      <Page VendorId="Layer8" Id="{D299A064-C33E-46E5-A09B-FA53A57C2E91}" Type="HPDriverPackGeneralPage" />
+      <Page VendorId="Layer8" Id="{CB174966-749E-46BC-9F3C-C8884969B637}" Type="HPDriverPackCatalogPage" />      
+    </Pages>
+  </Form>
+</SmsFormData>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SmsFormData FormatVersion="1.0" xmlns="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework">
+  <Form Id="{7C223488-5614-42B6-9FF3-E0596192BE22}" CustomData="Layer8DeviceCache" FormType="PropertySheet">
+    <Assembly Name="Layer8.Device" Namespace="Layer8.Device" />
+    <Pages>
+      <Page VendorId="Layer8" Id="{2B8545BC-3C5E-4926-978F-B701AFEBD128}" Type="ResultCacheControl" ReadOnly="false" MultiSelection="false" Visible="false" /> 
+    </Pages>
+  </Form>
+</SmsFormData>
+

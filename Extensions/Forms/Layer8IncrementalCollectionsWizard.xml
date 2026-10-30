@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SmsFormData FormatVersion="1.0" xmlns="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework">
+  <Form Id="{BB41CEF3-8661-42B6-A1B0-3BE9C74C369F}" FormType="Wizard" DisableSkippable="true">
+    <Assembly Name="Layer8" Namespace="Layer8" />
+    <Pages>
+      <Page VendorId="Layer8" Id="{D9F7E459-12E2-4F6C-93C0-86F26F0D0437}" Assembly="Layer8" Namespace="Layer8.CollectionManagement" Type="IncrementalCollectionsPage" />
+    </Pages>
+  </Form>
+</SmsFormData>

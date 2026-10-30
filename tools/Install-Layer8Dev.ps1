@@ -56,9 +56,9 @@ if (-not $NoBuild) {
     if (-not $msbuild) { throw 'MSBuild not found. Install Visual Studio with the .NET desktop development workload.' }
 
     $projects = 'IniFileParser\INIFileParser.csproj',
-                'ConfigMgr.QuickTools\ConfigMgr.QuickTools.csproj',
-                'ConfigMgr.QuickTools.Device\ConfigMgr.QuickTools.Device.csproj',
-                'ConfigMgr.QuickTools.DriverManager\ConfigMgr.QuickTools.DriverManager.csproj'
+                'Layer8\Layer8.csproj',
+                'Layer8.Device\Layer8.Device.csproj',
+                'Layer8.DriverManager\Layer8.DriverManager.csproj'
     foreach ($p in $projects) {
         Write-Host "Building $p ($Configuration)"
         & $msbuild (Join-Path $repo $p) -restore -t:Build -p:RestorePackagesConfig=true -p:Configuration=$Configuration "-p:SolutionDir=$repo/" -nologo -v:quiet
@@ -67,8 +67,8 @@ if (-not $NoBuild) {
 }
 
 $build = Join-Path $repo "Build\$Configuration"
-$libraries = 'ConfigMgr.QuickTools.dll', 'ConfigMgr.QuickTools.Device.dll', 'ConfigMgr.QuickTools.DriverManager.dll',
-             'INIFileParser.dll', 'log4net.dll', 'log4net.config', 'ByteSize.dll',
+$libraries = 'Layer8.dll', 'Layer8.Device.dll', 'Layer8.DriverManager.dll',
+             'Layer8.IniFileParser.dll', 'log4net.dll', 'Layer8.log4net.config', 'ByteSize.dll',
              'Microsoft.Deployment.Compression.dll', 'Microsoft.Deployment.Compression.Cab.dll', 'SmartThreadPool.dll'
 
 $placed = New-Object System.Collections.Generic.List[string]
@@ -78,7 +78,7 @@ foreach ($name in $libraries) {
     Copy-Item $source $bin -Force
     $placed.Add((Join-Path $bin $name))
 }
-Get-ChildItem $build -Filter 'ConfigMgr.QuickTools*.pdb' | ForEach-Object {
+Get-ChildItem $build -Filter 'Layer8*.pdb' | ForEach-Object {
     Copy-Item $_.FullName $bin -Force
     $placed.Add((Join-Path $bin $_.Name))
 }

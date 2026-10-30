@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription NamespaceGuid="1AE7B04B-E339-49E3-AA19-0E68134594A1" Class="ShowDialog" DisplayName="Dell Driver Pack" MnemonicDisplayName="Dell Driver Pack" Description="Download Dell driver pack" InsertBefore="B28AE9E9-01CF-4537-96A5-308CE406BBE0">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <DialogId>Layer8DellDriverPackWizard</DialogId>
+</ActionDescription>

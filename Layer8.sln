@@ -1,0 +1,72 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.28803.156
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Layer8", "Layer8\Layer8.csproj", "{86A66D04-06EB-41B0-A6BF-3A1AFF79CA8D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Layer8.Device", "Layer8.Device\Layer8.Device.csproj", "{A3580FA8-468B-490F-B079-3AF591876D28}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Layer8.DriverManager", "Layer8.DriverManager\Layer8.DriverManager.csproj", "{51F57A27-809B-43BB-92FF-FE39F9AD87F6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "INIFileParser", "IniFileParser\INIFileParser.csproj", "{5E46DCF4-C473-4171-9F9B-F3910B5EC407}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{86A66D04-06EB-41B0-A6BF-3A1AFF79CA8D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{86A66D04-06EB-41B0-A6BF-3A1AFF79CA8D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{86A66D04-06EB-41B0-A6BF-3A1AFF79CA8D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{86A66D04-06EB-41B0-A6BF-3A1AFF79CA8D}.Debug|x86.Build.0 = Debug|Any CPU
+		{86A66D04-06EB-41B0-A6BF-3A1AFF79CA8D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{86A66D04-06EB-41B0-A6BF-3A1AFF79CA8D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{86A66D04-06EB-41B0-A6BF-3A1AFF79CA8D}.Release|x86.ActiveCfg = Release|Any CPU
+		{86A66D04-06EB-41B0-A6BF-3A1AFF79CA8D}.Release|x86.Build.0 = Release|Any CPU
+		{A3580FA8-468B-490F-B079-3AF591876D28}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A3580FA8-468B-490F-B079-3AF591876D28}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A3580FA8-468B-490F-B079-3AF591876D28}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A3580FA8-468B-490F-B079-3AF591876D28}.Debug|x86.Build.0 = Debug|Any CPU
+		{A3580FA8-468B-490F-B079-3AF591876D28}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A3580FA8-468B-490F-B079-3AF591876D28}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A3580FA8-468B-490F-B079-3AF591876D28}.Release|x86.ActiveCfg = Release|Any CPU
+		{A3580FA8-468B-490F-B079-3AF591876D28}.Release|x86.Build.0 = Release|Any CPU
+		{51F57A27-809B-43BB-92FF-FE39F9AD87F6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{51F57A27-809B-43BB-92FF-FE39F9AD87F6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{51F57A27-809B-43BB-92FF-FE39F9AD87F6}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{51F57A27-809B-43BB-92FF-FE39F9AD87F6}.Debug|x86.Build.0 = Debug|Any CPU
+		{51F57A27-809B-43BB-92FF-FE39F9AD87F6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{51F57A27-809B-43BB-92FF-FE39F9AD87F6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{51F57A27-809B-43BB-92FF-FE39F9AD87F6}.Release|x86.ActiveCfg = Release|Any CPU
+		{51F57A27-809B-43BB-92FF-FE39F9AD87F6}.Release|x86.Build.0 = Release|Any CPU
+		{5E46DCF4-C473-4171-9F9B-F3910B5EC407}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5E46DCF4-C473-4171-9F9B-F3910B5EC407}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5E46DCF4-C473-4171-9F9B-F3910B5EC407}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{5E46DCF4-C473-4171-9F9B-F3910B5EC407}.Debug|x86.Build.0 = Debug|Any CPU
+		{5E46DCF4-C473-4171-9F9B-F3910B5EC407}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5E46DCF4-C473-4171-9F9B-F3910B5EC407}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5E46DCF4-C473-4171-9F9B-F3910B5EC407}.Release|x86.ActiveCfg = Release|Any CPU
+		{5E46DCF4-C473-4171-9F9B-F3910B5EC407}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {3F1211AF-80E3-444D-AA79-483BB9930A67}
+	EndGlobalSection
+	GlobalSection(AutomaticVersions) = postSolution
+		UpdateAssemblyVersion = True
+		UpdateAssemblyFileVersion = True
+		UpdateAssemblyInfoVersion = False
+		ShouldCreateLogs = True
+		AssemblyVersionSettings = None.IncrementOnDemand.IncrementWithResetOnIncrease.None
+		AssemblyFileVersionSettings = None.IncrementOnDemand.IncrementWithResetOnIncrease.None
+		UpdatePackageVersion = False
+		AssemblyInfoVersionType = SettingsVersion
+		InheritWinAppVersionFrom = None
+	EndGlobalSection
+EndGlobal

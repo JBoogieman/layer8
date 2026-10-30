@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription NamespaceGuid="E922FC6D-F6AD-451A-A475-F133B3C60532" Class="AssemblyType" SelectionMode="Both" DisplayName="Add Selected Items to Existing Device Collections" MnemonicDisplayName="Add Selected Items to Existing Device Collections" Description="Add Selected Items to Existing Device Collections" InsertBefore="92dbac0c-04d5-48e1-a663-dae80537f782">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <ImagesDescription>
+    <ResourceAssembly>
+      <Assembly>Layer8.dll</Assembly>
+      <Type>Layer8.Properties.Resources.resources</Type>
+    </ResourceAssembly>
+    <ImageResourceName>tools</ImageResourceName>
+  </ImagesDescription>
+  <ActionAssembly>
+    <Assembly>Layer8.Device.dll</Assembly>
+    <Type>Layer8.Device.Device</Type>
+    <Method>AddMulitDeviceCollection</Method>
+  </ActionAssembly>
+</ActionDescription>

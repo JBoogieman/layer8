@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription Class="Group" GroupAsRegion="true" SelectionMode="Both" DisplayName="Layer8" MnemonicDisplayName="Layer8 Root" Description="A collection of tools to enhance ConfigMgr.">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <ImagesDescription>
+    <ResourceAssembly>
+      <Assembly>Layer8.dll</Assembly>
+      <Type>Layer8.Properties.Resources.resources</Type>
+    </ResourceAssembly>
+    <ImageResourceName>tools</ImageResourceName>
+  </ImagesDescription>
+  <ActionGroups>
+    <ActionDescription Class="Group" SelectionMode="Both" DisplayName="Layer8" MnemonicDisplayName="Layer8" Description="A collection of tools to enhance ConfigMgr.">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
+      <ActionGroups>
+        <ActionDescription NamespaceGuid="F3215681-6D4C-410A-AF32-F38C130A170F" Class="ShowDialog" DisplayName="Driver Legacy Package Importer" MnemonicDisplayName="Driver Legacy Package Importer" Description="Import drivers and create an package">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <DialogId>Layer8DriverLegacyPackageImportWizard</DialogId>
+        </ActionDescription>
+        <ActionDescription NamespaceGuid="B28AE9E9-01CF-4537-96A5-308CE406BBE0" Class="None" />
+      </ActionGroups>
+    </ActionDescription>
+  </ActionGroups>
+</ActionDescription>
+

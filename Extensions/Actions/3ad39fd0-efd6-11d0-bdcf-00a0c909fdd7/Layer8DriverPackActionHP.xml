@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription NamespaceGuid="00E504C9-76D0-4B69-A0B8-4679DD85CE87" Class="ShowDialog" DisplayName="HP Driver Pack" MnemonicDisplayName="HP Driver Pack" Description="Download HP driver pack" InsertBefore="B28AE9E9-01CF-4537-96A5-308CE406BBE0">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <DialogId>Layer8HPDriverPackWizard</DialogId>
+</ActionDescription>
