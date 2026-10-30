@@ -108,6 +108,7 @@
       <DependentUpon>IncrementalCollectionsPage.cs</DependentUpon>
     </Compile>
     <Compile Include="CMTrace.cs" />
+    <Compile Include="Layer8Log.cs" />
     <Compile Include="OptionsControl.cs">
       <SubType>UserControl</SubType>
     </Compile>

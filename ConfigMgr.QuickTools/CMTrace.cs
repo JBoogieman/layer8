@@ -1,61 +1,28 @@
 ﻿using System;
 using System.IO;
-using System.Reflection;
+using log4net.Core;
 using log4net.Layout.Pattern;
+using log4net.Util;
 
 namespace ConfigMgr.QuickTools.CMTrace
 {
+    /// <summary>Writes the CMTrace severity for a log4net level: 3 = error, 2 = warning, 1 = everything else.</summary>
     public class NumericLevelPatternConverter : PatternLayoutConverter
     {
-        protected override void Convert(TextWriter writer, log4net.Core.LoggingEvent loggingEvent)
+        protected override void Convert(TextWriter writer, LoggingEvent loggingEvent)
         {
-            int LoggingLevel;
-            switch (loggingEvent.Level.Value)
-            {
-                case 10000: LoggingLevel = 4; break;
-                case 30000: LoggingLevel = 5; break;
-                case 40000: LoggingLevel = 6; break;
-                case 60000: LoggingLevel = 2; break;
-                case 70000: LoggingLevel = 3; break;
-                default: LoggingLevel = 1; break;
-
-            }
-            writer.Write(LoggingLevel);
+            int level = loggingEvent.Level.Value;
+            writer.Write(level >= Level.Error.Value ? 3 : level >= Level.Warn.Value ? 2 : 1);
         }
     }
 
-    public class AssemblyNamePatternConverter : log4net.Util.PatternConverter
+    /// <summary>Writes the time-zone bias CMTrace expects after the time, in minutes (for example +300 for US Central).</summary>
+    public class UTCOffsetPatternConverter : PatternConverter
     {
         public override void Convert(TextWriter writer, object state)
         {
-            string ProgramName;
-            try
-            {
-                ProgramName = (Assembly.GetExecutingAssembly().GetName().Name);
-            }
-            catch
-            {
-                ProgramName = "ConfigMgr.QuickTools";
-            }
-            writer.Write(ProgramName);
-        }
-    }
-
-    public class UTCOffsetPatternConverter : log4net.Util.PatternConverter
-    {
-        public override void Convert(TextWriter writer, object state)
-        {
-            TimeSpan delta = (TimeSpan.Zero);
-            try
-            {
-                TimeZone TimeZoneInfo = TimeZone.CurrentTimeZone;
-                delta = TimeZoneInfo.GetUtcOffset(DateTime.Now);
-            }
-            catch
-            {
-
-            }
-            writer.Write(delta.TotalMinutes.ToString());
+            double bias = -TimeZoneInfo.Local.GetUtcOffset(DateTime.Now).TotalMinutes;
+            writer.Write(bias.ToString("+0;-0"));
         }
     }
 }

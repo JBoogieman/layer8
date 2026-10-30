@@ -11,7 +11,7 @@ namespace ConfigMgr.QuickTools.DriverManager
     internal class DriverPackage : Package
     {
         #region Private
-        private static readonly log4net.ILog log = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+        private static readonly log4net.ILog log = ConfigMgr.QuickTools.Layer8Log.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
         private readonly ModifyRegistry registry = new ModifyRegistry();
         private readonly ConnectionManagerBase connectionManager;
         private IResultObject packageObject;

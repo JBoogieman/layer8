@@ -15,7 +15,7 @@ namespace ConfigMgr.QuickTools.Device
 {
     public partial class ResultCacheControl : SmsPageControl
     {
-        private static readonly log4net.ILog log = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+        private static readonly log4net.ILog log = ConfigMgr.QuickTools.Layer8Log.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
         private BackgroundWorker backgroundWorker;
         private ManagementObject cacheConfig;
 

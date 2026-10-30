@@ -30,6 +30,10 @@ Layer8 is an old-style console extension, so the console ignores it while **Only
 
 Early days. The rebrand is happening in stages, so the code still uses the Quick Tools project and namespace names for now. Automatic update checks have been removed.
 
+## Logs
+
+Layer8 writes a CMTrace-format log to `%LOCALAPPDATA%\Layer8\Logs\Layer8.log`. Each console session starts with a line showing the Layer8, console and .NET versions. To get more detail, change `<level value="INFO" />` to `DEBUG` in `log4net.config` next to Layer8's DLLs; it's picked up without restarting the console.
+
 ## Credits and license
 
 Based on ConfigMgr Quick Tools by Peter Szalatnay. Released under the MIT license; see [LICENSE](LICENSE).
