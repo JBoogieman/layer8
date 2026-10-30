@@ -4,3 +4,7 @@ bin
 obj
 Build
 packages
+
+# Visual Studio project-upgrade reports
+UpgradeLog*.htm
+_UpgradeReport_Files/
