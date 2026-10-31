@@ -67,9 +67,7 @@ if (-not $NoBuild) {
 }
 
 $build = Join-Path $repo "Build\$Configuration"
-$libraries = 'Layer8.dll', 'Layer8.Device.dll', 'Layer8.DriverManager.dll',
-             'Layer8.IniFileParser.dll', 'ByteSize.dll',
-             'Microsoft.Deployment.Compression.dll', 'Microsoft.Deployment.Compression.Cab.dll', 'SmartThreadPool.dll'
+$libraries = 'Layer8.dll', 'Layer8.Device.dll', 'Layer8.DriverManager.dll', 'Layer8.IniFileParser.dll'
 
 $placed = New-Object System.Collections.Generic.List[string]
 foreach ($name in $libraries) {

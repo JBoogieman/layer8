@@ -38,7 +38,7 @@ Layer8 is an old-style console extension, so the console ignores it while **Only
 
 ## Status
 
-Early days. Layer8 has its own assembly names, namespaces and console IDs, so its menus and dialogs no longer clash with ConfigMgr Quick Tools. Two overlaps remain: both replace the device properties form, so with both installed, whichever was installed last supplies those tabs; and both ship ByteSize.dll, SmartThreadPool.dll and the Microsoft.Deployment.Compression DLLs, so uninstalling one can remove files the other still uses. Automatic update checks have been removed.
+Early days. Layer8 has its own assembly names, namespaces and console IDs, so its menus and dialogs no longer clash with ConfigMgr Quick Tools. Layer8 ships only its own DLLs, so the two never share a file in the console's bin folder. The one overlap left: both replace the device properties form, so with both installed, whichever was installed last supplies those tabs. Automatic update checks have been removed.
 
 ## Logs
 

@@ -1,8 +1,5 @@
-﻿using ByteSizeLib;
-using Microsoft.ConfigurationManagement.AdminConsole;
+﻿using Microsoft.ConfigurationManagement.AdminConsole;
 using Microsoft.ConfigurationManagement.ManagementProvider;
-using Microsoft.Deployment.Compression;
-using Microsoft.Deployment.Compression.Cab;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -206,43 +203,39 @@ namespace Layer8.DriverManager
             string prefix = string.IsNullOrEmpty(registry.ReadString("DellFolderPrefix")) ? "Dell" : registry.ReadString("DellFolderPrefix");
 
             string tempFile = Path.Combine(Path.GetTempPath(), "DriverPackCatalog.cab");
-            using (FileStream innerCab = new FileStream(tempFile, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite))
+            foreach (string catalogFile in Utility.ExtractCab(tempFile, Path.Combine(Path.GetTempPath(), "Layer8", "DellDriverPackCatalog"), clearDestination: true))
             {
-                CabEngine engine = new CabEngine();
-                foreach (ArchiveFileInfo archiveFileInfo in engine.GetFileInfo(innerCab))
+                using (Stream stream = File.OpenRead(catalogFile))
                 {
-                    using (Stream stream = engine.Unpack(innerCab, archiveFileInfo.Name))
+                    catalog = XElement.Load(stream);
+                    XNamespace ns = catalog.GetDefaultNamespace();
+                    // Get download base location from DriverPackCatalog.xml 
+                    UserData["baseLocation"] = catalog.Attribute("baseLocation").Value;
+
+                    IEnumerable<XElement> nodeList = catalog.Elements(ns + "DriverPackage").Where(
+                            x => x.Element(ns + "SupportedOperatingSystems").Elements(ns + "OperatingSystem").Any( 
+                                y => y.Attribute("osCode").Value == UserData["OS"].ToString().Replace(" ", string.Empty) &&
+                                y.Attribute("osArch").Value == UserData["Architecture"].ToString()
+                            )
+                        );
+                    foreach (XElement node in nodeList)
                     {
-                        catalog = XElement.Load(stream);
-                        XNamespace ns = catalog.GetDefaultNamespace();
-                        // Get download base location from DriverPackCatalog.xml 
-                        UserData["baseLocation"] = catalog.Attribute("baseLocation").Value;
-
-                        IEnumerable<XElement> nodeList = catalog.Elements(ns + "DriverPackage").Where(
-                                x => x.Element(ns + "SupportedOperatingSystems").Elements(ns + "OperatingSystem").Any( 
-                                    y => y.Attribute("osCode").Value == UserData["OS"].ToString().Replace(" ", string.Empty) &&
-                                    y.Attribute("osArch").Value == UserData["Architecture"].ToString()
-                                )
-                            );
-                        foreach (XElement node in nodeList)
+                        DellDriverPackage package = new DellDriverPackage(node)
                         {
-                            DellDriverPackage package = new DellDriverPackage(node)
-                            {
-                                Vendor = prefix
-                            };
-                            package.GenerateModelFolderName(os, structure);
+                            Vendor = prefix
+                        };
+                        package.GenerateModelFolderName(os, structure);
 
-                            DataGridViewRow dataGridViewRow = new DataGridViewRow();
-                            dataGridViewRow.CreateCells(dataGridViewDriverPackages);
+                        DataGridViewRow dataGridViewRow = new DataGridViewRow();
+                        dataGridViewRow.CreateCells(dataGridViewDriverPackages);
 
-                            dataGridViewRow.Cells[0].Value = false;
-                            dataGridViewRow.Cells[1].Value = package.Model;
-                            dataGridViewRow.Cells[2].Value = package.Version;
-                            dataGridViewRow.Cells[3].Value = package.Size.ToString();
+                        dataGridViewRow.Cells[0].Value = false;
+                        dataGridViewRow.Cells[1].Value = package.Model;
+                        dataGridViewRow.Cells[2].Value = package.Version;
+                        dataGridViewRow.Cells[3].Value = Utility.FormatBytes(package.Size);
 
-                            dataGridViewRow.Tag = package;
-                            dataGridViewDriverPackages.Rows.Add(dataGridViewRow);
-                        }
+                        dataGridViewRow.Tag = package;
+                        dataGridViewDriverPackages.Rows.Add(dataGridViewRow);
                     }
                 }
             }
@@ -343,7 +336,7 @@ namespace Layer8.DriverManager
             double percentage = bytesIn / totalBytes * 100;
             double start = 100 / totalPacks * downloadedPacks;
             backgroundWorker.ReportProgress(Convert.ToInt32((start + (percentage / totalPacks)) * 0.5), 
-                string.Format("Downloading: {0} - {1} of {2}", currentModel, ByteSize.FromBytes(bytesIn).ToString("#"), ByteSize.FromBytes(totalBytes).ToString("#")
+                string.Format("Downloading: {0} - {1} of {2}", currentModel, Utility.FormatBytes(bytesIn, "0"), Utility.FormatBytes(totalBytes, "0")
                 ));
         }
 
@@ -408,8 +401,7 @@ namespace Layer8.DriverManager
 
                 try
                 {
-                    var cab = new CabInfo(data.Value);
-                    cab.Unpack(tempFolder);
+                    Utility.ExtractCab(data.Value, tempFolder);
 
                     // update my best friend the progress bar
                     backgroundWorker.ReportProgress(Convert.ToInt32(50 + ((80 / totalPacks * extracted) * 0.5)), string.Format("Processing {0} : moving to destination folder", currentModel));

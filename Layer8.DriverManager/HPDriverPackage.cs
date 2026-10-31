@@ -1,5 +1,4 @@
-﻿using ByteSizeLib;
-using System.Xml.Linq;
+﻿using System.Xml.Linq;
 
 namespace Layer8.DriverManager
 {
@@ -10,7 +9,8 @@ namespace Layer8.DriverManager
         public string VersionShort { get; private set; }
         public string Url { get; private set; }
         public string ReleaseNotesUrl { get; private set; }
-        public ByteSize Size { get; private set; }
+        /// <summary>Download size in bytes.</summary>
+        public double Size { get; private set; }
         public XElement SoftPaq { get; set; }
 
         public HPDriverPackage(XElement pack)
@@ -23,7 +23,7 @@ namespace Layer8.DriverManager
 
         public void ProcessSoftPaq()
         {
-            Size = ByteSize.FromBytes(double.Parse(SoftPaq.Element("Size").Value));
+            Size = double.Parse(SoftPaq.Element("Size").Value);
             Version = SoftPaq.Element("Version").Value;
             VersionShort = Version.TrimEnd("A 1").Trim();
             VersionFile = Version + ".version";

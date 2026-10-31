@@ -1,7 +1,4 @@
-﻿using ByteSizeLib;
-using Microsoft.ConfigurationManagement.AdminConsole;
-using Microsoft.Deployment.Compression;
-using Microsoft.Deployment.Compression.Cab;
+﻿using Microsoft.ConfigurationManagement.AdminConsole;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -208,41 +205,37 @@ namespace Layer8.DriverManager
             string prefix = string.IsNullOrEmpty(registry.ReadString("HPFolderPrefix")) ? "HP" : registry.ReadString("HPFolderPrefix");
 
             string tempFile = Path.Combine(Path.GetTempPath(), "HPClientDriverPackCatalog.cab");
-            using (FileStream innerCab = new FileStream(tempFile, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite))
+            foreach (string catalogFile in Utility.ExtractCab(tempFile, Path.Combine(Path.GetTempPath(), "Layer8", "HPClientDriverPackCatalog"), clearDestination: true))
             {
-                CabEngine engine = new CabEngine();
-                foreach (ArchiveFileInfo archiveFileInfo in engine.GetFileInfo(innerCab))
+                using (Stream stream = File.OpenRead(catalogFile))
                 {
-                    using (Stream stream = engine.Unpack(innerCab, archiveFileInfo.Name))
+                    catalog = XElement.Load(stream);
+
+                    IEnumerable<XElement> nodeList = catalog.Element("HPClientDriverPackCatalog").Element("ProductOSDriverPackList").Elements("ProductOSDriverPack").Where(
+                        x => x.Element("OSName").Value == UserData["OS"].ToString()
+                        );
+                    foreach (XElement node in nodeList)
                     {
-                        catalog = XElement.Load(stream);
-
-                        IEnumerable<XElement> nodeList = catalog.Element("HPClientDriverPackCatalog").Element("ProductOSDriverPackList").Elements("ProductOSDriverPack").Where(
-                            x => x.Element("OSName").Value == UserData["OS"].ToString()
-                            );
-                        foreach (XElement node in nodeList)
+                        HPDriverPackage package = new HPDriverPackage(node)
                         {
-                            HPDriverPackage package = new HPDriverPackage(node)
-                            {
-                                SoftPaq = catalog.Element("HPClientDriverPackCatalog").Element("SoftPaqList").Elements("SoftPaq").Where(
-                                x => x.Element("Id").Value == node.Element("SoftPaqId").Value
-                                ).FirstOrDefault(),
-                                Vendor = prefix 
-                            };
-                            package.ProcessSoftPaq();
-                            package.GenerateModelFolderName(os, structure);
+                            SoftPaq = catalog.Element("HPClientDriverPackCatalog").Element("SoftPaqList").Elements("SoftPaq").Where(
+                            x => x.Element("Id").Value == node.Element("SoftPaqId").Value
+                            ).FirstOrDefault(),
+                            Vendor = prefix 
+                        };
+                        package.ProcessSoftPaq();
+                        package.GenerateModelFolderName(os, structure);
 
-                            DataGridViewRow dataGridViewRow = new DataGridViewRow();
-                            dataGridViewRow.CreateCells(dataGridViewDriverPackages);
+                        DataGridViewRow dataGridViewRow = new DataGridViewRow();
+                        dataGridViewRow.CreateCells(dataGridViewDriverPackages);
 
-                            dataGridViewRow.Cells[0].Value = false;
-                            dataGridViewRow.Cells[1].Value = package.Model;
-                            dataGridViewRow.Cells[2].Value = package.VersionShort;
-                            dataGridViewRow.Cells[3].Value = package.Size.ToString();
+                        dataGridViewRow.Cells[0].Value = false;
+                        dataGridViewRow.Cells[1].Value = package.Model;
+                        dataGridViewRow.Cells[2].Value = package.VersionShort;
+                        dataGridViewRow.Cells[3].Value = Utility.FormatBytes(package.Size);
 
-                            dataGridViewRow.Tag = package;
-                            dataGridViewDriverPackages.Rows.Add(dataGridViewRow);
-                        }
+                        dataGridViewRow.Tag = package;
+                        dataGridViewDriverPackages.Rows.Add(dataGridViewRow);
                     }
                 }
             }
@@ -352,7 +345,7 @@ namespace Layer8.DriverManager
             double percentage = bytesIn / totalBytes * 100;
             double start = 100 / totalPacks * downloadedPacks;
             backgroundWorker.ReportProgress(Convert.ToInt32((start + (percentage / totalPacks)) * 0.5),
-                string.Format("Downloading: {0} - {1} of {2}", currentModel, ByteSize.FromBytes(bytesIn).ToString("#"), ByteSize.FromBytes(totalBytes).ToString("#")
+                string.Format("Downloading: {0} - {1} of {2}", currentModel, Utility.FormatBytes(bytesIn, "0"), Utility.FormatBytes(totalBytes, "0")
                 ));
         }
 

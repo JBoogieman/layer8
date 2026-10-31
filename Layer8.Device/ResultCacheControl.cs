@@ -1,6 +1,5 @@
 ﻿using Microsoft.ConfigurationManagement.AdminConsole;
 using Microsoft.ConfigurationManagement.AdminConsole.DialogFramework;
-using ByteSizeLib;
 using System;
 using System.Management;
 using System.Windows.Forms;
@@ -58,19 +57,19 @@ namespace Layer8.Device
 
                 ManagementObject disk = Utility.GetFirstWMIInstance(PropertyManager["Name"].StringValue, @"cimv2", string.Format("Win32_LogicalDisk WHERE DeviceID='{0}:'", location[0]));
 
-                ByteSize cacheSize = ByteSize.FromMegaBytes(double.Parse(cacheConfig["Size"].ToString()));
-                ByteSize freeSpace = ByteSize.FromBytes(double.Parse(disk["FreeSpace"].ToString()));
+                double cacheSizeMB = double.Parse(cacheConfig["Size"].ToString());
+                double freeSpaceMB = double.Parse(disk["FreeSpace"].ToString()) / Utility.BytesPerMegabyte;
 
-                trackBarWithoutFocus1.Maximum = Convert.ToInt32(freeSpace.MegaBytes);
+                trackBarWithoutFocus1.Maximum = Convert.ToInt32(freeSpaceMB);
                 trackBarWithoutFocus1.TickFrequency = Convert.ToInt32(trackBarWithoutFocus1.Maximum / 10);
                 trackBarWithoutFocus1.LargeChange = trackBarWithoutFocus1.TickFrequency;
                 numericUpDown1.Maximum = trackBarWithoutFocus1.Maximum;
 
-                trackBarWithoutFocus1.Value = Convert.ToInt32(cacheSize.MegaBytes);
+                trackBarWithoutFocus1.Value = Convert.ToInt32(cacheSizeMB);
 
                 labelLocation.Text = location;
-                labelCacheSize.Text = cacheSize.ToString();
-                labelSpaceToUse.Text = cacheSize.ToString();
+                labelCacheSize.Text = Utility.FormatBytes(cacheSizeMB * Utility.BytesPerMegabyte);
+                labelSpaceToUse.Text = labelCacheSize.Text;
 
                 trackBarWithoutFocus1.Enabled = true;
                 numericUpDown1.Enabled = true;
@@ -138,14 +137,14 @@ namespace Layer8.Device
 
             foreach (ManagementObject item in items)
             {
-                ByteSize size = ByteSize.FromKiloBytes(double.Parse(item["ContentSize"].ToString()));
+                string size = Utility.FormatBytes(double.Parse(item["ContentSize"].ToString()) * Utility.BytesPerKilobyte);
                 DateTime date = ManagementDateTimeConverter.ToDateTime(item["LastReferenced"].ToString());
 
                 listViewContent.Items.Add(new ListViewItem()
                 {
                     Text = item["Location"].ToString(),
                     SubItems = {
-                            size.ToString(),
+                            size,
                             date.ToShortDateString(),
                             item["CacheId"].ToString()
                         },
@@ -154,8 +153,7 @@ namespace Layer8.Device
             }
 
             double contentSize = items.Sum(item => double.Parse(item["ContentSize"].ToString()));
-            ByteSize usedSize = ByteSize.FromKiloBytes(contentSize);
-            labelUsedSize.Text = usedSize.ToString();
+            labelUsedSize.Text = Utility.FormatBytes(contentSize * Utility.BytesPerKilobyte);
         }
 
         private void RemoveCachedItems(ListView.SelectedListViewItemCollection items)
@@ -222,16 +220,14 @@ namespace Layer8.Device
         private void TrackBar1_ValueChanged(object sender, EventArgs e)
         {
             numericUpDown1.Value = trackBarWithoutFocus1.Value;
-            var b = ByteSize.FromMegaBytes(trackBarWithoutFocus1.Value);
-            labelSpaceToUse.Text = b.ToString();
+            labelSpaceToUse.Text = Utility.FormatBytes(trackBarWithoutFocus1.Value * Utility.BytesPerMegabyte);
             SetDirty();
         }
 
         private void NumericUpDown1_ValueChanged(object sender, EventArgs e)
         {
             trackBarWithoutFocus1.Value = Convert.ToInt32(numericUpDown1.Value);
-            var b = ByteSize.FromMegaBytes(trackBarWithoutFocus1.Value);
-            labelSpaceToUse.Text = b.ToString();
+            labelSpaceToUse.Text = Utility.FormatBytes(trackBarWithoutFocus1.Value * Utility.BytesPerMegabyte);
             SetDirty();
         }
 

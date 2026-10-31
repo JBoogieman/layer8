@@ -7,7 +7,7 @@ using System.Windows.Forms;
 using System.IO;
 using System.Globalization;
 using System.Collections.Generic;
-using Amib.Threading;
+using System.Threading.Tasks;
 
 namespace Layer8.DriverManager
 {
@@ -16,6 +16,8 @@ namespace Layer8.DriverManager
         #region Private
         private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
         private readonly ModifyRegistry registry = new ModifyRegistry();
+        // How many drivers already in a package are checked at once (each check is a few WMI calls to the SMS provider).
+        private const int ParallelDriverChecks = 8;
         private int progressStepPercent;
         private int progresPercent;
         private int progressTotal = 0;
@@ -81,7 +83,6 @@ namespace Layer8.DriverManager
 
                         try
                         {
-                            SmartThreadPool smartThreadPool = new SmartThreadPool();
                             // lock driver packge object
                             objectPath = driverPackage.Package["__RELPath"].StringValue;
                             Utility.RequestLock(ConnectionManager, objectPath);
@@ -122,32 +123,46 @@ namespace Layer8.DriverManager
                             progresPercent = 100 / progressStepCount / totalDriverPackages * 2;
                             log.Debug("ProcessingDrivers ---- ");
                             // check if driver is in driver package and same version
-                            foreach (IResultObject driverObject in driverPackage.GetDriversInPackge())
+                            // Check several drivers at once, so it's faster. A failed check is logged and listed with the
+                            // package's import errors (the old thread pool dropped those errors silently).
+                            List<IResultObject> driversInPackage = driverPackage.GetDriversInPackge().ToList();
+                            object errorSync = new object();
+                            Parallel.ForEach(driversInPackage, new ParallelOptions { MaxDegreeOfParallelism = ParallelDriverChecks }, driverObject =>
                             {
-                                // thread this so it is faster
-                                smartThreadPool.QueueWorkItem(new Amib.Threading.Func<DriverPackage, IResultObject, BackgroundWorker, bool>(ProcessDrivers), driverPackage, driverObject, worker);
-                            }
-                            // wait for thread pool to finish
-                            smartThreadPool.WaitForIdle();
+                                try
+                                {
+                                    ProcessDrivers(driverPackage, driverObject, worker);
+                                }
+                                catch (Exception ex)
+                                {
+                                    string driverName = driverObject["LocalizedDisplayName"].StringValue;
+                                    log.Error("Checking driver " + driverName + " failed", ex);
+                                    lock (errorSync)
+                                    {
+                                        driverPackage.ImportError[driverName] = ex.Message;
+                                    }
+                                }
+                            });
                             // I still hate calculating progress bars
                             progressStepPercent = progresPercent;
                             log.Debug("ImportingDrivers ---- ");
 
-                            // tried to create threading for importing drivers but CreateFromINF go sad if it gets to many request, so will leave this code here for maybe one day I fix it
-                            IWorkItemsGroup workItemsGroup = smartThreadPool.CreateWorkItemsGroup(1);
-      
-                            foreach (KeyValuePair<string, Driver> driver in driverPackage.Drivers)
+                            // Import one driver at a time: the SMS provider's CreateFromINF fails when it gets too many requests at once.
+                            // A failed import is logged and listed with the package's import errors.
+                            List<Driver> driversToImport = driverPackage.Drivers.Values.Where(d => d.Import).ToList();
+                            progressTotal = driversToImport.Count;
+                            foreach (Driver driverToImport in driversToImport)
                             {
-                                if (driver.Value.Import)
+                                try
                                 {
-                                    ++progressTotal;
-                                    workItemsGroup.QueueWorkItem(new Amib.Threading.Func<DriverPackage, Driver, BackgroundWorker, bool>(ImportDrivers), driverPackage, driver.Value, worker);
+                                    ImportDrivers(driverPackage, driverToImport, worker);
+                                }
+                                catch (Exception ex)
+                                {
+                                    log.Error("Importing driver " + driverToImport.InfLocation + " failed", ex);
+                                    driverPackage.ImportError[driverToImport.InfLocation] = ex.Message;
                                 }
                             }
-                            // wait for thread pool to finish
-                            workItemsGroup.WaitForIdle();
-
-                            smartThreadPool.Shutdown();
 
                             if (refreshPackage)
                             {

@@ -1,5 +1,4 @@
-﻿using ByteSizeLib;
-using System.Xml.Linq;
+﻿using System.Xml.Linq;
 
 namespace Layer8.DriverManager
 {
@@ -10,7 +9,8 @@ namespace Layer8.DriverManager
 
         public string Url { get; private set; }
         public string ReleaseNotesUrl { get; private set; }
-        public ByteSize Size { get; private set; }
+        /// <summary>Download size in bytes.</summary>
+        public double Size { get; private set; }
 
         public DellDriverPackage(XElement pack)
         {
@@ -20,7 +20,7 @@ namespace Layer8.DriverManager
 
             Name = Model = packageObject.Element(ns + "SupportedSystems").Element(ns + "Brand").Element(ns + "Model").Attribute("name").Value;
 
-            Size = ByteSize.FromBytes(double.Parse(packageObject.Attribute("size").Value));
+            Size = double.Parse(packageObject.Attribute("size").Value);
 
             Version = packageObject.Attribute("dellVersion").Value;
             VersionFile = Version + ".version";

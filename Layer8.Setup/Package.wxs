@@ -75,24 +75,15 @@
       </Directory>
     </StandardDirectory>
 
-    <!-- Layer8's own DLLs. "Layer8.dll" is named so the Version above can read its file version. -->
+    <!--
+      Layer8's DLLs: all Layer8's own, so nothing here can clash with another console extension's files.
+      "Layer8.dll" is named so the Version above can read its file version.
+    -->
     <ComponentGroup Id="Layer8Binaries" Directory="CONSOLEBIN">
       <File Id="Layer8.dll" Source="$(var.BuildDir)Layer8.dll" />
       <File Source="$(var.BuildDir)Layer8.Device.dll" />
       <File Source="$(var.BuildDir)Layer8.DriverManager.dll" />
       <File Source="$(var.BuildDir)Layer8.IniFileParser.dll" />
-    </ComponentGroup>
-
-    <!--
-      Third-party libraries Layer8 uses. Quick Tools ships the same versions of these under the same names,
-      so with both installed, uninstalling either one removes files the other still needs. Next step
-      to sort out (see the README's Status section).
-    -->
-    <ComponentGroup Id="SharedLibraries" Directory="CONSOLEBIN">
-      <File Source="$(var.BuildDir)ByteSize.dll" />
-      <File Source="$(var.BuildDir)SmartThreadPool.dll" />
-      <File Source="$(var.BuildDir)Microsoft.Deployment.Compression.dll" />
-      <File Source="$(var.BuildDir)Microsoft.Deployment.Compression.Cab.dll" />
     </ComponentGroup>
 
     <!--
@@ -105,7 +96,6 @@
 
     <Feature Id="Layer8">
       <ComponentGroupRef Id="Layer8Binaries" />
-      <ComponentGroupRef Id="SharedLibraries" />
       <ComponentGroupRef Id="ConsoleExtensions" />
     </Feature>
   </Package>

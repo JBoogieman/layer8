@@ -1,8 +1,6 @@
 ﻿using Microsoft.ConfigurationManagement.AdminConsole;
 using Microsoft.ConfigurationManagement.AdminConsole.DialogFramework;
 using Microsoft.ConfigurationManagement.AdminConsole.WizardFramework;
-using Microsoft.Deployment.Compression;
-using Microsoft.Deployment.Compression.Cab;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -275,25 +273,21 @@ namespace Layer8.DriverManager
         private bool ProcessCatalog()
         {
             string tempFile = Path.Combine(Path.GetTempPath(), "HPClientDriverPackCatalog.cab");
-            using (FileStream innerCab = new FileStream(tempFile, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite))
+            foreach (string catalogFile in Utility.ExtractCab(tempFile, Path.Combine(Path.GetTempPath(), "Layer8", "HPClientDriverPackCatalog"), clearDestination: true))
             {
-                CabEngine engine = new CabEngine();
-                foreach (ArchiveFileInfo archiveFileInfo in engine.GetFileInfo(innerCab))
+                using (Stream stream = File.OpenRead(catalogFile))
                 {
-                    using (Stream stream = engine.Unpack(innerCab, archiveFileInfo.Name))
+                    XElement catalog = XElement.Load(stream);
+
+                    comboBoxOS.Items.Clear();
+
+                    List<XElement> nodeList = catalog.Element("HPClientDriverPackCatalog").Element("OSList").Elements("OS").ToList();
+                    foreach (XElement node in nodeList)
                     {
-                        XElement catalog = XElement.Load(stream);
+                        string os = node.Element("Name").Value;
 
-                        comboBoxOS.Items.Clear();
-
-                        List<XElement> nodeList = catalog.Element("HPClientDriverPackCatalog").Element("OSList").Elements("OS").ToList();
-                        foreach (XElement node in nodeList)
-                        {
-                            string os = node.Element("Name").Value;
-
-                            comboBoxOS.Items.Add(os);
-                            comboBoxOS.SelectedIndex = 0;
-                        }
+                        comboBoxOS.Items.Add(os);
+                        comboBoxOS.SelectedIndex = 0;
                     }
                 }
             }

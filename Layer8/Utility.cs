@@ -19,6 +19,74 @@ namespace Layer8
 {
     public class Utility
     {
+        public const double BytesPerKilobyte = 1024;
+        public const double BytesPerMegabyte = 1024 * 1024;
+
+        /// <summary>
+        /// A size the way the console shows sizes: 1024-based, in the largest unit the value is at least 1 of,
+        /// with up to two decimals by default ("109.56 MB", "5 GB").
+        /// </summary>
+        public static string FormatBytes(double bytes, string numberFormat = "0.##")
+        {
+            string[] units = { "B", "KB", "MB", "GB", "TB", "PB" };
+            double value = bytes;
+            int unit = 0;
+            while (Math.Abs(value) >= 1024 && unit < units.Length - 1)
+            {
+                value /= 1024;
+                unit++;
+            }
+            return value.ToString(numberFormat, System.Globalization.CultureInfo.CurrentCulture) + " " + units[unit];
+        }
+
+        /// <summary>
+        /// Extracts every file in a .cab into destinationFolder, keeping the cab's own folders, with the expand.exe
+        /// that's part of Windows. Returns the files that are in destinationFolder afterwards.
+        /// clearDestination empties the folder first, for temporary folders Layer8 owns.
+        /// </summary>
+        public static string[] ExtractCab(string cabPath, string destinationFolder, bool clearDestination = false)
+        {
+            // No trailing backslash: on expand.exe's command line, a backslash right before the closing quote would escape the quote.
+            destinationFolder = destinationFolder.TrimEnd('\\', '/');
+
+            if (clearDestination && Directory.Exists(destinationFolder))
+            {
+                Directory.Delete(destinationFolder, true);
+            }
+            Directory.CreateDirectory(destinationFolder);
+
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "expand.exe"),
+                Arguments = string.Format("\"{0}\" -F:* \"{1}\"", cabPath, destinationFolder),
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+
+            string output;
+            int exitCode;
+            using (var expand = System.Diagnostics.Process.Start(startInfo))
+            {
+                expand.StandardInput.Close();   // nothing to answer, so it can never sit waiting for input
+                var errors = expand.StandardError.ReadToEndAsync();
+                output = expand.StandardOutput.ReadToEnd() + errors.Result;
+                expand.WaitForExit();
+                exitCode = expand.ExitCode;
+            }
+
+            string[] files = Directory.GetFiles(destinationFolder, "*", SearchOption.AllDirectories);
+            if (exitCode != 0 || files.Length == 0)
+            {
+                output = output.Trim();
+                if (output.Length > 1000) output = "..." + output.Substring(output.Length - 1000);
+                throw new IOException(string.Format("Could not extract {0} (expand.exe exit code {1}). {2}", cabPath, exitCode, output));
+            }
+            return files;
+        }
+
         public IEnumerable<IResultObject> GetCollectionMembership(ConnectionManagerBase ConnectionManager, int resourceID)
         {
             string query = string.Format("SELECT SMS_Collection.* FROM SMS_FullCollectionMembership, SMS_Collection where ResourceID = '{0}' and SMS_FullCollectionMembership.CollectionID = SMS_Collection.CollectionID", resourceID);
