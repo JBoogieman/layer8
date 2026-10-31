@@ -8,6 +8,7 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 
 - Client actions on devices and collections
 - Client tools on devices and collections: quick status (signed-in user, uptime, client version), check for a pending restart, install missing updates, full machine policy refresh, repair the client, turn off provisioning mode
+- Online status for devices and whole collections: ping, or port 445 when ping is blocked
 - Remote tools on devices: ping, Remote Desktop, Remote Assistance, PowerShell session, browse C$, client logs, Computer Management, Event Viewer, Services
 - Copy device names, or every member of a collection, to the clipboard
 - Extended device properties: update compliance, client health, collection membership
@@ -25,13 +26,15 @@ Console references resolve automatically (see `Directory.Build.props`). If your 
 
 ## Installing
 
-Close the ConfigMgr console, then from an elevated prompt:
+From an elevated prompt:
 
 ```
 msiexec /i Layer8.msi /qn
 ```
 
 The MSI finds the console through the registry, puts Layer8's DLLs in the console's `bin` folder and its menus in `XmlStorage\Extensions`, and shows up in Add/Remove Programs. `msiexec /x Layer8.msi /qn` removes it, and a newer Layer8.msi upgrades an installed one in place. It refuses to install on a machine without the console.
+
+An open console locks Layer8's DLLs, so the installer asks it to close, the same as clicking its X. A silent install running as SYSTEM (an MECM deployment) can't reach a signed-in user's console; then Windows replaces the files at the next restart and msiexec returns 3010, which MECM treats as a soft reboot.
 
 ## Developer install
 

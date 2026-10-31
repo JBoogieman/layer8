@@ -9,9 +9,10 @@
     4. Uninstalls cleanly, and a newer Layer8.msi replaces an older one in place (a "major upgrade").
 
   Install it silently, the way MECM would:  msiexec /i Layer8.msi /qn
-  Close the ConfigMgr console first: it locks the DLLs this replaces.
+  An open console is asked to close (see CloseConsole below).
 -->
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 
   <!--
     UpgradeCode is Layer8's permanent identity. Every Layer8.msi ever built must keep this value; it's how
@@ -58,6 +59,19 @@
     <!-- Stop with a clear message if there's no console. ("Installed" lets an uninstall through regardless.) -->
     <Launch Condition="Installed OR CONSOLEINSTALLDIR"
             Message="The Configuration Manager console isn't installed on this computer. Install the console, then run this again." />
+
+    <!--
+      The console locks Layer8's DLLs while it's open. Send it the same close message as clicking its X, so the
+      files are replaced now instead of at the next restart. It never kills the console, and never prompts.
+      A silent install running as SYSTEM (an MECM deployment) can't reach a signed-in user's console: then
+      Windows Installer replaces the files at the next restart and returns 3010, which MECM treats as a
+      soft reboot.
+    -->
+    <util:CloseApplication Id="CloseConsole"
+                           Target="Microsoft.ConfigurationManagement.exe"
+                           CloseMessage="yes"
+                           RebootPrompt="no"
+                           Description="The Configuration Manager console is open and is being closed so Layer8 can be installed." />
 
     <!-- Point CONSOLEDIR at the folder found above, before Windows Installer works out where files go. -->
     <SetDirectory Id="CONSOLEDIR" Value="[CONSOLEINSTALLDIR]" />

@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Management;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Threading;
 using System.Windows.Forms;
 using System.ServiceProcess;
@@ -84,6 +86,7 @@ namespace Layer8.Device
         // or null to run without asking.
         private static readonly Dictionary<string, string> ClientTools = new Dictionary<string, string>(StringComparer.Ordinal)
         {
+            { nameof(OnlineStatus), null },
             { nameof(QuickStatus), null },
             { nameof(CheckPendingRestart), null },
             { nameof(InstallMissingUpdates), "Install every missing software update on {0} now?\n\nThis installs the updates deployed to each device (required or available) that it reports as missing, without waiting for their deadlines. A device may restart afterwards, depending on the deployments' restart settings." },
@@ -205,6 +208,57 @@ namespace Layer8.Device
                 return null;
             }
             return result as string;
+        }
+
+        /// <summary>
+        /// Is the device reachable? Pings it twice, and when ping is blocked (Windows Firewall blocks it by
+        /// default) tries port 445, the file-sharing port Browse C$ and the client logs use anyway.
+        /// </summary>
+        public static string OnlineStatus(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            try
+            {
+                using (Ping ping = new Ping())
+                {
+                    for (int attempt = 0; attempt < 2; attempt++)
+                    {
+                        PingReply reply = ping.Send(host, 1000);
+                        if (reply.Status == IPStatus.Success)
+                        {
+                            return string.Format("Online: ping {0} ms ({1})", reply.RoundtripTime, reply.Address);
+                        }
+                    }
+                }
+            }
+            catch (PingException ex) when (ex.InnerException is SocketException)
+            {
+                throw new DeviceOfflineException("Not found in DNS");
+            }
+
+            if (PortAnswers(host, 445, 1000))
+            {
+                return "Online: ping blocked, port 445 answers";
+            }
+            throw new DeviceOfflineException("Offline: no ping reply, port 445 closed");
+        }
+
+        private static bool PortAnswers(string host, int port, int timeoutMs)
+        {
+            using (TcpClient client = new TcpClient())
+            {
+                Task connect = client.ConnectAsync(host, port);
+                // A connect still running when we give up fails later; observe that so it isn't reported as unhandled.
+                connect.ContinueWith(t => { Exception ignored = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
+                try
+                {
+                    return connect.Wait(timeoutMs) && client.Connected;
+                }
+                catch (AggregateException)
+                {
+                    return false;
+                }
+            }
         }
 
         /// <summary>
@@ -478,6 +532,15 @@ namespace Layer8.Device
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// A device that can't be reached, as an expected answer rather than a fault: the progress dialog shows the
+    /// message and counts the device as offline.
+    /// </summary>
+    public sealed class DeviceOfflineException : Exception
+    {
+        public DeviceOfflineException(string message) : base(message) { }
     }
 
     public static class ServiceControllerExtensions

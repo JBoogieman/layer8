@@ -167,6 +167,18 @@
         <string>ContextMenu</string>
       </ShowOn>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Online Status (Ping)" MnemonicDisplayName="Online Status (Ping)" Description="Check which devices are reachable: ping, or port 445 when ping is blocked">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>OnlineStatus</DialogId>
+    </ActionDescription>
     <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Quick Status" MnemonicDisplayName="Quick Status" Description="Show who is signed in, time since the last restart and the ConfigMgr client version">
       <ShowOn>
         <string>DefaultHomeTab</string>

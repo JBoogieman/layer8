@@ -14,6 +14,18 @@
   <MatchPattern>[^2]</MatchPattern>
   <MatchValueToTest>##SUB:ResourceType##</MatchValueToTest>
   <ActionGroups>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Online Status (Ping)" MnemonicDisplayName="Online Status (Ping)" Description="Check which devices are reachable: ping, or port 445 when ping is blocked">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>OnlineStatus</DialogId>
+    </ActionDescription>
     <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Ping" MnemonicDisplayName="Ping" Description="Ping the device continuously in a command window">
       <ShowOn>
         <string>DefaultHomeTab</string>

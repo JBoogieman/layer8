@@ -19,4 +19,9 @@
     <!-- Folders Package.wxs reads from, as $(var.RepoDir), $(var.BuildDir) and $(var.ExtensionsDir). -->
     <DefineConstants>RepoDir=$(MSBuildThisFileDirectory)..\;BuildDir=$(MSBuildThisFileDirectory)..\Build\$(Configuration)\;ExtensionsDir=$(MSBuildThisFileDirectory)..\Extensions\</DefineConstants>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- util:CloseApplication in Package.wxs (closes an open console during install). Same version as the SDK. -->
+    <PackageReference Include="WixToolset.Util.wixext" Version="7.0.1" />
+  </ItemGroup>
 </Project>

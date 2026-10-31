@@ -38,7 +38,7 @@ namespace Layer8.Device
             foreach (IResultObject resultObject in selectedResultObjects)
             {
                 string name = resultObject["Name"].StringValue;
-                if (name != null && ValidName.IsMatch(name)) names.Add(name); else skipped.Add(name ?? "(no name)");
+                if (IsComputerName(name)) names.Add(name); else skipped.Add(name ?? "(no name)");
             }
 
             if (skipped.Count > 0)
@@ -60,13 +60,23 @@ namespace Layer8.Device
             foreach (string name in names)
             {
                 ProcessStartInfo start = StartInfo(tool, name);
-                if (!File.Exists(start.FileName))
+                string program = RequiredProgram(tool, start);
+                if (!File.Exists(program))
                 {
-                    throw new FileNotFoundException(MissingToolMessage(tool, start.FileName), start.FileName);
+                    throw new FileNotFoundException(MissingToolMessage(tool, program), program);
                 }
                 log.InfoFormat("{0} on {1}: {2} {3}", action.DisplayName, name, start.FileName, start.Arguments);
                 Process.Start(start)?.Dispose();
             }
+        }
+
+        /// <summary>
+        /// True for names that can be a computer name. ConfigMgr also lists placeholder records such as
+        /// "x64 Unknown Computer (x64 Unknown Computer)", which aren't machines and mustn't reach a command line.
+        /// </summary>
+        public static bool IsComputerName(string name)
+        {
+            return name != null && ValidName.IsMatch(name);
         }
 
         /// <summary>The program and arguments for one tool against one device. Public so it can be tested.</summary>
@@ -82,7 +92,11 @@ namespace Layer8.Device
                 case "RemoteDesktop":
                     return Program(Path.Combine(system, "mstsc.exe"), "/v:" + name);
                 case "RemoteAssistance":
-                    return Program(Path.Combine(system, "msra.exe"), "/offerra " + name);
+                    // msra.exe asks for elevation, which a direct start can't give it ("requires elevation"). A hidden
+                    // 64-bit cmd passes it to Windows' normal launcher, which shows the UAC prompt. Inside that cmd,
+                    // System32 is the real 64-bit folder.
+                    return Hidden(Path.Combine(system, "cmd.exe"),
+                                  string.Format("/c start \"\" \"{0}\" /offerra {1}", Path.Combine(windows, @"System32\msra.exe"), name));
                 case "PowerShell":
                     return Program(Path.Combine(system, @"WindowsPowerShell\v1.0\powershell.exe"),
                                    string.Format("-NoExit -Command \"$Host.UI.RawUI.WindowTitle = 'PowerShell on {0}'; Enter-PSSession -ComputerName {0}\"", name));
@@ -104,6 +118,21 @@ namespace Layer8.Device
         private static ProcessStartInfo Program(string fileName, string arguments)
         {
             return new ProcessStartInfo(fileName, arguments) { UseShellExecute = false };
+        }
+
+        private static ProcessStartInfo Hidden(string fileName, string arguments)
+        {
+            return new ProcessStartInfo(fileName, arguments) { UseShellExecute = false, CreateNoWindow = true };
+        }
+
+        /// <summary>The program that must exist for the tool to work (for Remote Assistance, msra.exe rather than the cmd that starts it).</summary>
+        private static string RequiredProgram(string tool, ProcessStartInfo start)
+        {
+            if (tool == "RemoteAssistance")
+            {
+                return Path.Combine(NativeSystemFolder(Environment.GetFolderPath(Environment.SpecialFolder.Windows)), "msra.exe");
+            }
+            return start.FileName;
         }
 
         /// <summary>

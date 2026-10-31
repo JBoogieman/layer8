@@ -58,6 +58,17 @@ namespace Layer8.Device
 
         private void DeviceProgressDialog_Shown(object sender, EventArgs e)
         {
+            // Widen here, not in the constructor: the console's dialog base sizes the window while it loads, so
+            // an earlier size doesn't stick. 600 (at 100% scaling) fits answers like Quick Status's; the controls
+            // are anchored, so they stretch with it.
+            int wanted = LogicalToDeviceUnits(600);
+            if (ClientSize.Width < wanted)
+            {
+                int grow = wanted - ClientSize.Width;
+                ClientSize = new System.Drawing.Size(wanted, ClientSize.Height);
+                Left = Math.Max(0, Left - grow / 2);   // stay centred where the console put it
+            }
+
             foreach (IResultObject resultObject in resultObjects)
             {
                 // speed up the form by not searching for the item later, just include it into the run action
@@ -83,6 +94,17 @@ namespace Layer8.Device
                 return;
             }
 
+            // Placeholder records (the Unknown Computer and Provisioning Device entries in All Systems) aren't
+            // machines: answer at once instead of waiting for a connection that can't happen.
+            if (!RemoteTools.IsComputerName(item.Text))
+            {
+                Interlocked.Increment(ref offline);
+                Interlocked.Increment(ref other);
+                SetStatus(item, "Skipped: not a computer name");
+                OnUiThread(UpdateProgress);
+                return;
+            }
+
             string status;
             try
             {
@@ -100,7 +122,13 @@ namespace Layer8.Device
             catch (Exception ex)
             {
                 Exception root = SafeAction.Unwrap(ex);
-                if (root is ManagementException wmiError && ClientActions.IsNoClient(wmiError))
+                if (root is DeviceOfflineException)
+                {
+                    // An expected answer (no reply, not in DNS), not a fault.
+                    status = root.Message;
+                    Interlocked.Increment(ref offline);
+                }
+                else if (root is ManagementException wmiError && ClientActions.IsNoClient(wmiError))
                 {
                     // The ConfigMgr WMI namespace or class isn't there: no client, or a broken one.
                     status = "No ConfigMgr client found";
@@ -157,6 +185,18 @@ namespace Layer8.Device
             {
                 IsLoading = false;
                 buttonOK.Enabled = true;
+
+                // Fit the Status column to the longest answer, never narrower than the space it has. The console's
+                // list wraps a real ListView, so a header's Width doesn't reach it; its own AutoResizeColumn does.
+                // Header size on the last column fills the rest of the list.
+                int longest = 0;
+                foreach (ListViewItem host in listViewHosts.Items)
+                {
+                    longest = Math.Max(longest, TextRenderer.MeasureText(host.SubItems[1].Text, listViewHosts.Font).Width);
+                }
+                int available = listViewHosts.ClientSize.Width - columnHeaderName.Width - SystemInformation.VerticalScrollBarWidth;
+                listViewHosts.AutoResizeColumn(columnHeaderStatus.Index,
+                    longest + LogicalToDeviceUnits(16) > available ? ColumnHeaderAutoResizeStyle.ColumnContent : ColumnHeaderAutoResizeStyle.HeaderSize);
             }
         }
 
