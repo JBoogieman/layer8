@@ -1,0 +1,22 @@
+<Project Sdk="WixToolset.Sdk/7.0.1">
+  <!--
+    Builds Layer8.msi from the files the Layer8 projects put in ..\Build\<Configuration>\ and the
+    console XML in ..\Extensions\. Build the Layer8 projects first; tools\Build-Layer8Msi.ps1 does both.
+
+    The WiX Toolset comes from nuget.org the first time this builds (no separate install needed).
+  -->
+  <PropertyGroup>
+    <!--
+      WiX v7 won't build until you accept its Open Source Maintenance Fee EULA. The fee applies to
+      people who use WiX to generate revenue; a free, non-commercial project like Layer8 isn't charged.
+      Keeping this line means you accept that EULA: https://docs.firegiant.com/wix/osmf/
+    -->
+    <AcceptEula>wix7</AcceptEula>
+
+    <OutputName>Layer8</OutputName>
+    <OutputPath>$(MSBuildThisFileDirectory)..\Build\Installer\$(Configuration)\</OutputPath>
+
+    <!-- Folders Package.wxs reads from, as $(var.RepoDir), $(var.BuildDir) and $(var.ExtensionsDir). -->
+    <DefineConstants>RepoDir=$(MSBuildThisFileDirectory)..\;BuildDir=$(MSBuildThisFileDirectory)..\Build\$(Configuration)\;ExtensionsDir=$(MSBuildThisFileDirectory)..\Extensions\</DefineConstants>
+  </PropertyGroup>
+</Project>

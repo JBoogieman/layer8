@@ -1,6 +1,9 @@
 <Project>
-  <!-- Fail early with a clear message instead of dozens of missing-reference errors when the console isn't installed. -->
-  <Target Name="Layer8CheckConsole" BeforeTargets="ResolveAssemblyReferences" Condition="'$(MSBuildProjectName)' != 'INIFileParser'">
+  <!--
+    Fail early with a clear message instead of dozens of missing-reference errors when the console isn't installed.
+    Only the Layer8 C# projects need the console; the INI parser and the installer don't.
+  -->
+  <Target Name="Layer8CheckConsole" BeforeTargets="ResolveAssemblyReferences" Condition="'$(MSBuildProjectExtension)' == '.csproj' and '$(MSBuildProjectName)' != 'INIFileParser'">
     <Error Condition="!Exists('$(ConfigMgrConsoleBin)Microsoft.ConfigurationManagement.exe')"
            Text="ConfigMgr console not found in '$(ConfigMgrConsoleBin)'. Install the ConfigMgr console, or build with -p:ConfigMgrConsoleBin=&lt;path to AdminConsole\bin&gt;." />
   </Target>

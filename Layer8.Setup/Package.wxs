@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Layer8 installer.
+
+  What it does:
+    1. Finds the ConfigMgr console from the registry. No console, no install.
+    2. Copies Layer8's DLLs (and the libraries they use) into the console's bin folder.
+    3. Copies the menu (Actions) and dialog (Forms) XML into the console's XmlStorage\Extensions folder.
+    4. Uninstalls cleanly, and a newer Layer8.msi replaces an older one in place (a "major upgrade").
+
+  Install it silently, the way MECM would:  msiexec /i Layer8.msi /qn
+  Close the ConfigMgr console first: it locks the DLLs this replaces.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <!--
+    UpgradeCode is Layer8's permanent identity. Every Layer8.msi ever built must keep this value; it's how
+    Windows Installer knows a new MSI is an upgrade of an installed Layer8. Never change it.
+
+    Version comes from Layer8.dll's file version (SharedAssemblyInfo.cs), so there's one place to bump it.
+    Windows Installer only compares the first three parts (0.1.0), so bump at least the third number
+    for each release.
+  -->
+  <Package Name="Layer8"
+           Manufacturer="Layer8"
+           Version="!(bind.FileVersion.Layer8.dll)"
+           UpgradeCode="96752585-5D32-4B81-96E4-5999423295BC"
+           Scope="perMachine">
+
+    <!--
+      Installing any Layer8.msi removes the installed one first, then installs the new files.
+      AllowSameVersionUpgrades lets you reinstall a rebuilt MSI with the same version while developing.
+    -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of Layer8 is already installed." />
+
+    <!-- Everything goes inside the one .msi file. -->
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Add/Remove Programs: Layer8's icon, and no "Change" button (there's nothing to change). -->
+    <Icon Id="Layer8.ico" SourceFile="$(var.RepoDir)Layer8\Resources\tools.ico" />
+    <Property Id="ARPPRODUCTICON" Value="Layer8.ico" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <!--
+      Find the console. Its installer records its folder (...\AdminConsole\) in the 32-bit registry,
+      HKLM\SOFTWARE\WOW6432Node\Microsoft\ConfigMgr10\Setup, value "UI Installation Directory".
+    -->
+    <Property Id="CONSOLEINSTALLDIR">
+      <RegistrySearch Id="ConsoleInstallDir"
+                      Root="HKLM"
+                      Key="SOFTWARE\Microsoft\ConfigMgr10\Setup"
+                      Name="UI Installation Directory"
+                      Type="raw"
+                      Bitness="always32" />
+    </Property>
+
+    <!-- Stop with a clear message if there's no console. ("Installed" lets an uninstall through regardless.) -->
+    <Launch Condition="Installed OR CONSOLEINSTALLDIR"
+            Message="The Configuration Manager console isn't installed on this computer. Install the console, then run this again." />
+
+    <!-- Point CONSOLEDIR at the folder found above, before Windows Installer works out where files go. -->
+    <SetDirectory Id="CONSOLEDIR" Value="[CONSOLEINSTALLDIR]" />
+
+    <!--
+      The folder layout inside the console. CONSOLEDIR's name here is only a placeholder: SetDirectory
+      above replaces the whole path with the console's real folder.
+    -->
+    <StandardDirectory Id="ProgramFilesFolder">
+      <Directory Id="CONSOLEDIR" Name="ConfigMgrConsole">
+        <Directory Id="CONSOLEBIN" Name="bin" />
+        <Directory Id="XMLSTORAGE" Name="XmlStorage">
+          <Directory Id="EXTENSIONSDIR" Name="Extensions" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Layer8's own DLLs. "Layer8.dll" is named so the Version above can read its file version. -->
+    <ComponentGroup Id="Layer8Binaries" Directory="CONSOLEBIN">
+      <File Id="Layer8.dll" Source="$(var.BuildDir)Layer8.dll" />
+      <File Source="$(var.BuildDir)Layer8.Device.dll" />
+      <File Source="$(var.BuildDir)Layer8.DriverManager.dll" />
+      <File Source="$(var.BuildDir)Layer8.IniFileParser.dll" />
+    </ComponentGroup>
+
+    <!--
+      Third-party libraries Layer8 uses. Quick Tools ships the same versions of these under the same names,
+      so with both installed, uninstalling either one removes files the other still needs. Next step
+      to sort out (see the README's Status section).
+    -->
+    <ComponentGroup Id="SharedLibraries" Directory="CONSOLEBIN">
+      <File Source="$(var.BuildDir)ByteSize.dll" />
+      <File Source="$(var.BuildDir)SmartThreadPool.dll" />
+      <File Source="$(var.BuildDir)Microsoft.Deployment.Compression.dll" />
+      <File Source="$(var.BuildDir)Microsoft.Deployment.Compression.Cab.dll" />
+    </ComponentGroup>
+
+    <!--
+      The console XML: everything under the repo's Extensions folder, keeping its folder structure
+      (Actions\<console node GUID>\Layer8*.xml and Forms\*.xml).
+    -->
+    <ComponentGroup Id="ConsoleExtensions" Directory="EXTENSIONSDIR">
+      <Files Include="$(var.ExtensionsDir)**" />
+    </ComponentGroup>
+
+    <Feature Id="Layer8">
+      <ComponentGroupRef Id="Layer8Binaries" />
+      <ComponentGroupRef Id="SharedLibraries" />
+      <ComponentGroupRef Id="ConsoleExtensions" />
+    </Feature>
+  </Package>
+</Wix>
