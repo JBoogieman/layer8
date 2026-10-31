@@ -4,6 +4,7 @@ using Microsoft.ConfigurationManagement.AdminConsole.Schema;
 using Microsoft.ConfigurationManagement.AdminConsole.DialogFramework;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Management;
 using System.Threading;
 using System.Windows.Forms;
@@ -208,7 +209,8 @@ namespace Layer8.Device
 
         /// <summary>
         /// One line per device: who's signed in, time since the last restart, and the ConfigMgr client version.
-        /// The user comes from Win32_ComputerSystem, which only knows the console (local) session, not Remote Desktop ones.
+        /// Signed-in users are the owners of explorer.exe, which covers console and Remote Desktop sessions alike
+        /// (Win32_ComputerSystem.UserName only knows the console).
         /// </summary>
         public static string QuickStatus(IResultObject resultObject)
         {
@@ -216,9 +218,8 @@ namespace Layer8.Device
             List<string> parts = new List<string>();
 
             ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
-            ManagementObject computer = Utility.GetFirstWMIInstance(cimv2, "SELECT UserName FROM Win32_ComputerSystem");
-            string user = computer?["UserName"] as string;
-            parts.Add(string.IsNullOrEmpty(user) ? "Nobody signed in at the console" : "Signed in: " + user);
+            List<string> users = SignedInUsers(cimv2);
+            parts.Add(users.Count == 0 ? "Nobody signed in" : "Signed in: " + string.Join(", ", users));
 
             ManagementObject os = Utility.GetFirstWMIInstance(cimv2, "SELECT LastBootUpTime FROM Win32_OperatingSystem");
             DateTime? lastBoot = ToDateTime(os?["LastBootUpTime"]);
@@ -231,12 +232,39 @@ namespace Layer8.Device
                 string version = client?["ClientVersion"] as string;
                 parts.Add(string.IsNullOrEmpty(version) ? "client version unknown" : "client " + version);
             }
-            catch (ManagementException ex) when (ex.ErrorCode == ManagementStatus.InvalidNamespace)
+            catch (ManagementException ex) when (IsNoClient(ex))
             {
                 parts.Add("no ConfigMgr client");
             }
 
             return string.Join("; ", parts);
+        }
+
+        /// <summary>
+        /// True when a WMI error means the ConfigMgr client isn't there: no root\ccm namespace, or (on a site
+        /// server, which has root\ccm without a client) no client class.
+        /// </summary>
+        internal static bool IsNoClient(ManagementException ex)
+        {
+            return ex.ErrorCode == ManagementStatus.InvalidNamespace || ex.ErrorCode == ManagementStatus.InvalidClass;
+        }
+
+        private static List<string> SignedInUsers(ManagementScope cimv2)
+        {
+            List<string> users = new List<string>();
+            foreach (ManagementObject explorer in Utility.SearchWMIToList(cimv2, "SELECT Handle FROM Win32_Process WHERE Name = 'explorer.exe'"))
+            {
+                using (explorer)
+                using (ManagementBaseObject owner = explorer.InvokeMethod("GetOwner", null, null))
+                {
+                    string user = owner?["User"] as string;
+                    if (string.IsNullOrEmpty(user)) continue;
+                    string domain = owner["Domain"] as string;
+                    string name = string.IsNullOrEmpty(domain) ? user : domain + "\\" + user;
+                    if (!users.Contains(name, StringComparer.OrdinalIgnoreCase)) users.Add(name);
+                }
+            }
+            return users;
         }
 
         private static string FormatUptime(TimeSpan uptime)
