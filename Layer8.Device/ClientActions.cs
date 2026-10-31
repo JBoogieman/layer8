@@ -83,6 +83,7 @@ namespace Layer8.Device
         // or null to run without asking.
         private static readonly Dictionary<string, string> ClientTools = new Dictionary<string, string>(StringComparer.Ordinal)
         {
+            { nameof(QuickStatus), null },
             { nameof(CheckPendingRestart), null },
             { nameof(InstallMissingUpdates), "Install every missing software update on {0} now?\n\nThis installs the updates deployed to each device (required or available) that it reports as missing, without waiting for their deadlines. A device may restart afterwards, depending on the deployments' restart settings." },
             { nameof(FullMachinePolicyRefresh), null },
@@ -203,6 +204,46 @@ namespace Layer8.Device
                 return null;
             }
             return result as string;
+        }
+
+        /// <summary>
+        /// One line per device: who's signed in, time since the last restart, and the ConfigMgr client version.
+        /// The user comes from Win32_ComputerSystem, which only knows the console (local) session, not Remote Desktop ones.
+        /// </summary>
+        public static string QuickStatus(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            List<string> parts = new List<string>();
+
+            ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
+            ManagementObject computer = Utility.GetFirstWMIInstance(cimv2, "SELECT UserName FROM Win32_ComputerSystem");
+            string user = computer?["UserName"] as string;
+            parts.Add(string.IsNullOrEmpty(user) ? "Nobody signed in at the console" : "Signed in: " + user);
+
+            ManagementObject os = Utility.GetFirstWMIInstance(cimv2, "SELECT LastBootUpTime FROM Win32_OperatingSystem");
+            DateTime? lastBoot = ToDateTime(os?["LastBootUpTime"]);
+            if (lastBoot.HasValue) parts.Add("up " + FormatUptime(DateTime.Now - lastBoot.Value));
+
+            try
+            {
+                ManagementScope ccm = Utility.GetWMIScope(host, "ccm");
+                ManagementObject client = Utility.GetFirstWMIInstance(ccm, "SELECT ClientVersion FROM SMS_Client");
+                string version = client?["ClientVersion"] as string;
+                parts.Add(string.IsNullOrEmpty(version) ? "client version unknown" : "client " + version);
+            }
+            catch (ManagementException ex) when (ex.ErrorCode == ManagementStatus.InvalidNamespace)
+            {
+                parts.Add("no ConfigMgr client");
+            }
+
+            return string.Join("; ", parts);
+        }
+
+        private static string FormatUptime(TimeSpan uptime)
+        {
+            if (uptime.TotalDays >= 1) return string.Format("{0}d {1}h", (int)uptime.TotalDays, uptime.Hours);
+            if (uptime.TotalHours >= 1) return string.Format("{0}h {1}m", (int)uptime.TotalHours, uptime.Minutes);
+            return string.Format("{0}m", Math.Max(0, (int)uptime.TotalMinutes));
         }
 
         /// <summary>Asks the client whether it's waiting on a restart: ConfigMgr's own view, plus Windows servicing and Windows Update.</summary>

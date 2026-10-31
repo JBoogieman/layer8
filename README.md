@@ -7,7 +7,7 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 ## What's in it
 
 - Client actions on devices and collections
-- Client fixes on devices and collections: check for a pending restart, install missing updates, full machine policy refresh, repair the client
+- Client tools on devices and collections: quick status (signed-in user, uptime, client version), check for a pending restart, install missing updates, full machine policy refresh, repair the client, turn off provisioning mode
 - Remote tools on devices: ping, Remote Desktop, Remote Assistance, PowerShell session, browse C$, client logs, Computer Management, Event Viewer, Services
 - Copy device names, or every member of a collection, to the clipboard
 - Extended device properties: update compliance, client health, collection membership

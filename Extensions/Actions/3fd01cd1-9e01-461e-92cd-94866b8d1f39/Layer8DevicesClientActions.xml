@@ -167,6 +167,18 @@
         <string>ContextMenu</string>
       </ShowOn>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Quick Status" MnemonicDisplayName="Quick Status" Description="Show who is signed in, time since the last restart and the ConfigMgr client version">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>QuickStatus</DialogId>
+    </ActionDescription>
     <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Check Pending Restart" MnemonicDisplayName="Check Pending Restart" Description="Ask each device whether it is waiting on a restart: ConfigMgr, Windows servicing or Windows Update">
       <ShowOn>
         <string>DefaultHomeTab</string>
