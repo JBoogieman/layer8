@@ -76,7 +76,8 @@ namespace Layer8.DriverManager
 
                 foreach (DellDriverPackage package in packages)
                 {
-                    Uri uri = new Uri(string.Format("http://{0}/{1}", UserData["baseLocation"], package.Url));
+                    // Dell serves driver packs over https.
+                    Uri uri = new Uri(string.Format("https://{0}/{1}", UserData["baseLocation"], package.Url));
 
                     string filename = Path.GetFileName(uri.LocalPath);
                     _downloadUrls.Enqueue(new KeyValuePair<DellDriverPackage, Uri>(package, uri));

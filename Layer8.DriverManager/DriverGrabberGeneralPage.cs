@@ -137,8 +137,15 @@ namespace Layer8.DriverManager
 
         private void ProgressWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
         {
-            progressInformationDialog.Result = (bool)e.Result;
-            valiadated = (bool)e.Result;
+            // Read e.Result only when the work succeeded: after an error it throws, which used to leave the progress
+            // dialog open and the wizard stuck with no message. Now the error is logged and shown below.
+            bool succeeded = e.Error == null && !e.Cancelled && e.Result is bool workResult && workResult;
+            if (e.Error != null)
+            {
+                Layer8.Layer8Log.GetLogger(GetType()).Error("Connecting to the device or reading its drivers failed", e.Error);
+            }
+            progressInformationDialog.Result = succeeded;
+            valiadated = succeeded;
             progressInformationDialog.UpdateProgressValue(100);
             progressInformationDialog.CloseDialog();
 

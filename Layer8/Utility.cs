@@ -540,21 +540,29 @@ namespace Layer8
                 return dialog.Form.ShowDialog();
             }
         }
+        /// <summary>
+        /// The size a web server reports for a file, or -1 if it doesn't say or can't be reached. Callers compare it
+        /// with a file they already downloaded, so -1 simply means "download it again".
+        /// </summary>
         public static long GetFileSize(Uri url)
         {
-            long result = -1;
-
-            WebRequest req = WebRequest.Create(url);
-            req.Method = "HEAD";
-            using (WebResponse resp = req.GetResponse())
+            try
             {
-                if (long.TryParse(resp.Headers.Get("Content-Length"), out long ContentLength))
+                WebRequest req = WebRequest.Create(url);
+                req.Method = "HEAD";
+                using (WebResponse resp = req.GetResponse())
                 {
-                    result = ContentLength;
+                    if (long.TryParse(resp.Headers.Get("Content-Length"), out long contentLength))
+                    {
+                        return contentLength;
+                    }
                 }
             }
-
-            return result;
+            catch (Exception ex)
+            {
+                Layer8Log.GetLogger(typeof(Utility)).Warn("Could not get the size of " + url, ex);
+            }
+            return -1;
         }
 
         public static long GetFileSize(string url)

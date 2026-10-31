@@ -177,8 +177,15 @@ namespace Layer8.DriverManager
 
         private void ProgressWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
         {
-            progressInformationDialog.Result = (bool)e.Result;
-            valiadated = (bool)e.Result;
+            // Read e.Result only when the work succeeded: after an error it throws, which used to leave the progress
+            // dialog open and the wizard stuck with no message. Now the error is logged and shown below.
+            bool succeeded = e.Error == null && !e.Cancelled && e.Result is bool workResult && workResult;
+            if (e.Error != null)
+            {
+                Layer8.Layer8Log.GetLogger(GetType()).Error("Downloading the HP driver pack catalog failed", e.Error);
+            }
+            progressInformationDialog.Result = succeeded;
+            valiadated = succeeded;
             progressInformationDialog.UpdateProgressValue(100);
             progressInformationDialog.CloseDialog();
 
@@ -212,10 +219,12 @@ namespace Layer8.DriverManager
                 Uri HPXMLCabinetSource = new Uri(registry.ReadString("HPCatalogURI"));
                 string tempFile = Path.Combine(Path.GetTempPath(), "HPClientDriverPackCatalog.cab");
 
+                Layer8.Layer8Log.GetLogger(GetType()).InfoFormat("Downloading the HP catalog from {0}", HPXMLCabinetSource);
                 using (WebClient client = new WebClient())
                 {
                     client.DownloadFile(HPXMLCabinetSource, tempFile);
                 }
+                Layer8.Layer8Log.GetLogger(GetType()).InfoFormat("Downloaded the HP catalog ({0})", Utility.FormatBytes(new FileInfo(tempFile).Length));
 
                 downloadedCatalog = true;
 

@@ -13,6 +13,20 @@ namespace Layer8.DriverManager
 {
     public partial class OptionsCatalogControl : SmsPageControl
     {
+        // Default catalog addresses. Older settings saved Dell's as plain http; that exact value is upgraded to https.
+        public const string DefaultDellCatalogUri = "https://downloads.dell.com/catalog/DriverPackCatalog.cab";
+        public const string OldDellCatalogUri = "http://downloads.dell.com/catalog/DriverPackCatalog.cab";
+        public const string DefaultHPCatalogUri = "https://ftp.hp.com/pub/caps-softpaq/cmit/HPClientDriverPackCatalog.cab";
+
+        /// <summary>Replaces the old plain-http Dell catalog default with https. Any other address is left alone.</summary>
+        public static void UpgradeDellCatalogUri(ModifyRegistry registry)
+        {
+            if (string.Equals(registry.ReadString("DellCatalogURI"), OldDellCatalogUri, StringComparison.OrdinalIgnoreCase))
+            {
+                registry.Write("DellCatalogURI", DefaultDellCatalogUri);
+            }
+        }
+
         private ControlsValidator controlsValidator;
         private readonly ModifyRegistry registry = new ModifyRegistry();
 
@@ -29,12 +43,13 @@ namespace Layer8.DriverManager
 
             if (string.IsNullOrEmpty(registry.ReadString("DellCatalogURI")))
             {
-                registry.Write("DellCatalogURI", "http://downloads.dell.com/catalog/DriverPackCatalog.cab");
+                registry.Write("DellCatalogURI", DefaultDellCatalogUri);
             }
+            UpgradeDellCatalogUri(registry);
 
             if (string.IsNullOrEmpty(registry.ReadString("HPCatalogURI")))
             {
-                registry.Write("HPCatalogURI", "https://ftp.hp.com/pub/caps-softpaq/cmit/HPClientDriverPackCatalog.cab");
+                registry.Write("HPCatalogURI", DefaultHPCatalogUri);
             }
 
             if (string.IsNullOrEmpty(registry.ReadString("TempDownloadPath")))
