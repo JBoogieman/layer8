@@ -586,25 +586,36 @@ namespace Layer8
             }
         }
 
+        /// <summary>
+        /// Whether the current user can use a folder the way the caller needs. It tries the access instead of
+        /// reading the folder's permissions: the old permissions check said yes when any rule granted the right,
+        /// even one for another user or a Deny rule. For write-type rights it creates a temporary file that's
+        /// deleted as it closes; for read rights it lists the folder.
+        /// </summary>
         public static bool CheckFolderPermissions(string directoryPath, FileSystemRights accessType)
         {
-            bool hasAccess = true;
+            const FileSystemRights writeRights = FileSystemRights.WriteData | FileSystemRights.AppendData | FileSystemRights.Delete | FileSystemRights.DeleteSubdirectoriesAndFiles;
             try
             {
-                AuthorizationRuleCollection collection = Directory.GetAccessControl(directoryPath).GetAccessRules(true, true, typeof(System.Security.Principal.NTAccount));
-                foreach (FileSystemAccessRule rule in collection)
+                if (string.IsNullOrEmpty(directoryPath) || !Directory.Exists(directoryPath)) return false;
+
+                if ((accessType & writeRights) != 0)
                 {
-                    if ((rule.FileSystemRights & accessType) > 0)
-                    {
-                        return hasAccess;
-                    }
+                    string probe = Path.Combine(directoryPath, ".layer8-access-check-" + Guid.NewGuid().ToString("N") + ".tmp");
+                    using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose)) { }
+                    return true;
                 }
+
+                using (IEnumerator<string> entries = Directory.EnumerateFileSystemEntries(directoryPath).GetEnumerator())
+                {
+                    entries.MoveNext();
+                }
+                return true;
             }
-            catch
+            catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException || ex is System.Security.SecurityException)
             {
-                hasAccess = false;
+                return false;
             }
-            return hasAccess;
         }
     }
 

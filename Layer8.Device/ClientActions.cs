@@ -86,6 +86,7 @@ namespace Layer8.Device
             { nameof(CheckPendingRestart), null },
             { nameof(InstallMissingUpdates), "Install every missing software update on {0} now?\n\nThis installs the updates deployed to each device (required or available) that it reports as missing, without waiting for their deadlines. A device may restart afterwards, depending on the deployments' restart settings." },
             { nameof(FullMachinePolicyRefresh), null },
+            { nameof(TurnOffProvisioningMode), null },
             { nameof(RepairClient), "Repair the ConfigMgr client on {0}?\n\nEach client runs ccmrepair, which restarts the SMS Agent Host service and can take several minutes. Watch ccmrepair.log on the device." },
         };
 
@@ -287,6 +288,37 @@ namespace Layer8.Device
                 client.InvokeMethod("RepairClient", null);
             }
             return "Repair started (see ccmrepair.log)";
+        }
+
+        /// <summary>
+        /// Takes the client out of provisioning mode (SMS_Client.SetClientProvisioningMode false). A client left
+        /// in it after a task sequence ignores policy, so nothing deploys to it.
+        /// </summary>
+        public static string TurnOffProvisioningMode(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+
+            // Read the current state first so the result says whether this changed anything.
+            bool wasOn;
+            ManagementScope registryScope = Utility.GetWMIScope(host, "default");
+            using (ManagementClass registry = new ManagementClass(registryScope, new ManagementPath("StdRegProv"), null))
+            using (ManagementBaseObject inParams = registry.GetMethodParameters("GetStringValue"))
+            {
+                inParams["hDefKey"] = 0x80000002u;   // HKEY_LOCAL_MACHINE
+                inParams["sSubKeyName"] = @"SOFTWARE\Microsoft\CCM\CcmExec";
+                inParams["sValueName"] = "ProvisioningMode";
+                using (ManagementBaseObject outParams = registry.InvokeMethod("GetStringValue", inParams, null))
+                {
+                    wasOn = string.Equals(outParams["sValue"] as string, "true", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+
+            ObjectGetOptions options = new ObjectGetOptions(null, TimeSpan.FromSeconds(5), true);
+            using (ManagementClass client = new ManagementClass(string.Format(@"\\{0}\root\ccm:SMS_Client", host), options))
+            {
+                client.InvokeMethod("SetClientProvisioningMode", new object[] { false });
+            }
+            return wasOn ? "Was in provisioning mode; turned it off" : "Wasn't in provisioning mode";
         }
 
         private static bool HasSubKey(ManagementClass registry, string keyPath, string subKey)

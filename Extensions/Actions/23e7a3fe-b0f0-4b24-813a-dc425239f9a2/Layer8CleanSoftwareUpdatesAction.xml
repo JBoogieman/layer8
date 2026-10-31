@@ -25,7 +25,7 @@
         <ImageResourceName>tools</ImageResourceName>
       </ImagesDescription>
       <ActionGroups>
-        <ActionDescription Class="ShowDialog" DisplayName="Clean Software Update Groups" MnemonicDisplayName="Clean Software Update Groups" Description="This will help clean out expired and superseded updetes from software update groups" NodeInConsole="23e7a3fe-b0f0-4b24-813a-dc425239f9a2">
+        <ActionDescription Class="ShowDialog" DisplayName="Clean Software Update Groups" MnemonicDisplayName="Clean Software Update Groups" Description="This will help clean out expired and superseded updates from software update groups" NodeInConsole="23e7a3fe-b0f0-4b24-813a-dc425239f9a2">
           <ShowOn>
             <string>DefaultHomeTab</string>
             <string>ContextMenu</string>

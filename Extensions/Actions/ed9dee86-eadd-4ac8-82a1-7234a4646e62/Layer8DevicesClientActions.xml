@@ -215,5 +215,17 @@
       </ActionAssembly>
       <DialogId>RepairClient</DialogId>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Turn Off Provisioning Mode" MnemonicDisplayName="Turn Off Provisioning Mode" Description="Take the client out of provisioning mode, where it ignores policy (often left on by a failed task sequence)">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>TurnOffProvisioningMode</DialogId>
+    </ActionDescription>
   </ActionGroups>
 </ActionDescription>

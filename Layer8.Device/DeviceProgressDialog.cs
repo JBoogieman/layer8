@@ -100,7 +100,13 @@ namespace Layer8.Device
             catch (Exception ex)
             {
                 Exception root = SafeAction.Unwrap(ex);
-                if (root is ManagementException)
+                if (root is ManagementException wmiError && wmiError.ErrorCode == ManagementStatus.InvalidNamespace)
+                {
+                    // The ConfigMgr WMI namespace (root\ccm) isn't there: no client, or a broken one.
+                    status = "No ConfigMgr client found";
+                    Interlocked.Increment(ref failed);
+                }
+                else if (root is ManagementException)
                 {
                     status = "WMI error: " + root.Message;
                     Interlocked.Increment(ref failed);
