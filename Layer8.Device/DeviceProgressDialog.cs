@@ -89,12 +89,13 @@ namespace Layer8.Device
                 SetStatus(item, "Connecting");
 
                 object result = method.Invoke(null, new object[] { resultObject });
-                // Async actions (like restarting the client service) return a Task; wait for it so
-                // their errors are reported here instead of being lost.
-                (result as System.Threading.Tasks.Task)?.GetAwaiter().GetResult();
+                // Waits for async actions (their errors land in the catch below), and picks up the short
+                // status some actions return, like "No missing updates".
+                string outcome = ClientActions.WaitForResult(result);
 
                 Interlocked.Increment(ref completed);
-                status = "Completed";
+                status = string.IsNullOrEmpty(outcome) ? "Completed" : outcome;
+                log.InfoFormat("{0} on {1}: {2}", method.Name, item.Text, status);
             }
             catch (Exception ex)
             {

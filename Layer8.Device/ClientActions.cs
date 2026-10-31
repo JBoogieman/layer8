@@ -3,8 +3,10 @@ using Microsoft.ConfigurationManagement.ManagementProvider;
 using Microsoft.ConfigurationManagement.AdminConsole.Schema;
 using Microsoft.ConfigurationManagement.AdminConsole.DialogFramework;
 using System;
+using System.Collections.Generic;
 using System.Management;
 using System.Threading;
+using System.Windows.Forms;
 using System.ServiceProcess;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -58,20 +60,51 @@ namespace Layer8.Device
             ProcessAction(scopeNode, action, selectedResultObjects);
         }
 
-        private static void ProcessAction(ScopeNode scopeNode, ActionDescription action, IResultObject resultObjects)
+        /// <summary>
+        /// Console entry point for the client tools (Repair Client, Install Missing Updates, ...). The menu XML
+        /// names the tool in DialogId, which must be one of the methods listed in ClientTools.
+        /// These always show the progress dialog, so each device's answer is on screen.
+        /// </summary>
+        public static void RunClientTool(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
         {
-            bool showProgressDialog = false;
+            SafeAction.Run(action?.DisplayName ?? "RunClientTool", () =>
+            {
+                string tool = action?.DialogId;
+                if (tool == null || !ClientTools.TryGetValue(tool, out string confirmQuestion))
+                {
+                    throw new InvalidOperationException("Unknown client tool '" + tool + "' in the menu XML.");
+                }
+                method = tool;
+                ProcessAction(scopeNode, action, selectedResultObjects, alwaysShowDialog: true, confirmQuestion: confirmQuestion);
+            });
+        }
+
+        // Each client tool's method name, and the question to ask before running it ({0} is what it runs on),
+        // or null to run without asking.
+        private static readonly Dictionary<string, string> ClientTools = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            { nameof(CheckPendingRestart), null },
+            { nameof(InstallMissingUpdates), "Install every missing software update on {0} now?\n\nThis installs the updates deployed to each device (required or available) that it reports as missing, without waiting for their deadlines. A device may restart afterwards, depending on the deployments' restart settings." },
+            { nameof(FullMachinePolicyRefresh), null },
+            { nameof(RepairClient), "Repair the ConfigMgr client on {0}?\n\nEach client runs ccmrepair, which restarts the SMS Agent Host service and can take several minutes. Watch ccmrepair.log on the device." },
+        };
+
+        private static void ProcessAction(ScopeNode scopeNode, ActionDescription action, IResultObject resultObjects, bool alwaysShowDialog = false, string confirmQuestion = null)
+        {
+            bool showProgressDialog = alwaysShowDialog;
             if (resultObjects.ObjectClass == "SMS_Collection" || resultObjects.Count > 1)
             {
                 showProgressDialog = true;
             }
 
             int total = resultObjects.Count;
+            string targetDescription = total == 1 ? resultObjects["Name"].StringValue : total + " devices";
 
             if (resultObjects.ObjectClass == "SMS_Collection")
             {
                 try
                 {
+                    string collectionName = resultObjects["Name"].StringValue;
                     total = 0;
                     string query = string.Format("SELECT * FROM SMS_FullCollectionMembership WHERE CollectionID='{0}'", resultObjects["CollectionID"].StringValue);
                     // query processor does not have count implemented?!?!?
@@ -81,12 +114,19 @@ namespace Layer8.Device
                     }
 
                     resultObjects = resultObjects.ConnectionManager.QueryProcessor.ExecuteQuery(query);
+                    targetDescription = string.Format("the {0} device{1} in {2}", total, total == 1 ? "" : "s", collectionName);
                 }
                 catch (SmsQueryException ex)
                 {
                     SccmExceptionDialog.ShowDialog(SnapIn.Console, ex);
                     return;
                 }
+            }
+
+            if (confirmQuestion != null &&
+                MessageBox.Show(string.Format(confirmQuestion, targetDescription), action.DisplayName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            {
+                return;
             }
 
             if (showProgressDialog)
@@ -121,9 +161,8 @@ namespace Layer8.Device
             {
                 device = resultObject["Name"].StringValue;
                 object result = typeof(ClientActions).GetMethod(method).Invoke(null, new object[] { resultObject });
-                // Async actions (like restarting the client service) return a Task; wait for it so errors aren't lost.
-                (result as Task)?.GetAwaiter().GetResult();
-                log.InfoFormat("{0} on {1}: done", method, device);
+                string outcome = WaitForResult(result);
+                log.InfoFormat("{0} on {1}: {2}", method, device, outcome ?? "done");
             }
             catch (Exception ex)
             {
@@ -148,6 +187,151 @@ namespace Layer8.Device
                 }
             };
             if (uiContext != null) uiContext.Post(show, null); else show(null);
+        }
+
+        /// <summary>
+        /// Actions return nothing, a short status for the device's row ("No missing updates"), or a Task of
+        /// either. Waits for tasks, so their errors are reported where the action ran instead of being lost.
+        /// </summary>
+        internal static string WaitForResult(object result)
+        {
+            if (result is Task<string> textTask) return textTask.GetAwaiter().GetResult();
+            if (result is Task task)
+            {
+                task.GetAwaiter().GetResult();
+                return null;
+            }
+            return result as string;
+        }
+
+        /// <summary>Asks the client whether it's waiting on a restart: ConfigMgr's own view, plus Windows servicing and Windows Update.</summary>
+        public static string CheckPendingRestart(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            List<string> reasons = new List<string>();
+
+            ManagementScope clientSdk = Utility.GetWMIScope(host, @"ccm\ClientSDK");
+            using (ManagementClass utilities = new ManagementClass(clientSdk, new ManagementPath("CCM_ClientUtilities"), null))
+            using (ManagementBaseObject outParams = utilities.InvokeMethod("DetermineIfRebootPending", null, null))
+            {
+                if (IsTrue(outParams["RebootPending"]) || IsTrue(outParams["IsHardRebootPending"]))
+                {
+                    string reason = IsTrue(outParams["IsHardRebootPending"]) ? "ConfigMgr (hard restart)" : "ConfigMgr";
+                    DateTime? deadline = ToDateTime(outParams["RebootDeadline"]);
+                    if (deadline.HasValue) reason += ", deadline " + deadline.Value.ToString("g");
+                    reasons.Add(reason);
+                }
+            }
+
+            // The same registry keys Windows itself uses, read through WMI's registry provider.
+            ManagementScope registryScope = Utility.GetWMIScope(host, "default");
+            using (ManagementClass registry = new ManagementClass(registryScope, new ManagementPath("StdRegProv"), null))
+            {
+                if (HasSubKey(registry, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing", "RebootPending"))
+                    reasons.Add("Windows servicing");
+                if (HasSubKey(registry, @"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update", "RebootRequired"))
+                    reasons.Add("Windows Update");
+            }
+
+            return reasons.Count == 0 ? "No restart pending" : "Restart pending: " + string.Join("; ", reasons);
+        }
+
+        /// <summary>Installs every update the client reports as missing (ComplianceState 0) from its deployments.</summary>
+        public static string InstallMissingUpdates(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            ManagementScope clientSdk = Utility.GetWMIScope(host, @"ccm\ClientSDK");
+            List<ManagementObject> missing = Utility.SearchWMIToList(clientSdk, "SELECT * FROM CCM_SoftwareUpdate WHERE ComplianceState = 0");
+            if (missing.Count == 0)
+            {
+                return "No missing updates";
+            }
+
+            using (ManagementClass manager = new ManagementClass(clientSdk, new ManagementPath("CCM_SoftwareUpdatesManager"), null))
+            using (ManagementBaseObject inParams = manager.GetMethodParameters("InstallUpdates"))
+            {
+                inParams["CCMUpdates"] = missing.ToArray();
+                using (ManagementBaseObject outParams = manager.InvokeMethod("InstallUpdates", inParams, null))
+                {
+                    CheckReturnValue("InstallUpdates", outParams);
+                }
+            }
+            return string.Format("Installing {0} update{1}", missing.Count, missing.Count == 1 ? "" : "s");
+        }
+
+        /// <summary>
+        /// Makes the next policy request a full one instead of only the changes (SMS_Client.ResetPolicy 0), then
+        /// requests and evaluates machine policy. Doesn't purge policy: Microsoft warns a purge (flag 1) can make
+        /// deployed programs run again.
+        /// </summary>
+        public static string FullMachinePolicyRefresh(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            ObjectGetOptions options = new ObjectGetOptions(null, TimeSpan.FromSeconds(5), true);
+            using (ManagementClass client = new ManagementClass(string.Format(@"\\{0}\root\ccm:SMS_Client", host), options))
+            {
+                client.InvokeMethod("ResetPolicy", new object[] { 0u });
+                client.InvokeMethod("TriggerSchedule", new object[] { "{00000000-0000-0000-0000-000000000021}" });   // request machine policy
+                client.InvokeMethod("TriggerSchedule", new object[] { "{00000000-0000-0000-0000-000000000022}" });   // evaluate machine policy
+            }
+            return "Full policy requested";
+        }
+
+        /// <summary>Starts ccmrepair on the client (SMS_Client.RepairClient). It runs on its own for several minutes.</summary>
+        public static string RepairClient(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            ObjectGetOptions options = new ObjectGetOptions(null, TimeSpan.FromSeconds(5), true);
+            using (ManagementClass client = new ManagementClass(string.Format(@"\\{0}\root\ccm:SMS_Client", host), options))
+            {
+                client.InvokeMethod("RepairClient", null);
+            }
+            return "Repair started (see ccmrepair.log)";
+        }
+
+        private static bool HasSubKey(ManagementClass registry, string keyPath, string subKey)
+        {
+            const uint HKEY_LOCAL_MACHINE = 0x80000002;
+            using (ManagementBaseObject inParams = registry.GetMethodParameters("EnumKey"))
+            {
+                inParams["hDefKey"] = HKEY_LOCAL_MACHINE;
+                inParams["sSubKeyName"] = keyPath;
+                using (ManagementBaseObject outParams = registry.InvokeMethod("EnumKey", inParams, null))
+                {
+                    // A missing key returns an error code and no names: that just means "not pending".
+                    string[] names = outParams["sNames"] as string[];
+                    return names != null && Array.Exists(names, n => string.Equals(n, subKey, StringComparison.OrdinalIgnoreCase));
+                }
+            }
+        }
+
+        private static void CheckReturnValue(string methodName, ManagementBaseObject outParams)
+        {
+            object value = outParams?["ReturnValue"];
+            if (value != null && Convert.ToInt64(value) != 0)
+            {
+                throw new InvalidOperationException(string.Format("{0} returned error {1} (0x{1:X}).", methodName, Convert.ToInt64(value)));
+            }
+        }
+
+        private static bool IsTrue(object value)
+        {
+            return value is bool flag && flag;
+        }
+
+        private static DateTime? ToDateTime(object dmtfValue)
+        {
+            string text = dmtfValue as string;
+            if (string.IsNullOrEmpty(text)) return null;
+            try
+            {
+                DateTime value = ManagementDateTimeConverter.ToDateTime(text);
+                return value.Year > 2000 ? value : (DateTime?)null;   // no deadline comes back as 1970
+            }
+            catch (Exception)
+            {
+                return null;
+            }
         }
 
         public static void ClientAction(IResultObject resultObject)

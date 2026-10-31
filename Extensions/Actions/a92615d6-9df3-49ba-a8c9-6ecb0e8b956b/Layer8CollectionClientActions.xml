@@ -162,5 +162,58 @@
         <Method>RunClientActionRestartService</Method>
       </ActionAssembly>
     </ActionDescription>      
+    <ActionDescription Class="Separator">
+      <ShowOn>
+        <string>ContextMenu</string>
+      </ShowOn>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Check Pending Restart" MnemonicDisplayName="Check Pending Restart" Description="Ask each device whether it is waiting on a restart: ConfigMgr, Windows servicing or Windows Update">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>CheckPendingRestart</DialogId>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Install Missing Updates" MnemonicDisplayName="Install Missing Updates" Description="Install every deployed software update the device reports as missing, now">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>InstallMissingUpdates</DialogId>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Full Machine Policy Refresh" MnemonicDisplayName="Full Machine Policy Refresh" Description="Request full machine policy instead of only the changes, then evaluate it">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>FullMachinePolicyRefresh</DialogId>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Repair Client" MnemonicDisplayName="Repair Client" Description="Run ccmrepair on the ConfigMgr client">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>RepairClient</DialogId>
+    </ActionDescription>
   </ActionGroups>
 </ActionDescription>

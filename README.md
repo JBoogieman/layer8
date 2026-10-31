@@ -7,6 +7,9 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 ## What's in it
 
 - Client actions on devices and collections
+- Client fixes on devices and collections: check for a pending restart, install missing updates, full machine policy refresh, repair the client
+- Remote tools on devices: ping, Remote Desktop, Remote Assistance, PowerShell session, browse C$, client logs, Computer Management, Event Viewer, Services
+- Copy device names, or every member of a collection, to the clipboard
 - Extended device properties: update compliance, client health, collection membership
 - Collection management: add resources from a list
 - Driver Manager: grabber, importer, Dell and HP driver packs
@@ -44,10 +47,11 @@ Early days. Layer8 has its own assembly names, namespaces and console IDs, so it
 
 Layer8 writes a CMTrace-format log to `%LOCALAPPDATA%\Layer8\Logs\Layer8.log`. Each console session starts with a line showing the Layer8, console and .NET versions. To get more detail, set the log level to `Debug` (it's picked up within a few seconds, no console restart):
 
-```powershell
-New-Item HKCU:\SOFTWARE\Layer8 -Force | Out-Null
-Set-ItemProperty HKCU:\SOFTWARE\Layer8 LogLevel Debug   # Debug, Info (default), Warn or Error
 ```
+reg add HKCU\SOFTWARE\Layer8 /v LogLevel /d Debug /f
+```
+
+Use `Debug`, `Info` (the default), `Warn` or `Error`.
 
 The log rolls over to `Layer8.lo_` at 2 MB, the same way ConfigMgr's own logs do.
 

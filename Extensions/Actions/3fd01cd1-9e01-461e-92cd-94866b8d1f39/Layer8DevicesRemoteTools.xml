@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription Class="Group" SelectionMode="Both" DisplayName="Remote Tools" MnemonicDisplayName="Remote Tools" Description="Open Windows remote tools against the selected device" NodeInConsole="3fd01cd1-9e01-461e-92cd-94866b8d1f39" RibbonDisplayType="TextAndSmallImage" InsertBefore="bb2855af-4c7f-4a8a-9ec5-cd3833ec82d3">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <ImagesDescription>
+    <ResourceAssembly>
+      <Assembly>Layer8.dll</Assembly>
+      <Type>Layer8.Properties.Resources.resources</Type>
+    </ResourceAssembly>
+    <ImageResourceName>tools</ImageResourceName>
+  </ImagesDescription>
+  <MatchPattern>[^2]</MatchPattern>
+  <MatchValueToTest>##SUB:ResourceType##</MatchValueToTest>
+  <ActionGroups>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Ping" MnemonicDisplayName="Ping" Description="Ping the device continuously in a command window">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.RemoteTools</Type>
+        <Method>Open</Method>
+      </ActionAssembly>
+      <DialogId>Ping</DialogId>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Remote Desktop" MnemonicDisplayName="Remote Desktop" Description="Open a Remote Desktop connection to the device">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.RemoteTools</Type>
+        <Method>Open</Method>
+      </ActionAssembly>
+      <DialogId>RemoteDesktop</DialogId>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Remote Assistance" MnemonicDisplayName="Remote Assistance" Description="Offer Remote Assistance to the signed-in user">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.RemoteTools</Type>
+        <Method>Open</Method>
+      </ActionAssembly>
+      <DialogId>RemoteAssistance</DialogId>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="PowerShell Session" MnemonicDisplayName="PowerShell Session" Description="Open PowerShell with a remote session on the device">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.RemoteTools</Type>
+        <Method>Open</Method>
+      </ActionAssembly>
+      <DialogId>PowerShell</DialogId>
+    </ActionDescription>
+    <ActionDescription Class="Separator">
+      <ShowOn>
+        <string>ContextMenu</string>
+      </ShowOn>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Browse C$" MnemonicDisplayName="Browse C$" Description="Open the device C: drive (C$ share) in Explorer">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.RemoteTools</Type>
+        <Method>Open</Method>
+      </ActionAssembly>
+      <DialogId>BrowseC</DialogId>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Client Logs" MnemonicDisplayName="Client Logs" Description="Open the ConfigMgr client log folder (C:\Windows\CCM\Logs) on the device">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.RemoteTools</Type>
+        <Method>Open</Method>
+      </ActionAssembly>
+      <DialogId>ClientLogs</DialogId>
+    </ActionDescription>
+    <ActionDescription Class="Separator">
+      <ShowOn>
+        <string>ContextMenu</string>
+      </ShowOn>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Computer Management" MnemonicDisplayName="Computer Management" Description="Open Computer Management for the device">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.RemoteTools</Type>
+        <Method>Open</Method>
+      </ActionAssembly>
+      <DialogId>ComputerManagement</DialogId>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Event Viewer" MnemonicDisplayName="Event Viewer" Description="Open Event Viewer for the device">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.RemoteTools</Type>
+        <Method>Open</Method>
+      </ActionAssembly>
+      <DialogId>EventViewer</DialogId>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Services" MnemonicDisplayName="Services" Description="Open Services for the device">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.RemoteTools</Type>
+        <Method>Open</Method>
+      </ActionAssembly>
+      <DialogId>Services</DialogId>
+    </ActionDescription>
+  </ActionGroups>
+</ActionDescription>

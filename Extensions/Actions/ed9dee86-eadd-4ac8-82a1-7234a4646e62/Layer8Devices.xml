@@ -32,6 +32,17 @@
         <Method>ChangeClientCache</Method>
       </ActionAssembly>
     </ActionDescription>    
+    <ActionDescription NamespaceGuid="EB5DD4AB-5760-4BDF-9D10-DC1399582E6F" Class="AssemblyType" SelectionMode="Both" DisplayName="Copy Names" MnemonicDisplayName="Copy Names" Description="Copy the selected device names to the clipboard, one per line">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.Device</Type>
+        <Method>CopyNames</Method>
+      </ActionAssembly>
+    </ActionDescription>
     <ActionDescription NamespaceGuid="B7009279-2666-45EF-9935-1FB3D3ED2ABF" Class="None" />
   </ActionGroups>
 </ActionDescription>
