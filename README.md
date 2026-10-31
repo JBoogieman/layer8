@@ -7,7 +7,7 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 ## What's in it
 
 - Client actions on devices and collections
-- Client tools on devices and collections: quick status (signed-in users, uptime, free space on C:, client version), find installed software by name, list and install missing updates, check for a pending restart, full machine policy refresh, repair the client, turn off provisioning mode
+- Client tools on devices and collections: quick status (signed-in users, uptime, free space on C:, client version), find installed software by name, list and install missing updates, check for a pending restart, full machine policy refresh, group policy update, client health check, clear the client cache, repair the client, turn off provisioning mode. Every run shows one answer per device, works through at most 32 devices at a time, and Copy Results puts the rows on the clipboard for Excel
 - Online status for devices and whole collections: ping, or port 445 when ping is blocked
 - Remote tools on devices: ping, Remote Desktop, Remote Assistance, PowerShell session, browse C$, client logs, Computer Management, Event Viewer, Services
 - Copy device names, or every member of a collection, to the clipboard

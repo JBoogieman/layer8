@@ -239,6 +239,42 @@
       </ActionAssembly>
       <DialogId>FullMachinePolicyRefresh</DialogId>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Group Policy Update (Computer)" MnemonicDisplayName="Group Policy Update (Computer)" Description="Run gpupdate for computer policy on the device">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>GroupPolicyUpdate</DialogId>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Run Client Health Check" MnemonicDisplayName="Run Client Health Check" Description="Run the ConfigMgr client health check (CcmEval) on the device">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>ClientHealthCheck</DialogId>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Clear Client Cache" MnemonicDisplayName="Clear Client Cache" Description="Delete cached content from the ConfigMgr client cache, except content kept on purpose or in use">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>ClearClientCache</DialogId>
+    </ActionDescription>
     <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Repair Client" MnemonicDisplayName="Repair Client" Description="Run ccmrepair on the ConfigMgr client">
       <ShowOn>
         <string>DefaultHomeTab</string>

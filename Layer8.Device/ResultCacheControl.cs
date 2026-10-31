@@ -156,7 +156,7 @@ namespace Layer8.Device
             labelUsedSize.Text = Utility.FormatBytes(contentSize * Utility.BytesPerKilobyte);
         }
 
-        private void RemoveCachedItems(ListView.SelectedListViewItemCollection items)
+        private void RemoveCachedItems(IEnumerable<ListViewItem> items)
         {
             foreach (ListViewItem item in items)
             {
@@ -177,7 +177,7 @@ namespace Layer8.Device
                     }
                     else
                     {
-                        System.Windows.MessageBox.Show(string.Format("Cannot remove item: Access denied", items.Count), "Configuration Manager", MessageBoxButton.OK, MessageBoxImage.Hand);
+                        System.Windows.MessageBox.Show("Cannot remove " + path + ": it's missing or access is denied.", "Configuration Manager", MessageBoxButton.OK, MessageBoxImage.Hand);
                     }
                 }
                 catch (Exception ex)
@@ -209,7 +209,7 @@ namespace Layer8.Device
 
             if (result == MessageBoxResult.Yes)
             {
-                RemoveCachedItems(items);
+                RemoveCachedItems(items.Cast<ListViewItem>().ToList());
                 // update the list view
                 ManagementScope scope = Utility.GetWMIScope(PropertyManager["Name"].StringValue, @"ccm\softmgmtagent");
                 List<ManagementObject> cacheContent = Utility.SearchWMIToList(scope, "SELECT * FROM CacheInfoEx");
@@ -233,8 +233,8 @@ namespace Layer8.Device
 
         private void ButtonClearCache_Click(object sender, EventArgs e)
         {
-            listViewContent.Items.OfType<ListViewItem>().ToList().ForEach(item => item.Checked = true);
-            ListView.SelectedListViewItemCollection items = listViewContent.SelectedItems;
+            // Every item, not the selection: this used to tick everything and then delete only what was selected.
+            List<ListViewItem> items = listViewContent.Items.OfType<ListViewItem>().ToList();
 
             MessageBoxResult result = System.Windows.MessageBox.Show("Are you sure you want to clear the cache?", "Configuration Manager", MessageBoxButton.YesNo, MessageBoxImage.Exclamation);
 

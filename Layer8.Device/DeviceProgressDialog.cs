@@ -5,7 +5,9 @@ using System;
 using System.Management;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Layer8.Device
@@ -24,6 +26,11 @@ namespace Layer8.Device
 
         private readonly IResultObject resultObjects;
         private readonly MethodInfo method;
+        // At most this many devices are contacted at once. Without a limit, a 5,000-device collection opened
+        // 5,000 connections together; this keeps the console and the network calm at fleet scale.
+        private const int MaxParallel = 32;
+        private readonly SemaphoreSlim slots = new SemaphoreSlim(MaxParallel);
+
         private int completed;
         private int offline;
         private int failed;
@@ -54,6 +61,28 @@ namespace Layer8.Device
             this.method = method;
 
             Title = title ?? action.DisplayName;
+
+            // Copy Results: every row as tab-separated text, so a run pastes straight into Excel.
+            Button copyResults = new Button
+            {
+                Text = "Copy Results",
+                Size = new System.Drawing.Size(90, buttonOK.Height),
+                Location = new System.Drawing.Point(listViewHosts.Left, buttonOK.Top),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
+            };
+            copyResults.Click += (s, e) => CopyResults();
+            Controls.Add(copyResults);
+        }
+
+        private void CopyResults()
+        {
+            StringBuilder text = new StringBuilder("Device\tStatus").AppendLine();
+            foreach (ListViewItem host in listViewHosts.Items)
+            {
+                text.Append(host.Text).Append('\t').Append(host.SubItems[1].Text).AppendLine();
+            }
+            Clipboard.SetDataObject(text.ToString(), true, 10, 100);
+            log.InfoFormat("{0}: copied {1} result row(s)", Title, listViewHosts.Items.Count);
         }
 
         private void DeviceProgressDialog_Shown(object sender, EventArgs e)
@@ -80,7 +109,19 @@ namespace Layer8.Device
 
                 listViewHosts.Items.Add(item);
 
-                ThreadPool.QueueUserWorkItem(arg => { RunAction(resultObject, item); });
+                // Waits for a free slot without holding a thread, then runs on the thread pool.
+                Task.Run(async () =>
+                {
+                    await slots.WaitAsync().ConfigureAwait(false);
+                    try
+                    {
+                        RunAction(resultObject, item);
+                    }
+                    finally
+                    {
+                        slots.Release();
+                    }
+                });
             }
 
             listViewHosts.UpdateColumnWidth(columnHeaderStatus);

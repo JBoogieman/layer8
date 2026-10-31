@@ -4,6 +4,7 @@ using Microsoft.ConfigurationManagement.AdminConsole.Schema;
 using Microsoft.ConfigurationManagement.AdminConsole.DialogFramework;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Management;
 using System.Net;
@@ -108,6 +109,9 @@ namespace Layer8.Device
             { nameof(InstallMissingUpdates), "Install every missing software update on {0} now?\n\nThis installs the updates deployed to each device (required or available) that it reports as missing, without waiting for their deadlines. A device may restart afterwards, depending on the deployments' restart settings." },
             { nameof(FullMachinePolicyRefresh), null },
             { nameof(TurnOffProvisioningMode), null },
+            { nameof(GroupPolicyUpdate), null },
+            { nameof(ClientHealthCheck), null },
+            { nameof(ClearClientCache), "Clear the ConfigMgr client cache on {0}?\n\nCached content is deleted, except content marked to stay in the cache and content a device is using right now. Devices download content again when they next need it." },
             { nameof(RepairClient), "Repair the ConfigMgr client on {0}?\n\nEach client runs ccmrepair, which restarts the SMS Agent Host service and can take several minutes. Watch ccmrepair.log on the device." },
         };
 
@@ -565,6 +569,94 @@ namespace Layer8.Device
                 client.InvokeMethod("SetClientProvisioningMode", new object[] { false });
             }
             return wasOn ? "Was in provisioning mode; turned it off" : "Wasn't in provisioning mode";
+        }
+
+        /// <summary>
+        /// Deletes the client's cached content (folders and CacheInfoEx entries), the same way the Client Cache
+        /// window does, but for every device at once. Content marked to persist in the cache stays; content in use
+        /// can't be deleted and is counted as skipped.
+        /// </summary>
+        public static string ClearClientCache(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            ManagementScope scope = Utility.GetWMIScope(host, @"ccm\SoftMgmtAgent");
+            int cleared = 0, kept = 0, skipped = 0;
+            double freedKilobytes = 0;
+            foreach (ManagementObject item in Utility.SearchWMIToList(scope, "SELECT * FROM CacheInfoEx"))
+            {
+                using (item)
+                {
+                    if (Convert.ToInt64(item["PersistInCache"] ?? 0) != 0)
+                    {
+                        kept++;
+                        continue;
+                    }
+                    string location = item["Location"] as string;
+                    try
+                    {
+                        if (!string.IsNullOrEmpty(location))
+                        {
+                            string share = string.Format(@"\\{0}\{1}", host, location.Replace(':', '$'));
+                            if (Directory.Exists(share)) Directory.Delete(share, true);
+                        }
+                        item.Delete();
+                        cleared++;
+                        freedKilobytes += Convert.ToDouble(item["ContentSize"] ?? 0);
+                    }
+                    catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                    {
+                        skipped++;
+                        log.WarnFormat("ClearClientCache on {0}: kept {1}: {2}", host, location, ex.Message);
+                    }
+                }
+            }
+
+            if (cleared == 0 && skipped == 0) return kept > 0 ? string.Format("Nothing to clear ({0} item(s) kept on purpose)", kept) : "Cache already empty";
+            string result = string.Format("Cleared {0} item(s), {1} freed", cleared, Utility.FormatBytes(freedKilobytes * Utility.BytesPerKilobyte, "0.#"));
+            if (kept > 0) result += string.Format("; {0} kept on purpose", kept);
+            if (skipped > 0) result += string.Format("; {0} in use or access denied", skipped);
+            return result;
+        }
+
+        /// <summary>
+        /// Runs gpupdate for computer policy on the device. "echo n" answers the restart question some policies
+        /// ask, so it never waits on a prompt nobody can see. User policy isn't refreshed: that needs the user's own session.
+        /// </summary>
+        public static string GroupPolicyUpdate(IResultObject resultObject)
+        {
+            StartRemoteProcess(resultObject["Name"].StringValue, "cmd.exe /c echo n | gpupdate.exe /target:computer /force", "gpupdate");
+            return "Computer policy update started";
+        }
+
+        /// <summary>Runs the client's own health check (CcmEval.exe), which repairs what it can and writes CcmEval.log.</summary>
+        public static string ClientHealthCheck(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            ManagementObject os = Utility.GetFirstWMIInstance(Utility.GetWMIScope(host, "cimv2"), "SELECT WindowsDirectory FROM Win32_OperatingSystem");
+            string windows = os?["WindowsDirectory"] as string ?? @"C:\Windows";
+            StartRemoteProcess(host, "\"" + Path.Combine(windows, @"CCM\CcmEval.exe") + "\"", "CcmEval.exe");
+            return "Health check started (see CcmEval.log)";
+        }
+
+        /// <summary>Starts a program on the device through WMI (Win32_Process.Create); doesn't wait for it to finish.</summary>
+        private static void StartRemoteProcess(string host, string commandLine, string programName)
+        {
+            using (ManagementClass process = new ManagementClass(Utility.GetWMIScope(host, "cimv2"), new ManagementPath("Win32_Process"), null))
+            using (ManagementBaseObject inParams = process.GetMethodParameters("Create"))
+            {
+                inParams["CommandLine"] = commandLine;
+                using (ManagementBaseObject outParams = process.InvokeMethod("Create", inParams, null))
+                {
+                    long code = Convert.ToInt64(outParams?["ReturnValue"] ?? 0);
+                    switch (code)
+                    {
+                        case 0: return;
+                        case 2: throw new UnauthorizedAccessException("Access denied starting " + programName + " on " + host + ".");
+                        case 9: throw new FileNotFoundException(programName + " isn't on " + host + ".");
+                        default: throw new InvalidOperationException(string.Format("Starting {0} on {1} failed (Win32_Process.Create returned {2}).", programName, host, code));
+                    }
+                }
+            }
         }
 
         private static bool HasSubKey(ManagementClass registry, string keyPath, string subKey)
