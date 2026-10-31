@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Management;
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Threading;
@@ -24,6 +25,10 @@ namespace Layer8.Device
         private static string method;
 
         private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(typeof(ClientActions));
+
+        // Find Software's search text (kept, so the prompt offers the last search) and the progress dialog's title.
+        private static string softwareSearch;
+        private static string dialogTitle;
         private static SynchronizationContext uiContext;
 
         // A single-device action has no progress dialog, so nothing can cancel it.
@@ -77,6 +82,15 @@ namespace Layer8.Device
                 {
                     throw new InvalidOperationException("Unknown client tool '" + tool + "' in the menu XML.");
                 }
+
+                dialogTitle = null;
+                if (tool == nameof(FindSoftware))
+                {
+                    string search = InputPrompt.Ask("Find Software", "Software name, or part of it (for example Chrome, 7-Zip or Office):", softwareSearch);
+                    if (search == null) return;
+                    softwareSearch = search;
+                    dialogTitle = "Find Software: " + search;
+                }
                 method = tool;
                 ProcessAction(scopeNode, action, selectedResultObjects, alwaysShowDialog: true, confirmQuestion: confirmQuestion);
             });
@@ -88,6 +102,8 @@ namespace Layer8.Device
         {
             { nameof(OnlineStatus), null },
             { nameof(QuickStatus), null },
+            { nameof(FindSoftware), null },
+            { nameof(MissingUpdates), null },
             { nameof(CheckPendingRestart), null },
             { nameof(InstallMissingUpdates), "Install every missing software update on {0} now?\n\nThis installs the updates deployed to each device (required or available) that it reports as missing, without waiting for their deadlines. A device may restart afterwards, depending on the deployments' restart settings." },
             { nameof(FullMachinePolicyRefresh), null },
@@ -140,7 +156,7 @@ namespace Layer8.Device
                 Type type = typeof(ClientActions);
                 MethodInfo methodInfo = type.GetMethod(method);
 
-                deviceProgressDialog = new DeviceProgressDialog(action, resultObjects, methodInfo)
+                deviceProgressDialog = new DeviceProgressDialog(action, resultObjects, methodInfo, dialogTitle)
                 {
                     Total = total
                 };
@@ -217,37 +233,48 @@ namespace Layer8.Device
         public static string OnlineStatus(IResultObject resultObject)
         {
             string host = resultObject["Name"].StringValue;
-            try
+            IPAddress address = Resolve(host);
+            using (Ping ping = new Ping())
             {
-                using (Ping ping = new Ping())
+                for (int attempt = 0; attempt < 2; attempt++)
                 {
-                    for (int attempt = 0; attempt < 2; attempt++)
+                    PingReply reply = ping.Send(address, 1000);
+                    if (reply.Status == IPStatus.Success)
                     {
-                        PingReply reply = ping.Send(host, 1000);
-                        if (reply.Status == IPStatus.Success)
-                        {
-                            return string.Format("Online: ping {0} ms ({1})", reply.RoundtripTime, reply.Address);
-                        }
+                        return string.Format("Online: ping {0} ms ({1})", reply.RoundtripTime, address);
                     }
                 }
             }
-            catch (PingException ex) when (ex.InnerException is SocketException)
+
+            if (PortAnswers(address, 445, 1000))
+            {
+                return string.Format("Online: ping blocked, port 445 answers ({0})", address);
+            }
+            throw new DeviceOfflineException(string.Format("Offline: no ping reply, port 445 closed ({0})", address));
+        }
+
+        /// <summary>The device's address from DNS, IPv4 when it has one (that's the address people recognise).</summary>
+        private static IPAddress Resolve(string host)
+        {
+            IPAddress[] addresses;
+            try
+            {
+                addresses = Dns.GetHostAddresses(host);
+            }
+            catch (SocketException)
             {
                 throw new DeviceOfflineException("Not found in DNS");
             }
-
-            if (PortAnswers(host, 445, 1000))
-            {
-                return "Online: ping blocked, port 445 answers";
-            }
-            throw new DeviceOfflineException("Offline: no ping reply, port 445 closed");
+            IPAddress best = addresses.FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork) ?? addresses.FirstOrDefault();
+            if (best == null) throw new DeviceOfflineException("Not found in DNS");
+            return best;
         }
 
-        private static bool PortAnswers(string host, int port, int timeoutMs)
+        private static bool PortAnswers(IPAddress address, int port, int timeoutMs)
         {
-            using (TcpClient client = new TcpClient())
+            using (TcpClient client = new TcpClient(address.AddressFamily))
             {
-                Task connect = client.ConnectAsync(host, port);
+                Task connect = client.ConnectAsync(address, port);
                 // A connect still running when we give up fails later; observe that so it isn't reported as unhandled.
                 connect.ContinueWith(t => { Exception ignored = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
                 try
@@ -259,6 +286,95 @@ namespace Layer8.Device
                     return false;
                 }
             }
+        }
+
+        /// <summary>The updates the client reports as missing (ComplianceState 0), by KB number.</summary>
+        public static string MissingUpdates(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            ManagementScope clientSdk = Utility.GetWMIScope(host, @"ccm\ClientSDK");
+            List<string> updates = new List<string>();
+            foreach (ManagementObject update in Utility.SearchWMIToList(clientSdk, "SELECT ArticleID, Name FROM CCM_SoftwareUpdate WHERE ComplianceState = 0"))
+            {
+                using (update)
+                {
+                    string article = update["ArticleID"] as string;
+                    updates.Add(!string.IsNullOrEmpty(article) ? "KB" + article : (update["Name"] as string ?? "(unnamed update)"));
+                }
+            }
+            if (updates.Count == 0) return "No missing updates";
+            if (updates.Count > ShownInRow) log.InfoFormat("MissingUpdates on {0}, all {1}: {2}", host, updates.Count, string.Join(", ", updates));
+            return string.Format("{0} missing: {1}", updates.Count, Summarize(updates));
+        }
+
+        /// <summary>
+        /// Is the software Find Software asked for installed, and which version? Reads the ConfigMgr client's
+        /// view of Add/Remove Programs (Win32Reg_AddRemovePrograms and its 64-bit twin), which matches what
+        /// hardware inventory reports, but live.
+        /// </summary>
+        public static string FindSoftware(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            string search = softwareSearch;
+            ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
+
+            List<string> found = new List<string>();
+            ManagementException missingClass = null;
+            int classesRead = 0;
+            foreach (string inventoryClass in new[] { "Win32Reg_AddRemovePrograms64", "Win32Reg_AddRemovePrograms" })
+            {
+                string query = string.Format("SELECT DisplayName, Version FROM {0} WHERE DisplayName LIKE '%{1}%'", inventoryClass, WqlLikeText(search));
+                try
+                {
+                    foreach (ManagementObject program in Utility.SearchWMIToList(cimv2, query))
+                    {
+                        using (program)
+                        {
+                            string entry = ((program["DisplayName"] as string) + " " + (program["Version"] as string)).Trim();
+                            if (!found.Contains(entry, StringComparer.OrdinalIgnoreCase)) found.Add(entry);
+                        }
+                    }
+                    classesRead++;
+                }
+                catch (ManagementException ex) when (ex.ErrorCode == ManagementStatus.InvalidClass)
+                {
+                    missingClass = ex;   // the 64-bit class only exists on 64-bit Windows
+                }
+            }
+            if (classesRead == 0 && missingClass != null) throw missingClass;   // neither class: no ConfigMgr client
+
+            if (found.Count == 0) return "Not installed";
+            found.Sort(StringComparer.OrdinalIgnoreCase);
+            if (found.Count > ShownInRow) log.InfoFormat("FindSoftware '{0}' on {1}, all {2}: {3}", search, host, found.Count, string.Join("; ", found));
+            return "Installed: " + Summarize(found, "; ");
+        }
+
+        // Rows stay readable: list this many items, then "(+N more)". The log gets the full list.
+        private const int ShownInRow = 5;
+
+        private static string Summarize(List<string> items, string separator = ", ")
+        {
+            if (items.Count <= ShownInRow) return string.Join(separator, items);
+            return string.Join(separator, items.Take(ShownInRow)) + string.Format(" (+{0} more)", items.Count - ShownInRow);
+        }
+
+        /// <summary>Text for inside a WQL LIKE '%...%': wildcards and brackets taken literally, quotes escaped.</summary>
+        internal static string WqlLikeText(string text)
+        {
+            System.Text.StringBuilder escaped = new System.Text.StringBuilder();
+            foreach (char c in text)
+            {
+                switch (c)
+                {
+                    case '[': escaped.Append("[[]"); break;
+                    case '%': escaped.Append("[%]"); break;
+                    case '_': escaped.Append("[_]"); break;
+                    case '\\': escaped.Append(@"\\"); break;
+                    case '\'': escaped.Append(@"\'"); break;
+                    default: escaped.Append(c); break;
+                }
+            }
+            return escaped.ToString();
         }
 
         /// <summary>
@@ -278,6 +394,13 @@ namespace Layer8.Device
             ManagementObject os = Utility.GetFirstWMIInstance(cimv2, "SELECT LastBootUpTime FROM Win32_OperatingSystem");
             DateTime? lastBoot = ToDateTime(os?["LastBootUpTime"]);
             if (lastBoot.HasValue) parts.Add("up " + FormatUptime(DateTime.Now - lastBoot.Value));
+
+            // A full system drive is a common reason updates and installs fail.
+            ManagementObject systemDrive = Utility.GetFirstWMIInstance(cimv2, "SELECT FreeSpace, Size FROM Win32_LogicalDisk WHERE DeviceID = 'C:'");
+            if (systemDrive?["FreeSpace"] != null && systemDrive["Size"] != null)
+            {
+                parts.Add(string.Format("C: {0} free of {1}", Utility.FormatBytes(Convert.ToDouble(systemDrive["FreeSpace"]), "0.#"), Utility.FormatBytes(Convert.ToDouble(systemDrive["Size"]), "0")));
+            }
 
             try
             {

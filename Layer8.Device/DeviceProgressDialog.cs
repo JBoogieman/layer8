@@ -48,12 +48,12 @@ namespace Layer8.Device
             Updater.CheckUpdates();
         }
 
-        public DeviceProgressDialog(ActionDescription action, IResultObject selectedResultObjects, MethodInfo method) : this()
+        public DeviceProgressDialog(ActionDescription action, IResultObject selectedResultObjects, MethodInfo method, string title = null) : this()
         {
             resultObjects = selectedResultObjects;
             this.method = method;
 
-            Title = action.DisplayName;
+            Title = title ?? action.DisplayName;
         }
 
         private void DeviceProgressDialog_Shown(object sender, EventArgs e)

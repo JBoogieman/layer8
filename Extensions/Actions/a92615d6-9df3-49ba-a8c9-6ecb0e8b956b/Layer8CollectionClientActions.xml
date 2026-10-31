@@ -191,6 +191,18 @@
       </ActionAssembly>
       <DialogId>QuickStatus</DialogId>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Find Software..." MnemonicDisplayName="Find Software..." Description="Check which devices have a program installed, and which version">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>FindSoftware</DialogId>
+    </ActionDescription>
     <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Check Pending Restart" MnemonicDisplayName="Check Pending Restart" Description="Ask each device whether it is waiting on a restart: ConfigMgr, Windows servicing or Windows Update">
       <ShowOn>
         <string>DefaultHomeTab</string>
@@ -202,6 +214,18 @@
         <Method>RunClientTool</Method>
       </ActionAssembly>
       <DialogId>CheckPendingRestart</DialogId>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="List Missing Updates" MnemonicDisplayName="List Missing Updates" Description="List the software updates each device reports as missing, by KB number">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>MissingUpdates</DialogId>
     </ActionDescription>
     <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Install Missing Updates" MnemonicDisplayName="Install Missing Updates" Description="Install every deployed software update the device reports as missing, now">
       <ShowOn>

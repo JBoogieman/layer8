@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription NamespaceGuid="91593F35-CA90-495D-ACD2-3AFF9830B467" Class="AssemblyType" SelectionMode="Single" DisplayName="BitLocker Recovery Key" MnemonicDisplayName="BitLocker Recovery Key" Description="Look up the BitLocker recovery keys Active Directory holds for this device" InsertBefore="B7009279-2666-45EF-9935-1FB3D3ED2ABF">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <ActionAssembly>
+    <Assembly>Layer8.Device.dll</Assembly>
+    <Type>Layer8.Device.BitLockerKeys</Type>
+    <Method>Show</Method>
+  </ActionAssembly>
+</ActionDescription>

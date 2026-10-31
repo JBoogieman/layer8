@@ -7,14 +7,14 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 ## What's in it
 
 - Client actions on devices and collections
-- Client tools on devices and collections: quick status (signed-in user, uptime, client version), check for a pending restart, install missing updates, full machine policy refresh, repair the client, turn off provisioning mode
+- Client tools on devices and collections: quick status (signed-in users, uptime, free space on C:, client version), find installed software by name, list and install missing updates, check for a pending restart, full machine policy refresh, repair the client, turn off provisioning mode
 - Online status for devices and whole collections: ping, or port 445 when ping is blocked
 - Remote tools on devices: ping, Remote Desktop, Remote Assistance, PowerShell session, browse C$, client logs, Computer Management, Event Viewer, Services
 - Copy device names, or every member of a collection, to the clipboard
 - Extended device properties: update compliance, client health, collection membership
 - Collection management: add resources from a list
 - Driver Manager: grabber, importer, Dell and HP driver packs
-- LAPS password lookup
+- LAPS password and BitLocker recovery key lookup (from Active Directory; type the Key ID from the recovery screen to find the right key)
 - Software update clean-up and phased deployments
 
 ## Building
