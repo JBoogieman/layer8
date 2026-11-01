@@ -165,16 +165,19 @@ namespace Layer8.Device
             return "The client isn't offering Install for " + app.Name + " right now (" + app.State + "). AppDiscovery.log and AppIntentEval.log on the device say why.";
         }
 
+        // The client reports deployment times as the device's own clock time but tags them "+000", so converting them
+        // as UTC shifts them by the time zone (a 7:21 PM deadline showed as 12:21 PM in Pacific time). Read the
+        // digits as they are, the way Software Center shows them.
         private static DateTime? ToDate(object dmtf)
         {
             string text = dmtf as string;
-            if (string.IsNullOrEmpty(text)) return null;
+            if (string.IsNullOrEmpty(text) || text.Length < 14) return null;
             try
             {
-                DateTime value = ManagementDateTimeConverter.ToDateTime(text);
+                DateTime value = DateTime.ParseExact(text.Substring(0, 14), "yyyyMMddHHmmss", System.Globalization.CultureInfo.InvariantCulture);
                 return value.Year > 2000 ? value : (DateTime?)null;
             }
-            catch (Exception)
+            catch (FormatException)
             {
                 return null;
             }

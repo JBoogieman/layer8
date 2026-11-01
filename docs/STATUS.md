@@ -30,17 +30,20 @@ Inherited from ConfigMgr Quick Tools and not retested since the fork: extended d
 ## New since October 31
 
 - **Retry Failed Devices** and **Copy Failed Devices** on Monitoring > Deployments. For an application or software update deployment, Layer8 finds the devices in Error and either re-runs that deployment's evaluation on all of them (32 at a time, one row per device, Copy Results) or copies their names.
-  - Tested: the Layer8 menu is only offered for application and software update deployments (greyed out on a program deployment), and Copy Failed Devices with nothing in error explains why.
-  - Not tested yet: a deployment with devices in Error. DEV01 failed Layer8 Fail App (1603), but the lab site hadn't summarized since 1:15 PM an hour later, even after Run Summarization, so Monitoring still showed it In Progress.
+  - Tested on Layer8 Fail App with DEV01 in Error: Copy Failed Devices copied "DEV01"; Retry Failed Devices confirmed the app, count and collection, then reported "Application evaluation started" for DEV01.
+  - Also tested: the Layer8 menu is only offered for application and software update deployments (greyed out on a program deployment), and Copy Failed Devices with nothing in error explains why.
+  - The failure took over an hour to reach Monitoring: the lab site didn't summarize between 1:15 PM and about 2:25 PM, even after Run Summarization.
 - **Monitoring > Deployments > Delete** pointed at the wrong class (`ClientActions` instead of `Device`), so it couldn't have worked since the rename. Fixed, not tested.
 - **Layer8 Fail App** in `tools\New-Layer8LabTestData.ps1`: a required app whose install exits with 1603, so DEV01 lands in Error and Retry has something to retry.
 - **Install Application status text** used the wrong table for the client's EvaluationState numbers, so a failed install read "waiting to download" and an available app "detecting". It now follows Microsoft's CCM_Application reference (4 reads "last install failed"). The Deployment and Status columns now fit their text and stretch with the window.
+- **Install Application deadlines** were shifted by the time zone: the client reports them as the device's clock time tagged "+000", and Layer8 converted them as UTC (a 7:21 PM deadline showed as 12:21 PM in Pacific time). Now read as clock time, like Software Center.
 
 ## Ready-to-publish checklist
 
 ### Testing
 
-- [ ] Retry Failed Devices end to end: Layer8 Fail App in Error, Run Summarization, Retry, AppEnforce.log on DEV01 shows a new attempt; Copy Failed Devices gives the right names
+- [x] Retry Failed Devices end to end: Layer8 Fail App in Error, Retry reaches DEV01; Copy Failed Devices gives the right names (AppEnforce.log on DEV01 not checked)
+- [ ] Software update deployment: Retry Failed Devices and Copy Failed Devices on an update deployment with a device in Error
 - [x] Install Application installs Layer8 Test App (state reaches Installed)
 - [ ] Monitoring > Deployments > Delete removes a throwaway deployment
 - [ ] Second client VM (DEV02): every client tool, remote tool and collection run against a machine that isn't the console
@@ -79,6 +82,7 @@ Inherited from ConfigMgr Quick Tools and not retested since the fork: extended d
 - **Remote Assistance and PowerShell session** prompts unconfirmed (see testing).
 - **Device properties form** is shared with Quick Tools: with both installed, whichever was installed last supplies the tabs.
 - **Approved console extensions.** Layer8 is an old-style extension, so the console ignores it while "Only allow console extensions that are approved for the hierarchy" is ticked. Locked-down sites often tick it. The long-term fix is packaging Layer8 as an approved extension; research what that takes before promising it.
+- **Other ConfigMgr times may have the same "+000" shift** as Install Application's deadlines: Check Pending Restart's restart deadline goes through the same kind of conversion. Check it against Software Center.
 - **Skipped records count as offline** in the progress totals. A separate "skipped" count would read better.
 - **Large retries** keep every device record in memory until the window closes. Fine at lab scale; watch it on a 1,000-device deployment.
 
