@@ -137,7 +137,12 @@ namespace Layer8.Device
 
             if (confirmDialog)
             {
-                if (System.Windows.MessageBox.Show(string.Format("Delete the selected '{0}' deployment?", selectedResultObject[displayPropertyName].StringValue), "Configuration Manager", MessageBoxButton.YesNo, MessageBoxImage.Exclamation) != MessageBoxResult.Yes)
+                // Name the collection too: the same software is often deployed to several collections.
+                string collection = selectedResultObject["CollectionName"].StringValue;
+                string question = string.IsNullOrEmpty(collection)
+                    ? string.Format("Delete the selected '{0}' deployment?", selectedResultObject[displayPropertyName].StringValue)
+                    : string.Format("Delete the '{0}' deployment to {1}?", selectedResultObject[displayPropertyName].StringValue, collection);
+                if (System.Windows.MessageBox.Show(question, "Configuration Manager", MessageBoxButton.YesNo, MessageBoxImage.Exclamation) != MessageBoxResult.Yes)
                     return;
             }
             deploymentFromSummarizer.Delete();

@@ -30,13 +30,13 @@ Inherited from ConfigMgr Quick Tools and not retested since the fork: extended d
 ## New since October 31
 
 - **Retry Failed Devices** and **Copy Failed Devices** on Monitoring > Deployments. For an application or software update deployment, Layer8 finds the devices in Error and either re-runs that deployment's evaluation on all of them (32 at a time, one row per device, Copy Results) or copies their names.
-  - Tested on Layer8 Fail App with DEV01 in Error: Copy Failed Devices copied "DEV01"; Retry Failed Devices confirmed the app, count and collection, then reported "Application evaluation started" for DEV01.
+  - Tested on Layer8 Fail App with DEV01 in Error: Copy Failed Devices copied "DEV01"; Retry Failed Devices confirmed the app, count and collection, then reported "Application evaluation started" for DEV01. AppEnforce.log on DEV01 was written the same minute (2:29 PM); its contents weren't checked.
   - Also tested: the Layer8 menu is only offered for application and software update deployments (greyed out on a program deployment), and Copy Failed Devices with nothing in error explains why.
   - The failure took over an hour to reach Monitoring: the lab site didn't summarize between 1:15 PM and about 2:25 PM, even after Run Summarization.
-- **Monitoring > Deployments > Delete** pointed at the wrong class (`ClientActions` instead of `Device`), so it couldn't have worked since the rename. Fixed, not tested.
+- **Monitoring > Deployments > Delete** pointed at the wrong class (`ClientActions` instead of `Device`), so it couldn't have worked since the rename. Fixed and tested: deleted a throwaway deployment of Layer8 Test App to All Users and left the other three alone. The confirmation now names the collection, since the same app is often deployed to several.
 - **Layer8 Fail App** in `tools\New-Layer8LabTestData.ps1`: a required app whose install exits with 1603, so DEV01 lands in Error and Retry has something to retry.
 - **Install Application status text** used the wrong table for the client's EvaluationState numbers, so a failed install read "waiting to download" and an available app "detecting". It now follows Microsoft's CCM_Application reference (4 reads "last install failed"). The Deployment and Status columns now fit their text and stretch with the window.
-- **Install Application deadlines** were shifted by the time zone: the client reports them as the device's clock time tagged "+000", and Layer8 converted them as UTC (a 7:21 PM deadline showed as 12:21 PM in Pacific time). Now read as clock time, like Software Center.
+- **Install Application deadlines** were shifted by the time zone: the client reports them as the device's clock time tagged "+000", and Layer8 converted them as UTC (a 7:21 PM deadline showed as 12:21 PM in Pacific time). Now read as clock time, like Software Center: the fail app's deadline shows 10/31/2026 7:21 PM, when it was created.
 
 ## Ready-to-publish checklist
 
@@ -45,7 +45,7 @@ Inherited from ConfigMgr Quick Tools and not retested since the fork: extended d
 - [x] Retry Failed Devices end to end: Layer8 Fail App in Error, Retry reaches DEV01; Copy Failed Devices gives the right names (AppEnforce.log on DEV01 not checked)
 - [ ] Software update deployment: Retry Failed Devices and Copy Failed Devices on an update deployment with a device in Error
 - [x] Install Application installs Layer8 Test App (state reaches Installed)
-- [ ] Monitoring > Deployments > Delete removes a throwaway deployment
+- [x] Monitoring > Deployments > Delete removes a throwaway deployment
 - [ ] Second client VM (DEV02): every client tool, remote tool and collection run against a machine that isn't the console
 - [ ] Install Missing Updates with an update actually missing (deploy one update to Layer8 Dev)
 - [ ] Remote Assistance: UAC prompt and offer; PowerShell session opens over WinRM
