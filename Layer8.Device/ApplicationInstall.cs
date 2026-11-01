@@ -118,13 +118,17 @@ namespace Layer8.Device
             log.InfoFormat("Install of '{0}' {1} requested on {2}", app.Name, app.Version, host);
         }
 
-        // The client's EvaluationState numbers, as Software Center describes them.
+        // CCM_Application.EvaluationState, numbered as in Microsoft's client SDK reference. Null means there's nothing
+        // to add to the install state: 0 no state, 1 already in the deployment's desired state, 3 available to install.
         private static readonly string[] EvaluationStates =
         {
-            "No state", "Available", "Submitted", "Detecting", "Waiting to download", "Downloading", "Waiting to install", "Installing",
-            "Restart pending", "Restart pending", "Waiting for restart", "Verifying", "Installed", "Failed", "Waiting for maintenance window",
-            "Waiting for user logon", "Waiting for user logoff", "Waiting for user logon", "Waiting for user to reconnect", "Pending user logoff",
-            "Pending update", "Waiting to retry", "Waiting for presentation mode to end", "Waiting for orchestration",
+            null, null, "not required", null, "last install failed", "waiting for content", "waiting for content",
+            "waiting for dependencies to download", "waiting for a maintenance window", "waiting for a pending restart",
+            "waiting for other installs to finish", "installing dependencies", "installing", "restart pending", "restart pending",
+            "update available", "failed to evaluate", "waiting for a user session", "waiting for users to sign out",
+            "waiting for a user to sign in", "waiting to retry", "waiting for presentation mode to end", "downloading content",
+            "downloading dependencies", "download failed", "download failed", "downloaded", "checking the result",
+            "waiting for a network connection",
         };
 
         /// <summary>The install state first (it's what the client decides on), then what the client is doing with the app, if anything.</summary>
@@ -141,9 +145,13 @@ namespace Layer8.Device
                 case "": state = "Unknown"; break;
                 default: state = installState; break;
             }
-            if (evaluation >= 2 && evaluation < EvaluationStates.Length && evaluation != 12)
+            if (evaluation >= 0 && evaluation < EvaluationStates.Length && EvaluationStates[evaluation] != null)
             {
-                state += " (" + EvaluationStates[evaluation].ToLowerInvariant() + ")";
+                state += " (" + EvaluationStates[evaluation] + ")";
+            }
+            else if (evaluation >= EvaluationStates.Length)
+            {
+                state += " (state " + evaluation + ")";
             }
             if (error != 0) state += string.Format(" (error 0x{0:X8})", error);
             return state;
@@ -223,6 +231,7 @@ namespace Layer8.Device
                     if (app != null && !app.CanInstall) status.Text = WhyNotInstallable(app);
                 };
                 list.DoubleClick += (s, e) => InstallSelected();
+                list.Resize += (s, e) => FitColumns();
 
                 status = new Label
                 {
@@ -284,8 +293,23 @@ namespace Layer8.Device
                     if (!app.IsMachineTarget) item.ForeColor = SystemColors.GrayText;
                     list.Items.Add(item);
                 }
+                FitColumns();
                 list.EndUpdate();
                 status.Text = apps.Count == 0 ? "No applications are deployed to " + host + "." : string.Format("{0} application{1} deployed to {2}.", apps.Count, apps.Count == 1 ? "" : "s", host);
+            }
+
+            /// <summary>Deployment and Status fit their text, and Status takes any width left over, so the error code never hides.</summary>
+            private void FitColumns()
+            {
+                if (list.Columns.Count < 4) return;
+                if (list.Items.Count > 0)
+                {
+                    list.AutoResizeColumn(2, ColumnHeaderAutoResizeStyle.ColumnContent);
+                    list.AutoResizeColumn(3, ColumnHeaderAutoResizeStyle.ColumnContent);
+                    list.Columns[2].Width = Math.Max(list.Columns[2].Width, LogicalToDeviceUnits(90));
+                }
+                int spare = list.ClientSize.Width - list.Columns[0].Width - list.Columns[1].Width - list.Columns[2].Width;
+                if (spare > list.Columns[3].Width) list.Columns[3].Width = spare;
             }
 
             private void InstallSelected()
