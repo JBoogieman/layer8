@@ -8,7 +8,8 @@
     Recovery Key lookup without packaging an app or encrypting a disk.
 
     "Layer8 Test App" installs by writing HKLM\SOFTWARE\Layer8Test (Installed = 1), is detected by that key,
-    and uninstalls by deleting it. It has no content, so there's nothing to distribute.
+    and uninstalls by deleting it. It has no content, so there's nothing to distribute. Detection is a plain
+    registry rule rather than a script, so the client's PowerShell execution policy can't get in the way.
 
     The fake recovery key has Key ID 4C415938-0000-4000-8000-000000000001 (its first 8 characters spell "LAY8"
     in hex) and the obviously fake password 111111-222222-333333-444444-555555-666666-777777-888888.
@@ -65,10 +66,12 @@ try {
     }
     else {
         New-CMApplication -Name $appName -Publisher 'Layer8' -SoftwareVersion '1.0' | Out-Null
+        # /reg:64 and -Is64Bit: install and detection both use the 64-bit registry, whichever way the client runs the command.
+        $detection = New-CMDetectionClauseRegistryKey -Hive LocalMachine -KeyName 'SOFTWARE\Layer8Test' -Existence -Is64Bit
         Add-CMScriptDeploymentType -ApplicationName $appName -DeploymentTypeName "$appName (script)" `
-            -InstallCommand 'cmd.exe /c reg add HKLM\SOFTWARE\Layer8Test /v Installed /d 1 /f' `
-            -UninstallCommand 'cmd.exe /c reg delete HKLM\SOFTWARE\Layer8Test /f' `
-            -ScriptLanguage PowerShell -ScriptText 'if (Test-Path HKLM:\SOFTWARE\Layer8Test) { "Installed" }' `
+            -InstallCommand 'cmd.exe /c reg add HKLM\SOFTWARE\Layer8Test /v Installed /d 1 /f /reg:64' `
+            -UninstallCommand 'cmd.exe /c reg delete HKLM\SOFTWARE\Layer8Test /f /reg:64' `
+            -AddDetectionClause $detection `
             -InstallationBehaviorType InstallForSystem -LogonRequirementType WhetherOrNotUserLoggedOn | Out-Null
         New-CMApplicationDeployment -Name $appName -CollectionName $Collection -DeployAction Install -DeployPurpose Available `
             -UserNotification DisplaySoftwareCenterOnly | Out-Null

@@ -127,15 +127,34 @@ namespace Layer8.Device
             "Pending update", "Waiting to retry", "Waiting for presentation mode to end", "Waiting for orchestration",
         };
 
+        /// <summary>The install state first (it's what the client decides on), then what the client is doing with the app, if anything.</summary>
         private static string StateText(string installState, object evaluationState, object errorCode)
         {
             long evaluation = evaluationState == null ? -1 : Convert.ToInt64(evaluationState);
             long error = errorCode == null ? 0 : Convert.ToInt64(errorCode);
-            string state = evaluation > 1 && evaluation < EvaluationStates.Length ? EvaluationStates[evaluation] : (string.IsNullOrEmpty(installState) ? "Unknown" : installState);
-            if (string.Equals(installState, "Installed", StringComparison.OrdinalIgnoreCase) && evaluation <= 1) state = "Installed";
-            if (string.Equals(installState, "NotInstalled", StringComparison.OrdinalIgnoreCase) && evaluation <= 1) state = "Not installed";
+            string state;
+            switch ((installState ?? string.Empty).ToLowerInvariant())
+            {
+                case "installed": state = "Installed"; break;
+                case "notinstalled": state = "Not installed"; break;
+                case "error": state = "Error"; break;
+                case "": state = "Unknown"; break;
+                default: state = installState; break;
+            }
+            if (evaluation >= 2 && evaluation < EvaluationStates.Length && evaluation != 12)
+            {
+                state += " (" + EvaluationStates[evaluation].ToLowerInvariant() + ")";
+            }
             if (error != 0) state += string.Format(" (error 0x{0:X8})", error);
             return state;
+        }
+
+        /// <summary>Why Install is off for an app, in words the status line can show.</summary>
+        internal static string WhyNotInstallable(DeployedApp app)
+        {
+            if (!app.IsMachineTarget) return app.Name + " is deployed to users: it installs from the user's own Software Center.";
+            if (app.Installed) return app.Name + " is already installed.";
+            return "The client isn't offering Install for " + app.Name + " right now (" + app.State + "). AppDiscovery.log and AppIntentEval.log on the device say why.";
         }
 
         private static DateTime? ToDate(object dmtf)
@@ -197,7 +216,12 @@ namespace Layer8.Device
                 list.Columns.Add("Version", 80);
                 list.Columns.Add("Deployment", 150);
                 list.Columns.Add("Status", 190);
-                list.SelectedIndexChanged += (s, e) => install.Enabled = Selected()?.CanInstall == true;
+                list.SelectedIndexChanged += (s, e) =>
+                {
+                    DeployedApp app = Selected();
+                    install.Enabled = app?.CanInstall == true;
+                    if (app != null && !app.CanInstall) status.Text = WhyNotInstallable(app);
+                };
                 list.DoubleClick += (s, e) => InstallSelected();
 
                 status = new Label
@@ -284,6 +308,7 @@ namespace Layer8.Device
                         return;
                     }
                     status.Text = "Install started for " + app.Name + ". Refresh to follow its status.";
+                    install.Enabled = false;
                 }, TaskScheduler.FromCurrentSynchronizationContext());
             }
         }
