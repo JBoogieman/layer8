@@ -571,6 +571,32 @@ namespace Layer8.Device
             return wasOn ? "Was in provisioning mode; turned it off" : "Wasn't in provisioning mode";
         }
 
+        /// <summary>Retry Failed Devices for an application: the client re-evaluates its application deployments now.</summary>
+        public static string RetryApplication(IResultObject resultObject)
+        {
+            TriggerSchedules(resultObject["Name"].StringValue, "{00000000-0000-0000-0000-000000000121}");
+            return "Application evaluation started";
+        }
+
+        /// <summary>Retry Failed Devices for software updates: a fresh scan, then the update deployments are re-evaluated.</summary>
+        public static string RetryUpdates(IResultObject resultObject)
+        {
+            TriggerSchedules(resultObject["Name"].StringValue, "{00000000-0000-0000-0000-000000000113}", "{00000000-0000-0000-0000-000000000108}");
+            return "Update scan and evaluation started";
+        }
+
+        private static void TriggerSchedules(string host, params string[] scheduleIds)
+        {
+            ObjectGetOptions options = new ObjectGetOptions(null, TimeSpan.FromSeconds(5), true);
+            using (ManagementClass client = new ManagementClass(string.Format(@"\\{0}\root\ccm:SMS_Client", host), options))
+            {
+                foreach (string scheduleId in scheduleIds)
+                {
+                    client.InvokeMethod("TriggerSchedule", new object[] { scheduleId });
+                }
+            }
+        }
+
         /// <summary>
         /// Deletes the client's cached content (folders and CacheInfoEx entries), the same way the Client Cache
         /// window does, but for every device at once. Content marked to persist in the cache stays; content in use

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription NamespaceGuid="0033BDE2-D388-498C-A592-46826A53E763" Class="Group" SelectionMode="Single" DisplayName="Layer8" MnemonicDisplayName="Layer8" Description="Layer8 tools for this deployment" NodeInConsole="d1621955-48ad-4bba-9c85-95f74c0c6538" RibbonDisplayType="TextAndSmallImage" InsertBefore="8962c12f-c096-4e07-8125-7c681c270a98">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <ImagesDescription>
+    <ResourceAssembly>
+      <Assembly>Layer8.dll</Assembly>
+      <Type>Layer8.Properties.Resources.resources</Type>
+    </ResourceAssembly>
+    <ImageResourceName>tools</ImageResourceName>
+  </ImagesDescription>
+  <MatchPattern>^(1|5)$</MatchPattern>
+  <MatchValueToTest>##SUB:FeatureType##</MatchValueToTest>
+  <ActionGroups>
+    <ActionDescription Class="AssemblyType" SelectionMode="Single" DisplayName="Retry Failed Devices" MnemonicDisplayName="Retry Failed Devices" Description="Re-run the deployment on every device in error: application evaluation, or an update scan and evaluation">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.DeploymentRetry</Type>
+        <Method>RetryFailedDevices</Method>
+      </ActionAssembly>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Single" DisplayName="Copy Failed Devices" MnemonicDisplayName="Copy Failed Devices" Description="Copy the names of the devices in error for this deployment">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.DeploymentRetry</Type>
+        <Method>CopyFailedDevices</Method>
+      </ActionAssembly>
+    </ActionDescription>
+  </ActionGroups>
+</ActionDescription>

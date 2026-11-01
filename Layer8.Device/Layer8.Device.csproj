@@ -113,6 +113,7 @@
     <Compile Include="BitLockerKeys.cs" />
     <Compile Include="InputPrompt.cs" />
     <Compile Include="ApplicationInstall.cs" />
+    <Compile Include="DeploymentRetry.cs" />
     <Compile Include="ResultClientHealthControl.cs">
       <SubType>UserControl</SubType>
     </Compile>

@@ -24,7 +24,8 @@ namespace Layer8.Device
             }
         }
 
-        private readonly IResultObject resultObjects;
+        // Device records: a query result (IResultObject) or a list built elsewhere, such as Retry Failed Devices.
+        private readonly System.Collections.IEnumerable resultObjects;
         private readonly MethodInfo method;
         // At most this many devices are contacted at once. Without a limit, a 5,000-device collection opened
         // 5,000 connections together; this keeps the console and the network calm at fleet scale.
@@ -55,7 +56,23 @@ namespace Layer8.Device
             Updater.CheckUpdates();
         }
 
-        public DeviceProgressDialog(ActionDescription action, IResultObject selectedResultObjects, MethodInfo method, string title = null) : this()
+        /// <summary>For the console's selection (devices, or collection members).</summary>
+        public DeviceProgressDialog(ActionDescription action, IResultObject selectedResultObjects, MethodInfo method, string title = null)
+            : this(action, Each(selectedResultObjects), method, title)
+        {
+        }
+
+        // IResultObject supports foreach but isn't an IEnumerable, so this adapts it.
+        private static System.Collections.IEnumerable Each(IResultObject resultObjects)
+        {
+            foreach (IResultObject resultObject in resultObjects)
+            {
+                yield return resultObject;
+            }
+        }
+
+        /// <summary>For a list of device records built elsewhere, such as Retry Failed Devices.</summary>
+        public DeviceProgressDialog(ActionDescription action, System.Collections.IEnumerable selectedResultObjects, MethodInfo method, string title = null) : this()
         {
             resultObjects = selectedResultObjects;
             this.method = method;

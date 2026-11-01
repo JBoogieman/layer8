@@ -1,15 +1,21 @@
 <#
 .SYNOPSIS
     Creates (or with -Remove, deletes) Layer8's lab test data: a test application made available to a
-    collection, and a fake BitLocker recovery key on a computer object in Active Directory.
+    collection, an application that always fails, required for that collection, and a fake BitLocker
+    recovery key on a computer object in Active Directory.
 
 .DESCRIPTION
-    Lab only. It lets you test Layer8's Install Application window and the "keys found" path of the BitLocker
-    Recovery Key lookup without packaging an app or encrypting a disk.
+    Lab only. It lets you test Layer8's Install Application window, Retry Failed Devices and Copy Failed
+    Devices, and the "keys found" path of the BitLocker Recovery Key lookup without packaging an app or
+    encrypting a disk.
 
     "Layer8 Test App" installs by writing HKLM\SOFTWARE\Layer8Test (Installed = 1), is detected by that key,
     and uninstalls by deleting it. It has no content, so there's nothing to distribute. Detection is a plain
     registry rule rather than a script, so the client's PowerShell execution policy can't get in the way.
+
+    "Layer8 Fail App" is required, with a deadline of now, and its install command exits with 1603, so every
+    device in the collection ends up in Error for it. That's the deployment to try Retry Failed Devices on
+    (Monitoring > Deployments). Deployment status appears after the next summarization.
 
     The fake recovery key has Key ID 4C415938-0000-4000-8000-000000000001 (its first 8 characters spell "LAY8"
     in hex) and the obviously fake password 111111-222222-333333-444444-555555-666666-777777-888888.
@@ -24,7 +30,7 @@
     The computer that gets the fake recovery key. Default: this computer.
 
 .PARAMETER Remove
-    Deletes the test app, its deployment and the fake key.
+    Deletes both test apps, their deployments and the fake key.
 
 .EXAMPLE
     .\tools\New-Layer8LabTestData.ps1
@@ -41,10 +47,48 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $appName = 'Layer8 Test App'
+$failAppName = 'Layer8 Fail App'
 $keyGuid = [guid]'4C415938-0000-4000-8000-000000000001'
 $volumeGuid = [guid]'4C415938-0000-4000-8000-0000000000FF'
 
-# --- ConfigMgr: the test application -------------------------------------------------------------------------
+# --- ConfigMgr: the test applications ------------------------------------------------------------------------
+
+function Remove-LabApp([string]$Name) {
+    if (-not (Get-CMApplication -Name $Name -Fast)) { return }
+    # ConfigMgr won't delete an app that's still deployed, and a deleted deployment can take a moment
+    # to disappear, so remove it by name and collection and wait until it's really gone.
+    if (Get-CMApplicationDeployment -Name $Name -CollectionName $Collection) {
+        Remove-CMApplicationDeployment -Name $Name -CollectionName $Collection -Force
+    }
+    for ($i = 0; $i -lt 15 -and (Get-CMApplicationDeployment -Name $Name); $i++) { Start-Sleep -Seconds 2 }
+    Remove-CMApplication -Name $Name -Force
+    Write-Host "Removed $Name and its deployment."
+}
+
+function New-LabApp([string]$Name, [string]$KeyName, [string]$InstallCommand, [switch]$Required) {
+    if (Get-CMApplication -Name $Name -Fast) {
+        Write-Host "$Name already exists."
+        return
+    }
+    New-CMApplication -Name $Name -Publisher 'Layer8' -SoftwareVersion '1.0' | Out-Null
+    # /reg:64 and -Is64Bit: install and detection both use the 64-bit registry, whichever way the client runs the command.
+    $detection = New-CMDetectionClauseRegistryKey -Hive LocalMachine -KeyName $KeyName -Existence -Is64Bit
+    Add-CMScriptDeploymentType -ApplicationName $Name -DeploymentTypeName "$Name (script)" `
+        -InstallCommand $InstallCommand `
+        -UninstallCommand "cmd.exe /c reg delete HKLM\$KeyName /f /reg:64" `
+        -AddDetectionClause $detection `
+        -InstallationBehaviorType InstallForSystem -LogonRequirementType WhetherOrNotUserLoggedOn | Out-Null
+    if ($Required) {
+        New-CMApplicationDeployment -Name $Name -CollectionName $Collection -DeployAction Install -DeployPurpose Required `
+            -AvailableDateTime (Get-Date) -DeadlineDateTime (Get-Date) -UserNotification DisplaySoftwareCenterOnly | Out-Null
+        Write-Host "Created $Name and made it required for $Collection (it fails on purpose)."
+    }
+    else {
+        New-CMApplicationDeployment -Name $Name -CollectionName $Collection -DeployAction Install -DeployPurpose Available `
+            -UserNotification DisplaySoftwareCenterOnly | Out-Null
+        Write-Host "Created $Name and made it available to $Collection."
+    }
+}
 
 # The console installs its PowerShell module next to its binaries; importing it creates the site drive (LAB:).
 Import-Module (Join-Path (Split-Path $env:SMS_ADMIN_UI_PATH -Parent) 'ConfigurationManager.psd1')
@@ -53,34 +97,14 @@ if (-not $siteDrive) { throw 'No ConfigMgr site drive. Open the console once to 
 
 Push-Location "$($siteDrive.Name):"
 try {
-    $app = Get-CMApplication -Name $appName -Fast
     if ($Remove) {
-        if ($app) {
-            # ConfigMgr won't delete an app that's still deployed, and a deleted deployment can take a moment
-            # to disappear, so remove it by name and collection and wait until it's really gone.
-            if (Get-CMApplicationDeployment -Name $appName -CollectionName $Collection) {
-                Remove-CMApplicationDeployment -Name $appName -CollectionName $Collection -Force
-            }
-            for ($i = 0; $i -lt 15 -and (Get-CMApplicationDeployment -Name $appName); $i++) { Start-Sleep -Seconds 2 }
-            Remove-CMApplication -Name $appName -Force
-            Write-Host "Removed $appName and its deployment."
-        }
-    }
-    elseif ($app) {
-        Write-Host "$appName already exists."
+        Remove-LabApp $appName
+        Remove-LabApp $failAppName
     }
     else {
-        New-CMApplication -Name $appName -Publisher 'Layer8' -SoftwareVersion '1.0' | Out-Null
-        # /reg:64 and -Is64Bit: install and detection both use the 64-bit registry, whichever way the client runs the command.
-        $detection = New-CMDetectionClauseRegistryKey -Hive LocalMachine -KeyName 'SOFTWARE\Layer8Test' -Existence -Is64Bit
-        Add-CMScriptDeploymentType -ApplicationName $appName -DeploymentTypeName "$appName (script)" `
-            -InstallCommand 'cmd.exe /c reg add HKLM\SOFTWARE\Layer8Test /v Installed /d 1 /f /reg:64' `
-            -UninstallCommand 'cmd.exe /c reg delete HKLM\SOFTWARE\Layer8Test /f /reg:64' `
-            -AddDetectionClause $detection `
-            -InstallationBehaviorType InstallForSystem -LogonRequirementType WhetherOrNotUserLoggedOn | Out-Null
-        New-CMApplicationDeployment -Name $appName -CollectionName $Collection -DeployAction Install -DeployPurpose Available `
-            -UserNotification DisplaySoftwareCenterOnly | Out-Null
-        Write-Host "Created $appName and made it available to $Collection."
+        New-LabApp $appName 'SOFTWARE\Layer8Test' 'cmd.exe /c reg add HKLM\SOFTWARE\Layer8Test /v Installed /d 1 /f /reg:64'
+        # Never writes its detection key, and 1603 is "fatal error during installation", so it always ends in Error.
+        New-LabApp $failAppName 'SOFTWARE\Layer8FailTest' 'cmd.exe /c exit 1603' -Required
     }
 }
 finally {
