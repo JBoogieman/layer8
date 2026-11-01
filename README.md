@@ -9,6 +9,7 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 - Client actions on devices and collections
 - Client tools on devices and collections: quick status (signed-in users, uptime, free space on C:, client version), find installed software by name, list and install missing updates, check for a pending restart, full machine policy refresh, group policy update, client health check, clear the client cache, repair the client, turn off provisioning mode. Every run shows one answer per device, works through at most 32 devices at a time, and Copy Results puts the rows on the clipboard for Excel
 - Online status for devices and whole collections: ping, or port 445 when ping is blocked
+- Retry Failed Devices on Monitoring > Deployments: for an application or software update deployment, finds every device in error and re-runs that deployment's evaluation on all of them. Copy Failed Devices puts their names on the clipboard
 - Remote tools on devices: ping, Remote Desktop, Remote Assistance, PowerShell session, browse C$, client logs, Computer Management, Event Viewer, Services
 - Copy device names, or every member of a collection, to the clipboard
 - Extended device properties: update compliance, client health, collection membership
@@ -39,13 +40,13 @@ An open console locks Layer8's DLLs, so the installer asks it to close, the same
 
 ## Developer install
 
-From an elevated PowerShell with the console closed, run `tools\Install-Layer8Dev.ps1`. It builds Layer8, copies it into the console's folders and records every file it placed; `tools\Uninstall-Layer8Dev.ps1` removes exactly those files. In a lab, `tools\New-Layer8LabTestData.ps1` creates a test app and a fake BitLocker recovery key to test against (`-Remove` deletes them). Don't use it on a machine where the MSI is installed: both put the same files in the same places, so uninstall one before using the other. If PowerShell blocks the script, run it as `powershell -ExecutionPolicy Bypass -File tools\Install-Layer8Dev.ps1`.
+From an elevated PowerShell with the console closed, run `tools\Install-Layer8Dev.ps1`. It builds Layer8, copies it into the console's folders and records every file it placed; `tools\Uninstall-Layer8Dev.ps1` removes exactly those files. In a lab, `tools\New-Layer8LabTestData.ps1` creates a test app, an app that always fails (for Retry Failed Devices) and a fake BitLocker recovery key to test against (`-Remove` deletes them). Don't use it on a machine where the MSI is installed: both put the same files in the same places, so uninstall one before using the other. If PowerShell blocks the script, run it as `powershell -ExecutionPolicy Bypass -File tools\Install-Layer8Dev.ps1`.
 
 Layer8 is an old-style console extension, so the console ignores it while **Only allow console extensions that are approved for the hierarchy** is ticked (Administration > Site Configuration > Sites > Hierarchy Settings > General).
 
 ## Status
 
-Early days. Layer8 has its own assembly names, namespaces and console IDs, so its menus and dialogs no longer clash with ConfigMgr Quick Tools. Layer8 ships only its own DLLs, so the two never share a file in the console's bin folder. The one overlap left: both replace the device properties form, so with both installed, whichever was installed last supplies those tabs. Automatic update checks have been removed.
+Early days: see [docs/STATUS.md](docs/STATUS.md) for what's tested, what's left before a public release, and the ideas list. Layer8 has its own assembly names, namespaces and console IDs, so its menus and dialogs no longer clash with ConfigMgr Quick Tools. Layer8 ships only its own DLLs, so the two never share a file in the console's bin folder. The one overlap left: both replace the device properties form, so with both installed, whichever was installed last supplies those tabs. Automatic update checks have been removed.
 
 ## Logs
 
