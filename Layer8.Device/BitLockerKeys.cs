@@ -202,6 +202,8 @@ namespace Layer8.Device
                 }
                 // One match is the usual case when a Key ID is typed: select it, ready to copy.
                 if (list.Items.Count == 1) list.Items[0].Selected = true;
+                // The 48-digit password is the one thing that must never be cut off.
+                if (list.Items.Count > 0) list.AutoResizeColumn(2, ColumnHeaderAutoResizeStyle.ColumnContent);
                 list.EndUpdate();
                 copy.Enabled = SelectedPassword() != null;
             }

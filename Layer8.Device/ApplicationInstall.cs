@@ -57,10 +57,27 @@ namespace Layer8.Device
             {
                 using (app)
                 {
+                    // Some CCM_Application properties are "lazy": a list query leaves them empty and only reading
+                    // the instance itself fills them in. AllowedActions is the one Install depends on.
+                    if (app["AllowedActions"] == null)
+                    {
+                        try
+                        {
+                            app.Get();
+                        }
+                        catch (ManagementException ex)
+                        {
+                            log.Warn("Couldn't read all of " + (app["Name"] as string) + " on " + host, ex);
+                        }
+                    }
+
                     string installState = app["InstallState"] as string ?? string.Empty;
-                    string[] allowed = app["AllowedActions"] as string[] ?? new string[0];
+                    string[] allowed = app["AllowedActions"] as string[];
                     bool machine = app["IsMachineTarget"] is bool target && target;
                     bool installed = string.Equals(installState, "Installed", StringComparison.OrdinalIgnoreCase);
+                    log.InfoFormat("Application on {0}: '{1}' InstallState={2} EvaluationState={3} ApplicabilityState={4} IsMachineTarget={5} AllowedActions={6} ErrorCode={7}",
+                        host, app["Name"], installState, app["EvaluationState"], app["ApplicabilityState"], machine,
+                        allowed == null ? "(not reported)" : string.Join("/", allowed), app["ErrorCode"]);
                     apps.Add(new DeployedApp
                     {
                         Id = app["Id"] as string,
@@ -71,7 +88,8 @@ namespace Layer8.Device
                         Installed = installed,
                         Deadline = ToDate(app["Deadline"]),
                         State = StateText(installState, app["EvaluationState"], app["ErrorCode"]),
-                        CanInstall = machine && !installed && allowed.Contains("Install", StringComparer.OrdinalIgnoreCase),
+                        // When the client doesn't report its allowed actions, let Install try: the client answers either way.
+                        CanInstall = machine && !installed && (allowed == null || allowed.Contains("Install", StringComparer.OrdinalIgnoreCase)),
                     });
                 }
             }
