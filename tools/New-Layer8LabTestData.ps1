@@ -56,8 +56,13 @@ try {
     $app = Get-CMApplication -Name $appName -Fast
     if ($Remove) {
         if ($app) {
-            Get-CMApplicationDeployment -Name $appName | Remove-CMApplicationDeployment -Force
-            $app | Remove-CMApplication -Force
+            # ConfigMgr won't delete an app that's still deployed, and a deleted deployment can take a moment
+            # to disappear, so remove it by name and collection and wait until it's really gone.
+            if (Get-CMApplicationDeployment -Name $appName -CollectionName $Collection) {
+                Remove-CMApplicationDeployment -Name $appName -CollectionName $Collection -Force
+            }
+            for ($i = 0; $i -lt 15 -and (Get-CMApplicationDeployment -Name $appName); $i++) { Start-Sleep -Seconds 2 }
+            Remove-CMApplication -Name $appName -Force
             Write-Host "Removed $appName and its deployment."
         }
     }
