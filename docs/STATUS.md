@@ -1,4 +1,4 @@
-# Layer8 status: October 31, 2026
+# Layer8 status: November 1, 2026
 
 Working notes, not documentation: where Layer8 stands, what's left before a public release, and the ideas list. Update the date and tick boxes as things land.
 
@@ -20,25 +20,28 @@ Working notes, not documentation: where Layer8 stands, what's left before a publ
 | Copy Names, Copy Member Names, Copy Results | DEV01, All Systems | |
 | BitLocker Recovery Key | No keys; the lab script's fake key | Key ID filter works ("4c41") |
 | Clear Client Cache | DEV01 | 109.6 MB freed |
-| Install Application | DEV01 | The window lists apps and says why Install is off. A real install hasn't been done yet (the test app was recreated with registry detection for this) |
+| Install Application | DEV01 | Installed Layer8 Test App from the window; it reached Installed. Shows the fail app's 1603 (0x643) |
 | Driver Manager | Catalog download | Dell and HP driver pack imports not tested |
 | MSI | Install; closing open consoles | 3 consoles closed, exit 0. Upgrade, uninstall and the SYSTEM/3010 path not tested |
 | Logging | DEV01 | Log level change picked up without a restart |
 
 Inherited from ConfigMgr Quick Tools and not retested since the fork: extended device properties tabs, add resources to a collection, LAPS (legacy) lookup, software update clean-up, phased deployments.
 
-## New today, not tested yet
+## New since October 31
 
 - **Retry Failed Devices** and **Copy Failed Devices** on Monitoring > Deployments. For an application or software update deployment, Layer8 finds the devices in Error and either re-runs that deployment's evaluation on all of them (32 at a time, one row per device, Copy Results) or copies their names.
-- **Monitoring > Deployments > Delete** pointed at the wrong class (`ClientActions` instead of `Device`), so it couldn't have worked since the rename. Fixed.
+  - Tested: the Layer8 menu is only offered for application and software update deployments (greyed out on a program deployment), and Copy Failed Devices with nothing in error explains why.
+  - Not tested yet: a deployment with devices in Error. DEV01 failed Layer8 Fail App (1603), but the lab site hadn't summarized since 1:15 PM an hour later, even after Run Summarization, so Monitoring still showed it In Progress.
+- **Monitoring > Deployments > Delete** pointed at the wrong class (`ClientActions` instead of `Device`), so it couldn't have worked since the rename. Fixed, not tested.
 - **Layer8 Fail App** in `tools\New-Layer8LabTestData.ps1`: a required app whose install exits with 1603, so DEV01 lands in Error and Retry has something to retry.
+- **Install Application status text** used the wrong table for the client's EvaluationState numbers, so a failed install read "waiting to download" and an available app "detecting". It now follows Microsoft's CCM_Application reference (4 reads "last install failed"). The Deployment and Status columns now fit their text and stretch with the window.
 
 ## Ready-to-publish checklist
 
 ### Testing
 
 - [ ] Retry Failed Devices end to end: Layer8 Fail App in Error, Run Summarization, Retry, AppEnforce.log on DEV01 shows a new attempt; Copy Failed Devices gives the right names
-- [ ] Install Application installs Layer8 Test App (state reaches Installed, `HKLM\SOFTWARE\Layer8Test` exists)
+- [x] Install Application installs Layer8 Test App (state reaches Installed)
 - [ ] Monitoring > Deployments > Delete removes a throwaway deployment
 - [ ] Second client VM (DEV02): every client tool, remote tool and collection run against a machine that isn't the console
 - [ ] Install Missing Updates with an update actually missing (deploy one update to Layer8 Dev)
@@ -54,6 +57,7 @@ Inherited from ConfigMgr Quick Tools and not retested since the fork: extended d
 - [ ] Read through the repo for anything lab-specific (names, site codes, paths)
 - [ ] LICENSE keeps Peter Szalatnay's MIT notice; README credit stays
 - [ ] README: screenshots, the console version tested, known limitations
+- [ ] README: a short AI disclosure
 - [ ] Decide on signing. An unsigned MSI shows "unknown publisher" and SmartScreen warnings. Acceptable for a first release if the README says so
 - [ ] Bump to 0.2.0 in `SharedAssemblyInfo.cs`, tag `v0.2.0`, GitHub release with the MSI and release notes
 - [ ] Make the repo public
@@ -70,7 +74,7 @@ Inherited from ConfigMgr Quick Tools and not retested since the fork: extended d
 ## Rough edges to iron out
 
 - **Retry and Available deployments.** Retry triggers evaluation, which retries required deployments. An Available app in Error won't reinstall by itself. Fix: for Available app deployments, call `CCM_Application.Install` for that app on each failed device, the same call Install Application uses.
-- **Retry uses summarized status.** A device that failed minutes ago may be missing, and one that's since recovered may still be listed. Both dialogs say so; Run Summarization first.
+- **Retry uses summarized status.** A device that failed minutes ago may be missing, and one that's since recovered may still be listed. Both dialogs say so; Run Summarization first. In the lab, summarization took over an hour to pick up a failure. Worth checking whether `SMS_AppDeploymentAssetDetails` or the client's own state (as Install Application reads it) is the better source.
 - **Retry menu filter.** The Layer8 group on Monitoring > Deployments should only show for application and software update deployments. If the console ignores the filter on a group, the buttons show everywhere and Layer8 explains what it supports. Check which one happens.
 - **Remote Assistance and PowerShell session** prompts unconfirmed (see testing).
 - **Device properties form** is shared with Quick Tools: with both installed, whichever was installed last supplies the tabs.
