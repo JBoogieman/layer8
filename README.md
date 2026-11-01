@@ -14,6 +14,7 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 - Extended device properties: update compliance, client health, collection membership
 - Collection management: add resources from a list
 - Driver Manager: grabber, importer, Dell and HP driver packs
+- Install Application: list the apps deployed to a device and install one now, like Software Center
 - LAPS password and BitLocker recovery key lookup (from Active Directory; type the Key ID from the recovery screen to find the right key)
 - Software update clean-up and phased deployments
 
@@ -38,7 +39,7 @@ An open console locks Layer8's DLLs, so the installer asks it to close, the same
 
 ## Developer install
 
-From an elevated PowerShell with the console closed, run `tools\Install-Layer8Dev.ps1`. It builds Layer8, copies it into the console's folders and records every file it placed; `tools\Uninstall-Layer8Dev.ps1` removes exactly those files. Don't use it on a machine where the MSI is installed: both put the same files in the same places, so uninstall one before using the other. If PowerShell blocks the script, run it as `powershell -ExecutionPolicy Bypass -File tools\Install-Layer8Dev.ps1`.
+From an elevated PowerShell with the console closed, run `tools\Install-Layer8Dev.ps1`. It builds Layer8, copies it into the console's folders and records every file it placed; `tools\Uninstall-Layer8Dev.ps1` removes exactly those files. In a lab, `tools\New-Layer8LabTestData.ps1` creates a test app and a fake BitLocker recovery key to test against (`-Remove` deletes them). Don't use it on a machine where the MSI is installed: both put the same files in the same places, so uninstall one before using the other. If PowerShell blocks the script, run it as `powershell -ExecutionPolicy Bypass -File tools\Install-Layer8Dev.ps1`.
 
 Layer8 is an old-style console extension, so the console ignores it while **Only allow console extensions that are approved for the hierarchy** is ticked (Administration > Site Configuration > Sites > Hierarchy Settings > General).
 

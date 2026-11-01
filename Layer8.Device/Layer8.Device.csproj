@@ -112,6 +112,7 @@
     <Compile Include="RemoteTools.cs" />
     <Compile Include="BitLockerKeys.cs" />
     <Compile Include="InputPrompt.cs" />
+    <Compile Include="ApplicationInstall.cs" />
     <Compile Include="ResultClientHealthControl.cs">
       <SubType>UserControl</SubType>
     </Compile>

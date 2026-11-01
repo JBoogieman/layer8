@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription NamespaceGuid="C8219F80-525D-47E9-9DAF-8FFD1053066B" Class="AssemblyType" SelectionMode="Single" DisplayName="Install Application..." MnemonicDisplayName="Install Application" Description="List the applications deployed to this device and install one now, like Install in Software Center" InsertBefore="B7009279-2666-45EF-9935-1FB3D3ED2ABF">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <ActionAssembly>
+    <Assembly>Layer8.Device.dll</Assembly>
+    <Type>Layer8.Device.ApplicationInstall</Type>
+    <Method>Show</Method>
+  </ActionAssembly>
+</ActionDescription>
