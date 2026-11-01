@@ -17,7 +17,7 @@
   </ActionStateAssembly>
   <ActionAssembly>
     <Assembly>Layer8.Device.dll</Assembly>
-    <Type>Layer8.Device.ClientActions</Type>
+    <Type>Layer8.Device.Device</Type>
     <Method>DeleteDeploymentForMonitoring</Method>
   </ActionAssembly>
   <SecurityConfiguration>
