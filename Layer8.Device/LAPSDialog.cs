@@ -43,9 +43,18 @@ namespace Layer8.Device
         {
             try
             {
+                // Records such as "x64 Unknown Computer (x64 Unknown Computer)" aren't machines, and their brackets
+                // would break the LDAP filter; real names are escaped anyway, the same way BitLocker lookups are.
+                string name = resultObjects["Name"].StringValue;
+                if (!RemoteTools.IsComputerName(name))
+                {
+                    textBoxPassword.Text = "Not a computer name";
+                    return;
+                }
+
                 using (DirectorySearcher search = new DirectorySearcher
                 {
-                    Filter = string.Format("(&(objectCategory=computer)(objectClass=computer)(cn={0}))", resultObjects["Name"].StringValue)
+                    Filter = string.Format("(&(objectCategory=computer)(objectClass=computer)(cn={0}))", BitLockerKeys.LdapEscape(name))
                 })
                 {
                     search.PropertiesToLoad.Add("distinguishedName");
@@ -54,7 +63,11 @@ namespace Layer8.Device
 
                     SearchResult result = search.FindOne();
 
-                    if (result != null)
+                    if (result == null)
+                    {
+                        textBoxPassword.Text = "Not found in Active Directory";
+                    }
+                    else
                     {
                         if (result.Properties.Contains("ms-mcs-admpwdexpirationtime"))
                         {
