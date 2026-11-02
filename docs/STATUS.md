@@ -25,7 +25,11 @@ Working notes, not documentation: where Layer8 stands, what's left before a publ
 | MSI | Install; closing open consoles | 3 consoles closed, exit 0. Upgrade, uninstall and the SYSTEM/3010 path not tested |
 | Logging | DEV01 | Log level change picked up without a restart |
 
-Inherited from ConfigMgr Quick Tools and not retested since the fork: extended device properties tabs, add resources to a collection, LAPS (legacy) lookup, software update clean-up, phased deployments.
+Inherited from ConfigMgr Quick Tools, smoke-tested Nov 2 (opened and cancelled, nothing changed):
+
+- Device properties tabs: all six show up. Collections lists DEV01's four collections. Maintenance Windows, Software Updates, Software Updates Compliance, Client Health and Driver Compliance open without errors but showed nothing (see rough edges).
+- Client Cache (location, size, used space), Driver Grabber (WMI and ADMIN$ checks pass), Incremental Collections, Remove Retired Content, Clean Software Update Groups, Driver Package Importer, Driver Legacy Package Importer, Driver Manager options, Dell and HP Driver Pack: all open and cancel cleanly.
+- Not testable in this lab yet: Quick Deployment and anything with update data (the site has never synchronized software updates: All Software Updates shows 0), Task Sequence Export to XML (no task sequences), phased deployments.
 
 ## New since October 31
 
@@ -56,7 +60,7 @@ Inherited from ConfigMgr Quick Tools and not retested since the fork: extended d
 - [ ] Second client VM (DEV02): every client tool, remote tool and collection run against a machine that isn't the console
 - [ ] Install Missing Updates with an update actually missing (deploy one update to Layer8 Dev)
 - [ ] Remote Assistance: UAC prompt and offer; PowerShell session opens over WinRM
-- [ ] Smoke test the inherited Quick Tools features listed above, or mark them as untested in the README
+- [x] Smoke test the inherited Quick Tools features listed above (Nov 2; see the rough edges for what it found)
 - [ ] Driver Manager: import one Dell and one HP pack, or label Driver Manager as experimental
 - [ ] Scale: a collection run on 50+ devices, mostly offline is fine, to check the 32-at-a-time limit and that the console stays usable (the pilot can cover this)
 - [ ] MSI paths: clean machine, upgrade over the previous MSI, uninstall leaves nothing behind, MECM deployment as SYSTEM with a console open (3010)
@@ -90,6 +94,9 @@ Inherited from ConfigMgr Quick Tools and not retested since the fork: extended d
 - **Device properties form** is shared with Quick Tools: with both installed, whichever was installed last supplies the tabs.
 - **Approved console extensions.** Layer8 is an old-style extension, so the console ignores it while "Only allow console extensions that are approved for the hierarchy" is ticked. Locked-down sites often tick it. The long-term fix is packaging Layer8 as an approved extension; research what that takes before promising it.
 - **Other ConfigMgr times may have the same "+000" shift** as Install Application's deadlines: Check Pending Restart's restart deadline goes through the same kind of conversion. Check it against Software Center.
+- **Dell Driver Pack only offers Windows 10, 8.1 and 7**: no Windows 11, which makes it close to useless for a current fleet. HP builds its list from HP's live catalog.
+- **Inherited properties tabs** (Client Health, Software Updates, Software Updates Compliance, Client Cache) fill their lists and labels from a background thread, the same pattern fixed in Collection Evaluation Statistics. In the smoke test Client Health stayed empty, even its "Last Evaluation" label; whether its refresh actually ran couldn't be confirmed. Fix the same way, then retest with update data in the lab.
+- **Lab gaps:** sync software updates (at least one product and classification), and create one task sequence, so update and task sequence features can be tested.
 - **Collection Evaluation Statistics** took about 30 seconds to read colleval.log from CM01 in the lab, and OK didn't close the window until it finished (the X did).
 - **Skipped records count as offline** in the progress totals. A separate "skipped" count would read better.
 - **Large retries** keep every device record in memory until the window closes. Fine at lab scale; watch it on a 1,000-device deployment.
