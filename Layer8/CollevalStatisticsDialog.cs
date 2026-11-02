@@ -63,6 +63,17 @@ namespace Layer8
             backgroundWorker.RunWorkerAsync();
         }
 
+        // What the background read found. The worker only collects; the UI thread fills the window, because
+        // WinForms controls may only be changed from the thread that created them.
+        private sealed class EvaluationStats
+        {
+            public DateTime StartTime;
+            public DateTime EndTime;
+            public int CollectionCount;
+            public readonly List<ListViewItem> Rows = new List<ListViewItem>();
+            public readonly List<double> Seconds = new List<double>();
+        }
+
         private void InfoWorker_DoWork(object sender, DoWorkEventArgs e)
         {
             try
@@ -87,8 +98,6 @@ namespace Layer8
                     CultureInfo provider = CultureInfo.InvariantCulture;
                     DateTime startTime = DateTime.ParseExact(startMatch.Groups[1].Value, "MM-dd-yyyy HH:mm:ss", provider);
                     DateTime endTime = DateTime.ParseExact(endMatch.Groups[1].Value, "MM-dd-yyyy HH:mm:ss", provider);
-                    TimeSpan duration = endTime - startTime;
-
                     if (endTime.CompareTo(startTime) > 0)
                     {
                         // get collection count
@@ -101,6 +110,7 @@ namespace Layer8
                         MatchCollection matches = regex.Matches(input);
 
                         List<IResultObject> collections = Utility.SearchWMIToList(connectionManager, "SELECT CollectionID,Name FROM SMS_Collection");
+                        EvaluationStats stats = new EvaluationStats { StartTime = startTime, EndTime = endTime, CollectionCount = collectionCount };
 
                         foreach (Match obj in matches)
                         {
@@ -108,32 +118,23 @@ namespace Layer8
 
                             if (Utility.InclusiveBetween(collectionTime, startTime, endTime))
                             {
-                                IResultObject collection = collections.Where(x => x.Properties["CollectionID"].StringValue.Equals(obj.Groups[1].Value)).FirstOrDefault();
-                                listViewListCollections.Items.Add(new ListViewItem()
+                                string collectionId = obj.Groups[1].Value;
+                                IResultObject collection = collections.FirstOrDefault(x => x.Properties["CollectionID"].StringValue.Equals(collectionId));
+                                stats.Rows.Add(new ListViewItem()
                                 {
-                                    Text = collection["Name"].StringValue,
+                                    // A collection deleted since the log was written has no name any more: show its ID.
+                                    Text = collection != null ? collection["Name"].StringValue : collectionId,
                                     SubItems = {
                                         obj.Groups[2].Value,
-                                        obj.Groups[1].Value
+                                        collectionId
                                     }
                                 });
+                                if (double.TryParse(obj.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds))
+                                    stats.Seconds.Add(seconds);
                             }
                         }
 
-                        labelStartTime.Text = startTime.ToString();
-                        labelEndTime.Text = endTime.ToString();
-                        labelTimeTaken.Text = duration.ToString(@"mm\:ss");
-                        labelCollectionCount.Text = collectionCount.ToString();
-
-                        double[] columnData = (from ListViewItem row in listViewListCollections.Items
-                                               where row.SubItems[1].Text.ToString() != string.Empty
-                                               select Convert.ToDouble(row.SubItems[1].Text)
-                                              ).ToArray();
-
-                        labelCollAverageTime.Text = Math.Round(columnData.Average(), 3).ToString() + " sec";
-                        labelCollTime.Text = TimeSpan.FromSeconds(columnData.Sum()).ToString(@"mm\:ss\.fff");
-                        labelCollLongTime.Text  = Math.Round(columnData.Max(), 3).ToString() + " sec";
-                        labelCollShortTime.Text = Math.Round(columnData.Min(), 3).ToString() + " sec";
+                        e.Result = stats;
                     }
                 }
             }
@@ -149,6 +150,8 @@ namespace Layer8
             {
                 if (e.Error != null)
                     SccmExceptionDialog.ShowDialog(this, e.Error, "Error");
+                else if (e.Result is EvaluationStats stats)
+                    ShowStats(stats);
             }
             finally
             {
@@ -162,6 +165,28 @@ namespace Layer8
                     listViewListCollections.UpdateColumnWidth(columnHeaderName);
                 }
             }
+        }
+
+        private void ShowStats(EvaluationStats stats)
+        {
+            listViewListCollections.Items.AddRange(stats.Rows.ToArray());
+
+            labelStartTime.Text = stats.StartTime.ToString();
+            labelEndTime.Text = stats.EndTime.ToString();
+            labelTimeTaken.Text = (stats.EndTime - stats.StartTime).ToString(@"mm\:ss");
+            labelCollectionCount.Text = stats.CollectionCount.ToString();
+
+            // A run that evaluated nothing has no average, longest or shortest.
+            if (stats.Seconds.Count == 0)
+            {
+                labelCollAverageTime.Text = labelCollLongTime.Text = labelCollShortTime.Text = "-";
+                labelCollTime.Text = TimeSpan.Zero.ToString(@"mm\:ss\.fff");
+                return;
+            }
+            labelCollAverageTime.Text = Math.Round(stats.Seconds.Average(), 3).ToString() + " sec";
+            labelCollTime.Text = TimeSpan.FromSeconds(stats.Seconds.Sum()).ToString(@"mm\:ss\.fff");
+            labelCollLongTime.Text = Math.Round(stats.Seconds.Max(), 3).ToString() + " sec";
+            labelCollShortTime.Text = Math.Round(stats.Seconds.Min(), 3).ToString() + " sec";
         }
 
         private static string ReadInput(string fileName)
