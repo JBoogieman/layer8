@@ -21,15 +21,11 @@ namespace Layer8.Device
     public static class ClientActions
     {
         private static DeviceProgressDialog deviceProgressDialog;
-        private static string scheduleId;
-        private static bool fullScan = false;
-        private static string method;
 
         private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(typeof(ClientActions));
 
-        // Find Software's search text (kept, so the prompt offers the last search) and the progress dialog's title.
+        // Find Software's last search, offered again by the next prompt. Runs get their own copy of the search.
         private static string softwareSearch;
-        private static string dialogTitle;
         private static SynchronizationContext uiContext;
 
         // A single-device action has no progress dialog, so nothing can cancel it.
@@ -43,17 +39,16 @@ namespace Layer8.Device
 
         private static void RunClientActionCore(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
         {
-            // set the thread pool method to run
-            method = "ClientAction";
-            // check if we need full scan
-            if (!string.IsNullOrEmpty(action.DialogId))
+            // DialogId is the schedule ID, plus ",full" (anything after a comma) for a full inventory.
+            if (string.IsNullOrEmpty(action.DialogId))
             {
-                string[] tmp = action.DialogId.Split(',');
-                scheduleId = tmp[0];
-                fullScan = tmp.Length > 1 ? true : false;
+                throw new InvalidOperationException("The client action '" + action.DisplayName + "' has no schedule ID in the menu XML.");
             }
+            string[] parts = action.DialogId.Split(',');
+            string scheduleId = parts[0];
+            bool fullScan = parts.Length > 1;
 
-            ProcessAction(scopeNode, action, selectedResultObjects);
+            ProcessAction(scopeNode, action, selectedResultObjects, nameof(ClientAction), device => { ClientAction(device, scheduleId, fullScan); return null; });
         }
 
         /// <summary>Console entry point: runs RunClientActionRestartServiceCore behind Layer8's crash guard.</summary>
@@ -64,9 +59,7 @@ namespace Layer8.Device
 
         private static void RunClientActionRestartServiceCore(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
         {
-            // set the thread pool method to run
-            method = "RestartServiceAsync";
-            ProcessAction(scopeNode, action, selectedResultObjects);
+            ProcessAction(scopeNode, action, selectedResultObjects, nameof(RestartServiceAsync), device => RestartServiceAsync(device));
         }
 
         /// <summary>
@@ -84,16 +77,22 @@ namespace Layer8.Device
                     throw new InvalidOperationException("Unknown client tool '" + tool + "' in the menu XML.");
                 }
 
-                dialogTitle = null;
+                string title = null;
+                Func<IResultObject, object> run;
                 if (tool == nameof(FindSoftware))
                 {
                     string search = InputPrompt.Ask("Find Software", "Software name, or part of it (for example Chrome, 7-Zip or Office):", softwareSearch);
                     if (search == null) return;
                     softwareSearch = search;
-                    dialogTitle = "Find Software: " + search;
+                    title = "Find Software: " + search;
+                    run = device => FindSoftware(device, search);
                 }
-                method = tool;
-                ProcessAction(scopeNode, action, selectedResultObjects, alwaysShowDialog: true, confirmQuestion: confirmQuestion);
+                else
+                {
+                    MethodInfo toolMethod = typeof(ClientActions).GetMethod(tool, new[] { typeof(IResultObject) });
+                    run = device => toolMethod.Invoke(null, new object[] { device });
+                }
+                ProcessAction(scopeNode, action, selectedResultObjects, tool, run, title, alwaysShowDialog: true, confirmQuestion: confirmQuestion);
             });
         }
 
@@ -115,7 +114,8 @@ namespace Layer8.Device
             { nameof(RepairClient), "Repair the ConfigMgr client on {0}?\n\nEach client runs ccmrepair, which restarts the SMS Agent Host service and can take several minutes. Watch ccmrepair.log on the device." },
         };
 
-        private static void ProcessAction(ScopeNode scopeNode, ActionDescription action, IResultObject resultObjects, bool alwaysShowDialog = false, string confirmQuestion = null)
+        private static void ProcessAction(ScopeNode scopeNode, ActionDescription action, IResultObject resultObjects, string actionName, Func<IResultObject, object> run,
+                                          string title = null, bool alwaysShowDialog = false, string confirmQuestion = null)
         {
             bool showProgressDialog = alwaysShowDialog;
             if (resultObjects.ObjectClass == "SMS_Collection" || resultObjects.Count > 1)
@@ -157,10 +157,7 @@ namespace Layer8.Device
 
             if (showProgressDialog)
             {
-                Type type = typeof(ClientActions);
-                MethodInfo methodInfo = type.GetMethod(method);
-
-                deviceProgressDialog = new DeviceProgressDialog(action, resultObjects, methodInfo, dialogTitle)
+                deviceProgressDialog = new DeviceProgressDialog(action, resultObjects, actionName, run, title)
                 {
                     Total = total
                 };
@@ -173,27 +170,27 @@ namespace Layer8.Device
                 foreach (IResultObject resultObject in resultObjects)
                 {
                     IResultObject target = resultObject;
-                    Task.Run(() => RunAction(target));
+                    Task.Run(() => RunAction(target, actionName, run));
                 }
             }
 
             return;
         }
 
-        private static void RunAction(IResultObject resultObject)
+        private static void RunAction(IResultObject resultObject, string actionName, Func<IResultObject, object> run)
         {
             string device = "(unknown device)";
             try
             {
                 device = resultObject["Name"].StringValue;
-                object result = typeof(ClientActions).GetMethod(method).Invoke(null, new object[] { resultObject });
+                object result = run(resultObject);
                 string outcome = WaitForResult(result);
-                log.InfoFormat("{0} on {1}: {2}", method, device, outcome ?? "done");
+                log.InfoFormat("{0} on {1}: {2}", actionName, device, outcome ?? "done");
             }
             catch (Exception ex)
             {
                 Exception root = SafeAction.Unwrap(ex);
-                log.Error(string.Format("{0} on {1} failed", method, device), root);
+                log.Error(string.Format("{0} on {1} failed", actionName, device), root);
                 ShowError(root);
             }
         }
@@ -316,10 +313,9 @@ namespace Layer8.Device
         /// view of Add/Remove Programs (Win32Reg_AddRemovePrograms and its 64-bit twin), which matches what
         /// hardware inventory reports, but live.
         /// </summary>
-        public static string FindSoftware(IResultObject resultObject)
+        public static string FindSoftware(IResultObject resultObject, string search)
         {
             string host = resultObject["Name"].StringValue;
-            string search = softwareSearch;
             ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
 
             List<string> found = new List<string>();
@@ -730,7 +726,7 @@ namespace Layer8.Device
             }
         }
 
-        public static void ClientAction(IResultObject resultObject)
+        public static void ClientAction(IResultObject resultObject, string scheduleId, bool fullScan)
         {
             try
             {

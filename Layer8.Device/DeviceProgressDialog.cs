@@ -26,7 +26,10 @@ namespace Layer8.Device
 
         // Device records: a query result (IResultObject) or a list built elsewhere, such as Retry Failed Devices.
         private readonly System.Collections.IEnumerable resultObjects;
-        private readonly MethodInfo method;
+        // What runs on each device, and its name for the log. Callers pass the values a run needs (a schedule ID,
+        // a search) into this function, so a second action started while one is still running can't change them.
+        private readonly Func<IResultObject, object> run;
+        private readonly string actionName;
         // At most this many devices are contacted at once. Without a limit, a 5,000-device collection opened
         // 5,000 connections together; this keeps the console and the network calm at fleet scale.
         private const int MaxParallel = 32;
@@ -57,8 +60,14 @@ namespace Layer8.Device
         }
 
         /// <summary>For the console's selection (devices, or collection members).</summary>
-        public DeviceProgressDialog(ActionDescription action, IResultObject selectedResultObjects, MethodInfo method, string title = null)
-            : this(action, Each(selectedResultObjects), method, title)
+        public DeviceProgressDialog(ActionDescription action, IResultObject selectedResultObjects, string actionName, Func<IResultObject, object> run, string title = null)
+            : this(action, Each(selectedResultObjects), actionName, run, title)
+        {
+        }
+
+        /// <summary>For a list of device records and a public static ClientActions method that takes one device.</summary>
+        public DeviceProgressDialog(ActionDescription action, System.Collections.IEnumerable selectedResultObjects, MethodInfo method, string title = null)
+            : this(action, selectedResultObjects, method.Name, device => method.Invoke(null, new object[] { device }), title)
         {
         }
 
@@ -72,10 +81,11 @@ namespace Layer8.Device
         }
 
         /// <summary>For a list of device records built elsewhere, such as Retry Failed Devices.</summary>
-        public DeviceProgressDialog(ActionDescription action, System.Collections.IEnumerable selectedResultObjects, MethodInfo method, string title = null) : this()
+        public DeviceProgressDialog(ActionDescription action, System.Collections.IEnumerable selectedResultObjects, string actionName, Func<IResultObject, object> run, string title = null) : this()
         {
             resultObjects = selectedResultObjects;
-            this.method = method;
+            this.actionName = actionName;
+            this.run = run;
 
             Title = title ?? action.DisplayName;
 
@@ -168,14 +178,14 @@ namespace Layer8.Device
             {
                 SetStatus(item, "Connecting");
 
-                object result = method.Invoke(null, new object[] { resultObject });
+                object result = run(resultObject);
                 // Waits for async actions (their errors land in the catch below), and picks up the short
                 // status some actions return, like "No missing updates".
                 string outcome = ClientActions.WaitForResult(result);
 
                 Interlocked.Increment(ref completed);
                 status = string.IsNullOrEmpty(outcome) ? "Completed" : outcome;
-                log.InfoFormat("{0} on {1}: {2}", method.Name, item.Text, status);
+                log.InfoFormat("{0} on {1}: {2}", actionName, item.Text, status);
             }
             catch (Exception ex)
             {
@@ -208,7 +218,7 @@ namespace Layer8.Device
                     Interlocked.Increment(ref failed);
                 }
                 Interlocked.Increment(ref other);
-                log.Warn(string.Format("{0} on {1}: {2}", method.Name, item.Text, status), root);
+                log.Warn(string.Format("{0} on {1}: {2}", actionName, item.Text, status), root);
             }
 
             SetStatus(item, status);
