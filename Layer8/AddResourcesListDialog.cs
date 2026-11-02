@@ -6,6 +6,8 @@ using Microsoft.ConfigurationManagement.AdminConsole.Common;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using System.Windows;
 
@@ -16,6 +18,12 @@ namespace Layer8.CollectionManagement
         private long searchCompleteTime = -1L;
         private readonly ControlsInspector controlsInspector;
         private SmsBackgroundWorker backgroundWorkerQueryMachine;
+        private List<string> searchedNames = new List<string>();
+
+        // The rule Layer8.Device.RemoteTools.IsComputerName uses: letters, digits, dots, hyphens, underscores.
+        // A line with anything else (an apostrophe, a second pasted column) isn't a computer name, and in the
+        // query it would break the WQL or change what it matches.
+        private static readonly Regex ComputerName = new Regex(@"^[A-Za-z0-9][A-Za-z0-9.\-_]{0,254}$");
 
         public AddResourcesListDialog()
         {
@@ -50,11 +58,26 @@ namespace Layer8.CollectionManagement
                 if (string.IsNullOrWhiteSpace(textBoxSeachList.Text))
                     return;
                 
+                // A column pasted from Excel brings blank lines and stray spaces, and the same name twice would
+                // add two membership rules for one device.
                 List<string> resourceList = new List<string>();
+                List<string> notNames = new List<string>();
+                HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (string line in textBoxSeachList.Lines)
                 {
-                    resourceList.Add(line);
+                    string name = line.Trim();
+                    if (name.Length == 0 || !seen.Add(name)) continue;
+                    if (ComputerName.IsMatch(name)) resourceList.Add(name); else notNames.Add(name);
                 }
+
+                if (notNames.Count > 0)
+                {
+                    System.Windows.MessageBox.Show(string.Format("Left out {0} line{1} that can't be a computer name: {2}", notNames.Count, notNames.Count == 1 ? "" : "s", Shorten(notNames)),
+                        "Add Resources", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                if (resourceList.Count == 0)
+                    return;
+                searchedNames = resourceList;
 
                 string query = string.Format("SELECT * From SMS_R_System WHERE Name IN ('{0}') ORDER by Name", string.Join("','", resourceList));
 
@@ -97,6 +120,7 @@ namespace Layer8.CollectionManagement
 
         private void BackgroundWorkerQueryMachine_QueryProcessorCompleted(object sender, RunWorkerCompletedEventArgs e)
         {
+            bool finished = false;
             try
             {
                 if (e.Error != null)
@@ -111,10 +135,14 @@ namespace Layer8.CollectionManagement
                         listViewSelectedResources.Items[0].Focused = true;
                     }
                 }
-                else if (listViewSelectedResources.Items.Count > 0)
+                else
                 {
-                    listViewSelectedResources.Items[0].Selected = true;
-                    listViewSelectedResources.Items[0].Focused = true;
+                    if (listViewSelectedResources.Items.Count > 0)
+                    {
+                        listViewSelectedResources.Items[0].Selected = true;
+                        listViewSelectedResources.Items[0].Focused = true;
+                    }
+                    finished = true;
                 }
             }
             finally
@@ -128,6 +156,29 @@ namespace Layer8.CollectionManagement
                 controlsInspector.InspectAll();
                 UtilitiesClass.UpdateListViewColumnsSize(listViewSelectedResources, columnMachineName);
             }
+
+            if (finished)
+                ReportNotFound();
+        }
+
+        /// <summary>Names that matched no device, so a pasted list that's partly wrong doesn't pass unnoticed.</summary>
+        private void ReportNotFound()
+        {
+            HashSet<string> found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (ListViewItem item in listViewSelectedResources.Items)
+                found.Add(item.Text);
+
+            List<string> missing = searchedNames.Where(name => !found.Contains(name)).ToList();
+            if (missing.Count == 0)
+                return;
+            System.Windows.MessageBox.Show(string.Format("Found {0} of the {1} names. Not in ConfigMgr: {2}", searchedNames.Count - missing.Count, searchedNames.Count, Shorten(missing)),
+                "Add Resources", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private static string Shorten(List<string> names)
+        {
+            const int Shown = 10;
+            return names.Count <= Shown ? string.Join(", ", names) : string.Join(", ", names.Take(Shown)) + string.Format(" (+{0} more)", names.Count - Shown);
         }
 
         private void AddToCollectionAndClose()
