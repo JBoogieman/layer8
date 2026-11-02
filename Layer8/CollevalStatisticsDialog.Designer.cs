@@ -346,7 +346,7 @@
             this.label18.Name = "label18";
             this.label18.Size = new System.Drawing.Size(118, 13);
             this.label18.TabIndex = 24;
-            this.label18.Text = "Longest Collection Eval";
+            this.label18.Text = "Shortest Collection Eval";
             // 
             // CollevalStatisticsDialog
             // 
