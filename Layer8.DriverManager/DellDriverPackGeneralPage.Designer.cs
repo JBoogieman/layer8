@@ -42,9 +42,8 @@
             // 
             this.comboBoxOS.FormattingEnabled = true;
             this.comboBoxOS.Items.AddRange(new object[] {
-            "Windows 10",
-            "Windows 8.1",
-            "Windows 7"});
+            "Windows 11",
+            "Windows 10"});
             this.comboBoxOS.Location = new System.Drawing.Point(21, 162);
             this.comboBoxOS.Name = "comboBoxOS";
             this.comboBoxOS.Size = new System.Drawing.Size(188, 21);
