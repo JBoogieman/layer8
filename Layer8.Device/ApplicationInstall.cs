@@ -96,6 +96,38 @@ namespace Layer8.Device
             return apps.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
+        /// <summary>
+        /// Retry Failed Devices for an Available deployment: installs one app on one device now, found by its ID
+        /// (the deployment's ModelName, which is the client's CCM_Application.Id).
+        /// </summary>
+        internal static string InstallById(string host, string appId)
+        {
+            ManagementScope clientSdk = Utility.GetWMIScope(host, @"ccm\ClientSDK");
+            foreach (ManagementObject app in Utility.SearchWMIToList(clientSdk, "SELECT * FROM CCM_Application"))
+            {
+                using (app)
+                {
+                    if (!string.Equals(app["Id"] as string, appId, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!(app["IsMachineTarget"] is bool machine && machine)) continue;
+
+                    if (string.Equals(app["InstallState"] as string, "Installed", StringComparison.OrdinalIgnoreCase))
+                        return "Already installed";
+                    if (app["Revision"] == null) app.Get();   // a lazy property on some clients
+
+                    Install(host, new DeployedApp
+                    {
+                        Id = appId,
+                        Revision = app["Revision"] as string,
+                        IsMachineTarget = true,
+                        Name = app["Name"] as string ?? appId,
+                        Version = app["SoftwareVersion"] as string ?? string.Empty,
+                    });
+                    return "Install started";
+                }
+            }
+            throw new InvalidOperationException("The device doesn't have this app deployed to it as a device (it may be a user deployment, or policy hasn't arrived yet).");
+        }
+
         /// <summary>Installs now: immediate, high priority, no restart even if one is needed (the deployment's own settings decide restarts later).</summary>
         internal static void Install(string host, DeployedApp app)
         {

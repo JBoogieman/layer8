@@ -22,6 +22,9 @@ namespace Layer8.Device
         private const int ApplicationDeployment = 1;
         private const int SoftwareUpdateDeployment = 5;
 
+        // SMS_DeploymentSummary.DeploymentIntent: 1 Required, 2 Available.
+        private const int AvailableIntent = 2;
+
         // The status classes' "Error" value (AppStatusType for applications, StatusType for software updates).
         private const int ErrorStatus = 5;
 
@@ -44,7 +47,9 @@ namespace Layer8.Device
         {
             public string Software;
             public string Collection;
-            public string RetryMethod;
+            // What Retry does on each device, its name for the log, and how the confirmation describes it.
+            public string RetryName;
+            public Func<IResultObject, object> Retry;
             public string RetryDescription;
             public readonly List<int> Ids = new List<int>();
             public readonly List<string> Names = new List<string>();
@@ -59,14 +64,14 @@ namespace Layer8.Device
             if (failed == null || failed.Ids.Count == 0) return;
 
             string question = string.Format(
-                "Retry {0} on the {1} device{2} in error ({3})?\n\nEach device {4} now, so required deployments try again. Deployment status catches up at the next summarization.",
+                "Retry {0} on the {1} device{2} in error ({3})?\n\nEach device {4}. Deployment status catches up at the next summarization.",
                 failed.Software, failed.Ids.Count, failed.Ids.Count == 1 ? "" : "s", failed.Collection, failed.RetryDescription);
             if (MessageBox.Show(question, "Retry Failed Devices", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
 
             List<IResultObject> devices = DevicesById(deployment.ConnectionManager, failed.Ids);
             log.InfoFormat("Retrying {0} ({1}) on {2} device(s) in error", failed.Software, failed.Collection, devices.Count);
 
-            using (DeviceProgressDialog dialog = new DeviceProgressDialog(action, devices, typeof(ClientActions).GetMethod(failed.RetryMethod), "Retry Failed Devices: " + failed.Software))
+            using (DeviceProgressDialog dialog = new DeviceProgressDialog(action, devices, failed.RetryName, failed.Retry, "Retry Failed Devices: " + failed.Software))
             {
                 dialog.Total = devices.Count;
                 dialog.ShowDialog();
@@ -167,15 +172,29 @@ namespace Layer8.Device
                     query = string.Format("SELECT MachineID, MachineName FROM SMS_AppDeploymentAssetDetails WHERE AssignmentID = {0} AND AppStatusType = {1}", assignmentId, ErrorStatus);
                     idColumn = "MachineID";
                     nameColumn = "MachineName";
-                    failed.RetryMethod = nameof(ClientActions.RetryApplication);
-                    failed.RetryDescription = "re-runs its application deployment evaluation";
+                    if (deployment["DeploymentIntent"].IntegerValue == AvailableIntent)
+                    {
+                        // Evaluation doesn't reinstall an Available app, so ask each device to install it, as
+                        // Install Application does. ModelName is the ID the client knows the app by.
+                        string appId = deployment["ModelName"].StringValue;
+                        failed.RetryName = "RetryAvailableApplication";
+                        failed.Retry = device => ApplicationInstall.InstallById(device["Name"].StringValue, appId);
+                        failed.RetryDescription = "is asked to install it now, like Install Application (an Available deployment isn't retried by evaluation)";
+                    }
+                    else
+                    {
+                        failed.RetryName = nameof(ClientActions.RetryApplication);
+                        failed.Retry = device => ClientActions.RetryApplication(device);
+                        failed.RetryDescription = "re-runs its application deployment evaluation now, so the install is tried again";
+                    }
                     break;
                 case SoftwareUpdateDeployment:
                     query = string.Format("SELECT ResourceID, DeviceName, StatusErrorCode, StatusDescription FROM SMS_SUMDeploymentAssetDetails WHERE AssignmentID = {0} AND StatusType = {1}", assignmentId, ErrorStatus);
                     idColumn = "ResourceID";
                     nameColumn = "DeviceName";
-                    failed.RetryMethod = nameof(ClientActions.RetryUpdates);
-                    failed.RetryDescription = "scans for updates and re-evaluates its update deployments";
+                    failed.RetryName = nameof(ClientActions.RetryUpdates);
+                    failed.Retry = device => ClientActions.RetryUpdates(device);
+                    failed.RetryDescription = "scans for updates and re-evaluates its update deployments now, so required updates are tried again";
                     break;
                 default:
                     MessageBox.Show("This works for application and software update deployments.", "Layer8", MessageBoxButtons.OK, MessageBoxIcon.Information);
