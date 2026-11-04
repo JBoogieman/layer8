@@ -14,6 +14,15 @@ namespace Layer8.Device
 {
     public static class Device
     {
+        /// <summary>
+        /// Console entry point for Layer8 Settings... on the Layer8 menu. The settings aren't about the selected
+        /// device; the console just opens its settings window (a property sheet) on whatever is selected.
+        /// </summary>
+        public static void OpenSettings(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObject, PropertyDataUpdated dataUpdatedDelegate, Status status)
+        {
+            SafeAction.Run(action?.DisplayName ?? "Layer8 Settings", () => Utility.ShowDialog("Layer8Settings", selectedObject));
+        }
+
         /// <summary>Console entry point: runs AddMulitDeviceCollectionCore behind Layer8's crash guard.</summary>
         public static void AddMulitDeviceCollection(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObject, PropertyDataUpdated dataUpdatedDelegate, Status Status)
         {

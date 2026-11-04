@@ -30,10 +30,12 @@ namespace Layer8.Device
         // a search) into this function, so a second action started while one is still running can't change them.
         private readonly Func<IResultObject, object> run;
         private readonly string actionName;
-        // At most this many devices are contacted at once. Without a limit, a 5,000-device collection opened
-        // 5,000 connections together; this keeps the console and the network calm at fleet scale.
-        private const int MaxParallel = 32;
-        private readonly SemaphoreSlim slots = new SemaphoreSlim(MaxParallel);
+        // At most this many devices are contacted at once (Layer8 Settings, 32 unless changed). Without a limit,
+        // a 5,000-device collection opened 5,000 connections together; this keeps the console and the network calm.
+        private readonly SemaphoreSlim slots = new SemaphoreSlim(Layer8Settings.DevicesAtOnce);
+        // The quick offline check (Layer8 Settings), read once per run. Online Status does its own, fuller check.
+        private readonly bool checkReachable;
+        private readonly int reachableMs = Layer8Settings.ReachableSeconds * 1000;
 
         private int completed;
         private int offline;
@@ -86,6 +88,7 @@ namespace Layer8.Device
             resultObjects = selectedResultObjects;
             this.actionName = actionName;
             this.run = run;
+            checkReachable = Layer8Settings.CheckReachable && actionName != nameof(ClientActions.OnlineStatus);
 
             Title = title ?? action.DisplayName;
 
@@ -218,6 +221,12 @@ namespace Layer8.Device
             string status;
             try
             {
+                if (checkReachable)
+                {
+                    SetStatus(item, "Checking it answers");
+                    ClientActions.EnsureReachable(item.Text, reachableMs);
+                }
+
                 SetStatus(item, "Connecting");
 
                 object result = run(resultObject);

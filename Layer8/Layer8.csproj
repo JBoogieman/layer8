@@ -104,6 +104,7 @@
       <DependentUpon>IncrementalCollectionsPage.cs</DependentUpon>
     </Compile>
     <Compile Include="Layer8Log.cs" />
+    <Compile Include="Layer8Settings.cs" />
     <Compile Include="SafeAction.cs" />
     <Compile Include="OptionsControl.cs">
       <SubType>UserControl</SubType>

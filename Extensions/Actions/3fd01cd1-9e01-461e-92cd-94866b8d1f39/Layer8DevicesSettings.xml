@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription NamespaceGuid="D24FAF31-0199-44A9-A2B6-CF44175053D5" Class="AssemblyType" SelectionMode="Both" DisplayName="Layer8 Settings..." MnemonicDisplayName="Layer8 Settings" Description="Devices contacted at once, the quick offline check and the log level" InsertBefore="B7009279-2666-45EF-9935-1FB3D3ED2ABF">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <ActionAssembly>
+    <Assembly>Layer8.Device.dll</Assembly>
+    <Type>Layer8.Device.Device</Type>
+    <Method>OpenSettings</Method>
+  </ActionAssembly>
+</ActionDescription>

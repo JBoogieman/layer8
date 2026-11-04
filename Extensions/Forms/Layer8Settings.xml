@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<SmsFormData FormatVersion="1.0" xmlns="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework">
+  <Form Id="{606B343A-CD25-47F9-9862-4D3EA40AA563}" CustomData="Layer8Settings" FormType="PropertySheet">
+    <Assembly Name="Layer8" Namespace="Layer8" />
+    <Pages>
+      <Page VendorId="Layer8" Id="{819E7722-EDC5-465E-B020-4A0268AFEFFE}" Assembly="Layer8" Namespace="Layer8" Type="OptionsControl" ReadOnly="false" MultiSelection="true" Visible="false" />
+    </Pages>
+  </Form>
+</SmsFormData>

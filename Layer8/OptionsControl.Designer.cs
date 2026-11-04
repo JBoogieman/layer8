@@ -2,12 +2,12 @@
 {
     partial class OptionsControl
     {
-        /// <summary> 
+        /// <summary>
         /// Required designer variable.
         /// </summary>
         private System.ComponentModel.IContainer components = null;
 
-        /// <summary> 
+        /// <summary>
         /// Clean up any resources being used.
         /// </summary>
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
@@ -22,139 +22,213 @@
 
         #region Component Designer generated code
 
-        /// <summary> 
-        /// Required method for Designer support - do not modify 
+        /// <summary>
+        /// Required method for Designer support - do not modify
         /// the contents of this method with the code editor.
         /// </summary>
         private void InitializeComponent()
         {
-            this.checkEnable = new System.Windows.Forms.CheckBox();
-            this.label2 = new System.Windows.Forms.Label();
-            this.label4 = new System.Windows.Forms.Label();
-            this.numericUpDownInterval = new System.Windows.Forms.NumericUpDown();
-            this.label1 = new System.Windows.Forms.Label();
-            this.labelLastChecked = new System.Windows.Forms.Label();
-            this.buttonCheckNow = new System.Windows.Forms.Button();
-            this.label3 = new System.Windows.Forms.Label();
-            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownInterval)).BeginInit();
+            this.groupBoxDevices = new System.Windows.Forms.GroupBox();
+            this.labelDevicesAtOnce = new System.Windows.Forms.Label();
+            this.numericDevicesAtOnce = new System.Windows.Forms.NumericUpDown();
+            this.checkReachable = new System.Windows.Forms.CheckBox();
+            this.labelReachableSeconds = new System.Windows.Forms.Label();
+            this.numericReachableSeconds = new System.Windows.Forms.NumericUpDown();
+            this.labelReachableHelp = new System.Windows.Forms.Label();
+            this.groupBoxLogging = new System.Windows.Forms.GroupBox();
+            this.labelLogLevel = new System.Windows.Forms.Label();
+            this.comboLogLevel = new System.Windows.Forms.ComboBox();
+            this.labelLogFileCaption = new System.Windows.Forms.Label();
+            this.labelLogFile = new System.Windows.Forms.Label();
+            this.buttonOpenLogFolder = new System.Windows.Forms.Button();
+            this.labelSavedFor = new System.Windows.Forms.Label();
+            this.groupBoxDevices.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numericDevicesAtOnce)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericReachableSeconds)).BeginInit();
+            this.groupBoxLogging.SuspendLayout();
             this.SuspendLayout();
-            // 
-            // checkEnable
-            // 
-            this.checkEnable.AutoSize = true;
-            this.checkEnable.Location = new System.Drawing.Point(10, 41);
-            this.checkEnable.Name = "checkEnable";
-            this.checkEnable.Size = new System.Drawing.Size(102, 17);
-            this.checkEnable.TabIndex = 0;
-            this.checkEnable.Text = "Enable Updates";
-            this.checkEnable.UseVisualStyleBackColor = true;
-            this.checkEnable.CheckedChanged += new System.EventHandler(this.CheckEnable_CheckedChanged);
-            // 
-            // label2
-            // 
-            this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(7, 79);
-            this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(126, 13);
-            this.label2.TabIndex = 15;
-            this.label2.Text = "Check for updates every:";
-            // 
-            // label4
-            // 
-            this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(91, 143);
-            this.label4.Name = "label4";
-            this.label4.Size = new System.Drawing.Size(75, 13);
-            this.label4.TabIndex = 17;
-            this.label4.Text = "Last checked:";
-            // 
-            // numericUpDownInterval
-            // 
-            this.numericUpDownInterval.Location = new System.Drawing.Point(10, 95);
-            this.numericUpDownInterval.Maximum = new decimal(new int[] {
-            30,
-            0,
-            0,
-            0});
-            this.numericUpDownInterval.Minimum = new decimal(new int[] {
-            7,
-            0,
-            0,
-            0});
-            this.numericUpDownInterval.Name = "numericUpDownInterval";
-            this.numericUpDownInterval.Size = new System.Drawing.Size(49, 20);
-            this.numericUpDownInterval.TabIndex = 18;
-            this.numericUpDownInterval.Value = new decimal(new int[] {
-            7,
-            0,
-            0,
-            0});
-            this.numericUpDownInterval.ValueChanged += new System.EventHandler(this.NumericUpDownInterval_ValueChanged);
-            // 
-            // label1
-            // 
-            this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(65, 97);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(29, 13);
-            this.label1.TabIndex = 19;
-            this.label1.Text = "days";
-            // 
-            // labelLastChecked
-            // 
-            this.labelLastChecked.AutoSize = true;
-            this.labelLastChecked.Location = new System.Drawing.Point(161, 143);
-            this.labelLastChecked.Name = "labelLastChecked";
-            this.labelLastChecked.Size = new System.Drawing.Size(0, 13);
-            this.labelLastChecked.TabIndex = 20;
-            // 
-            // buttonCheckNow
-            // 
-            this.buttonCheckNow.Location = new System.Drawing.Point(10, 138);
-            this.buttonCheckNow.Name = "buttonCheckNow";
-            this.buttonCheckNow.Size = new System.Drawing.Size(75, 23);
-            this.buttonCheckNow.TabIndex = 21;
-            this.buttonCheckNow.Text = "Check Now";
-            this.buttonCheckNow.UseVisualStyleBackColor = true;
-            this.buttonCheckNow.Click += new System.EventHandler(this.ButtonCheckNow_Click);
-            // 
-            // label3
-            // 
-            this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(7, 15);
-            this.label3.Name = "label3";
-            this.label3.Size = new System.Drawing.Size(303, 13);
-            this.label3.TabIndex = 22;
-            this.label3.Text = "Be up to date and enable auto update check for new versions.";
-            // 
+            //
+            // groupBoxDevices
+            //
+            this.groupBoxDevices.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.groupBoxDevices.Controls.Add(this.labelDevicesAtOnce);
+            this.groupBoxDevices.Controls.Add(this.numericDevicesAtOnce);
+            this.groupBoxDevices.Controls.Add(this.checkReachable);
+            this.groupBoxDevices.Controls.Add(this.labelReachableSeconds);
+            this.groupBoxDevices.Controls.Add(this.numericReachableSeconds);
+            this.groupBoxDevices.Controls.Add(this.labelReachableHelp);
+            this.groupBoxDevices.Location = new System.Drawing.Point(10, 10);
+            this.groupBoxDevices.Name = "groupBoxDevices";
+            this.groupBoxDevices.Size = new System.Drawing.Size(360, 160);
+            this.groupBoxDevices.TabIndex = 0;
+            this.groupBoxDevices.TabStop = false;
+            this.groupBoxDevices.Text = "Actions on many devices";
+            //
+            // labelDevicesAtOnce
+            //
+            this.labelDevicesAtOnce.AutoSize = true;
+            this.labelDevicesAtOnce.Location = new System.Drawing.Point(12, 26);
+            this.labelDevicesAtOnce.Name = "labelDevicesAtOnce";
+            this.labelDevicesAtOnce.Size = new System.Drawing.Size(140, 13);
+            this.labelDevicesAtOnce.TabIndex = 0;
+            this.labelDevicesAtOnce.Text = "Devices contacted at once:";
+            //
+            // numericDevicesAtOnce
+            //
+            this.numericDevicesAtOnce.Location = new System.Drawing.Point(270, 24);
+            this.numericDevicesAtOnce.Name = "numericDevicesAtOnce";
+            this.numericDevicesAtOnce.Size = new System.Drawing.Size(70, 20);
+            this.numericDevicesAtOnce.TabIndex = 1;
+            this.numericDevicesAtOnce.ValueChanged += new System.EventHandler(this.Setting_Changed);
+            //
+            // checkReachable
+            //
+            this.checkReachable.AutoSize = true;
+            this.checkReachable.Location = new System.Drawing.Point(15, 56);
+            this.checkReachable.Name = "checkReachable";
+            this.checkReachable.Size = new System.Drawing.Size(270, 17);
+            this.checkReachable.TabIndex = 2;
+            this.checkReachable.Text = "Check that each device answers before connecting";
+            this.checkReachable.UseVisualStyleBackColor = true;
+            this.checkReachable.CheckedChanged += new System.EventHandler(this.Setting_Changed);
+            //
+            // labelReachableSeconds
+            //
+            this.labelReachableSeconds.AutoSize = true;
+            this.labelReachableSeconds.Location = new System.Drawing.Point(32, 84);
+            this.labelReachableSeconds.Name = "labelReachableSeconds";
+            this.labelReachableSeconds.Size = new System.Drawing.Size(150, 13);
+            this.labelReachableSeconds.TabIndex = 3;
+            this.labelReachableSeconds.Text = "Seconds to wait for an answer:";
+            //
+            // numericReachableSeconds
+            //
+            this.numericReachableSeconds.Location = new System.Drawing.Point(270, 82);
+            this.numericReachableSeconds.Name = "numericReachableSeconds";
+            this.numericReachableSeconds.Size = new System.Drawing.Size(70, 20);
+            this.numericReachableSeconds.TabIndex = 4;
+            this.numericReachableSeconds.ValueChanged += new System.EventHandler(this.Setting_Changed);
+            //
+            // labelReachableHelp
+            //
+            this.labelReachableHelp.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.labelReachableHelp.Location = new System.Drawing.Point(12, 112);
+            this.labelReachableHelp.Name = "labelReachableHelp";
+            this.labelReachableHelp.Size = new System.Drawing.Size(336, 40);
+            this.labelReachableHelp.TabIndex = 5;
+            this.labelReachableHelp.Text = "A device that answers on neither port 135 (WMI) nor 445 (file sharing) is listed as offline right away, instead of after a WMI connection gives up (20 seconds or more).";
+            //
+            // groupBoxLogging
+            //
+            this.groupBoxLogging.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.groupBoxLogging.Controls.Add(this.labelLogLevel);
+            this.groupBoxLogging.Controls.Add(this.comboLogLevel);
+            this.groupBoxLogging.Controls.Add(this.labelLogFileCaption);
+            this.groupBoxLogging.Controls.Add(this.labelLogFile);
+            this.groupBoxLogging.Controls.Add(this.buttonOpenLogFolder);
+            this.groupBoxLogging.Location = new System.Drawing.Point(10, 180);
+            this.groupBoxLogging.Name = "groupBoxLogging";
+            this.groupBoxLogging.Size = new System.Drawing.Size(360, 130);
+            this.groupBoxLogging.TabIndex = 1;
+            this.groupBoxLogging.TabStop = false;
+            this.groupBoxLogging.Text = "Logging";
+            //
+            // labelLogLevel
+            //
+            this.labelLogLevel.AutoSize = true;
+            this.labelLogLevel.Location = new System.Drawing.Point(12, 26);
+            this.labelLogLevel.Name = "labelLogLevel";
+            this.labelLogLevel.Size = new System.Drawing.Size(53, 13);
+            this.labelLogLevel.TabIndex = 0;
+            this.labelLogLevel.Text = "Log level:";
+            //
+            // comboLogLevel
+            //
+            this.comboLogLevel.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.comboLogLevel.FormattingEnabled = true;
+            this.comboLogLevel.Location = new System.Drawing.Point(240, 23);
+            this.comboLogLevel.Name = "comboLogLevel";
+            this.comboLogLevel.Size = new System.Drawing.Size(100, 21);
+            this.comboLogLevel.TabIndex = 1;
+            this.comboLogLevel.SelectedIndexChanged += new System.EventHandler(this.Setting_Changed);
+            //
+            // labelLogFileCaption
+            //
+            this.labelLogFileCaption.AutoSize = true;
+            this.labelLogFileCaption.Location = new System.Drawing.Point(12, 56);
+            this.labelLogFileCaption.Name = "labelLogFileCaption";
+            this.labelLogFileCaption.Size = new System.Drawing.Size(44, 13);
+            this.labelLogFileCaption.TabIndex = 2;
+            this.labelLogFileCaption.Text = "Log file:";
+            //
+            // labelLogFile
+            //
+            this.labelLogFile.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.labelLogFile.AutoEllipsis = true;
+            this.labelLogFile.Location = new System.Drawing.Point(12, 72);
+            this.labelLogFile.Name = "labelLogFile";
+            this.labelLogFile.Size = new System.Drawing.Size(336, 13);
+            this.labelLogFile.TabIndex = 3;
+            //
+            // buttonOpenLogFolder
+            //
+            this.buttonOpenLogFolder.AutoSize = true;
+            this.buttonOpenLogFolder.Location = new System.Drawing.Point(12, 94);
+            this.buttonOpenLogFolder.Name = "buttonOpenLogFolder";
+            this.buttonOpenLogFolder.Size = new System.Drawing.Size(110, 23);
+            this.buttonOpenLogFolder.TabIndex = 4;
+            this.buttonOpenLogFolder.Text = "Open Log Folder";
+            this.buttonOpenLogFolder.UseVisualStyleBackColor = true;
+            this.buttonOpenLogFolder.Click += new System.EventHandler(this.ButtonOpenLogFolder_Click);
+            //
+            // labelSavedFor
+            //
+            this.labelSavedFor.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.labelSavedFor.Location = new System.Drawing.Point(10, 322);
+            this.labelSavedFor.Name = "labelSavedFor";
+            this.labelSavedFor.Size = new System.Drawing.Size(360, 30);
+            this.labelSavedFor.TabIndex = 2;
+            this.labelSavedFor.Text = "Saved for your Windows account. Changes apply to the next action you start.";
+            //
             // OptionsControl
-            // 
+            //
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.Controls.Add(this.label3);
-            this.Controls.Add(this.buttonCheckNow);
-            this.Controls.Add(this.labelLastChecked);
-            this.Controls.Add(this.label1);
-            this.Controls.Add(this.numericUpDownInterval);
-            this.Controls.Add(this.label4);
-            this.Controls.Add(this.label2);
-            this.Controls.Add(this.checkEnable);
+            this.Controls.Add(this.groupBoxDevices);
+            this.Controls.Add(this.groupBoxLogging);
+            this.Controls.Add(this.labelSavedFor);
             this.Name = "OptionsControl";
-            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownInterval)).EndInit();
+            this.Size = new System.Drawing.Size(380, 420);
+            this.groupBoxDevices.ResumeLayout(false);
+            this.groupBoxDevices.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numericDevicesAtOnce)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericReachableSeconds)).EndInit();
+            this.groupBoxLogging.ResumeLayout(false);
+            this.groupBoxLogging.PerformLayout();
             this.ResumeLayout(false);
-            this.PerformLayout();
 
         }
 
         #endregion
 
-        private System.Windows.Forms.CheckBox checkEnable;
-        private System.Windows.Forms.Label label2;
-        private System.Windows.Forms.Label label4;
-        private System.Windows.Forms.NumericUpDown numericUpDownInterval;
-        private System.Windows.Forms.Label label1;
-        private System.Windows.Forms.Label labelLastChecked;
-        private System.Windows.Forms.Button buttonCheckNow;
-        private System.Windows.Forms.Label label3;
+        private System.Windows.Forms.GroupBox groupBoxDevices;
+        private System.Windows.Forms.Label labelDevicesAtOnce;
+        private System.Windows.Forms.NumericUpDown numericDevicesAtOnce;
+        private System.Windows.Forms.CheckBox checkReachable;
+        private System.Windows.Forms.Label labelReachableSeconds;
+        private System.Windows.Forms.NumericUpDown numericReachableSeconds;
+        private System.Windows.Forms.Label labelReachableHelp;
+        private System.Windows.Forms.GroupBox groupBoxLogging;
+        private System.Windows.Forms.Label labelLogLevel;
+        private System.Windows.Forms.ComboBox comboLogLevel;
+        private System.Windows.Forms.Label labelLogFileCaption;
+        private System.Windows.Forms.Label labelLogFile;
+        private System.Windows.Forms.Button buttonOpenLogFolder;
+        private System.Windows.Forms.Label labelSavedFor;
     }
 }

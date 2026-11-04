@@ -273,19 +273,59 @@ namespace Layer8.Device
 
         private static bool PortAnswers(IPAddress address, int port, int timeoutMs)
         {
-            using (TcpClient client = new TcpClient(address.AddressFamily))
+            return AnyPortAnswers(address, new[] { port }, timeoutMs);
+        }
+
+        /// <summary>
+        /// The quick offline check Layer8 Settings turns on: before connecting, does the device answer on port 135
+        /// (WMI) or 445 (file sharing, and the service manager)? One that answers on neither is offline, or
+        /// firewalled so nothing Layer8 does would reach it, and saying so takes a second or two instead of the
+        /// 20 or more a WMI connection takes to give up.
+        /// </summary>
+        internal static void EnsureReachable(string host, int timeoutMs)
+        {
+            IPAddress address = Resolve(host);
+            if (!AnyPortAnswers(address, new[] { 135, 445 }, timeoutMs))
             {
-                Task connect = client.ConnectAsync(address, port);
-                // A connect still running when we give up fails later; observe that so it isn't reported as unhandled.
-                connect.ContinueWith(t => { Exception ignored = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
-                try
+                throw new DeviceOfflineException(string.Format("Offline: ports 135 and 445 don't answer ({0})", address));
+            }
+        }
+
+        /// <summary>
+        /// Tries the ports together and returns as soon as one connects; false when all refuse or the time runs
+        /// out. Waits on the connections themselves, so it doesn't tie up a thread per port.
+        /// </summary>
+        private static bool AnyPortAnswers(IPAddress address, int[] ports, int timeoutMs)
+        {
+            List<TcpClient> clients = new List<TcpClient>();
+            try
+            {
+                List<Task> pending = new List<Task>();
+                foreach (int port in ports)
                 {
-                    return connect.Wait(timeoutMs) && client.Connected;
+                    TcpClient client = new TcpClient(address.AddressFamily);
+                    clients.Add(client);
+                    Task connect = client.ConnectAsync(address, port);
+                    // A connect still running when we give up fails later; observe that so it isn't reported as unhandled.
+                    connect.ContinueWith(t => { Exception ignored = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
+                    pending.Add(connect);
                 }
-                catch (AggregateException)
+
+                DateTime giveUp = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+                while (pending.Count > 0)
                 {
-                    return false;
+                    int left = (int)(giveUp - DateTime.UtcNow).TotalMilliseconds;
+                    if (left <= 0) return false;
+                    int done = Task.WaitAny(pending.ToArray(), left);
+                    if (done < 0) return false;
+                    if (pending[done].Status == TaskStatus.RanToCompletion) return true;
+                    pending.RemoveAt(done);   // refused: wait on the others
                 }
+                return false;
+            }
+            finally
+            {
+                foreach (TcpClient client in clients) client.Close();
             }
         }
 

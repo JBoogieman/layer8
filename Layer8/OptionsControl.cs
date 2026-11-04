@@ -1,45 +1,58 @@
 ﻿using Microsoft.ConfigurationManagement.AdminConsole;
 using System;
+using System.Diagnostics;
+using System.IO;
 using System.Windows.Forms;
 
 namespace Layer8
 {
+    /// <summary>
+    /// The General page of Layer8 Settings: how many devices a run contacts at once, the quick offline check,
+    /// and the log level. Saved per Windows user (see Layer8Settings); changes apply to the next action started.
+    /// This page replaced Quick Tools' Auto Updates page, whose update check Layer8 turned off.
+    /// </summary>
     public partial class OptionsControl : SmsPageControl
     {
-        private readonly ModifyRegistry registry = new ModifyRegistry();
+        private static readonly Logger log = Layer8Log.GetLogger(typeof(OptionsControl));
+
+        // Set while the page fills its controls, so filling them doesn't count as a change.
+        private bool loading;
 
         public OptionsControl(SmsPageData pageData)
           : base(pageData)
         {
             InitializeComponent();
 
-            Title = "Auto Updates";
+            Title = "General";
         }
 
         public override void InitializePageControl()
         {
             base.InitializePageControl();
 
-            if (string.IsNullOrEmpty(registry.ReadString("UpdateEnabled")))
+            loading = true;
+
+            numericDevicesAtOnce.Minimum = Layer8Settings.MinDevicesAtOnce;
+            numericDevicesAtOnce.Maximum = Layer8Settings.MaxDevicesAtOnce;
+            numericDevicesAtOnce.Value = Layer8Settings.DevicesAtOnce;
+
+            checkReachable.Checked = Layer8Settings.CheckReachable;
+            numericReachableSeconds.Minimum = Layer8Settings.MinReachableSeconds;
+            numericReachableSeconds.Maximum = Layer8Settings.MaxReachableSeconds;
+            numericReachableSeconds.Value = Layer8Settings.ReachableSeconds;
+
+            comboLogLevel.Items.Clear();
+            foreach (string level in Enum.GetNames(typeof(LogLevel)))
             {
-                registry.Write("UpdateEnabled", true);
+                comboLogLevel.Items.Add(level);
             }
+            comboLogLevel.SelectedItem = Layer8Settings.LogLevel.ToString();
 
-            if (string.IsNullOrEmpty(registry.ReadString("UpdateLastCheck")))
-            {
-                registry.Write("UpdateLastCheck", DateTime.Now.ToString());
-            }
+            labelLogFile.Text = Layer8Log.LogFile;
 
-            if (registry.ReadInt("UpdateInterval") == 0)
-            {
-                registry.Write("UpdateInterval", 7);
-            }
+            UpdateEnabled();
 
-            labelLastChecked.Text = registry.ReadString("UpdateLastCheck");
-
-            numericUpDownInterval.Value = registry.ReadInt("UpdateInterval");
-
-            checkEnable.Checked = registry.ReadBool("UpdateEnabled");
+            loading = false;
 
             Dirty = false;
 
@@ -48,27 +61,55 @@ namespace Layer8
 
         protected override bool ApplyChanges(out Control errorControl, out bool showError)
         {
-            registry.Write("UpdateEnabled", checkEnable.Checked);
-            registry.Write("UpdateInterval", (int)numericUpDownInterval.Value);
+            try
+            {
+                Layer8Settings.DevicesAtOnce = (int)numericDevicesAtOnce.Value;
+                Layer8Settings.CheckReachable = checkReachable.Checked;
+                Layer8Settings.ReachableSeconds = (int)numericReachableSeconds.Value;
+                if (comboLogLevel.SelectedItem is string level && Enum.TryParse(level, out LogLevel parsed))
+                {
+                    Layer8Settings.LogLevel = parsed;
+                }
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException || ex is System.Security.SecurityException || ex is IOException)
+            {
+                log.Error("Couldn't save the settings", ex);
+                MessageBox.Show(this, "Layer8 couldn't save its settings:\n\n" + ex.Message, "Layer8", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                errorControl = numericDevicesAtOnce;
+                showError = false;
+                return false;
+            }
+
+            log.InfoFormat("Settings saved: {0} devices at once; offline check {1}, {2} s; log level {3}",
+                (int)numericDevicesAtOnce.Value, checkReachable.Checked ? "on" : "off", (int)numericReachableSeconds.Value, comboLogLevel.SelectedItem);
 
             Dirty = false;
 
             return base.ApplyChanges(out errorControl, out showError);
         }
 
-        private void CheckEnable_CheckedChanged(object sender, EventArgs e)
+        private void UpdateEnabled()
         {
-            Dirty = true;
+            labelReachableSeconds.Enabled = checkReachable.Checked;
+            numericReachableSeconds.Enabled = checkReachable.Checked;
         }
 
-        private void NumericUpDownInterval_ValueChanged(object sender, EventArgs e)
+        private void Setting_Changed(object sender, EventArgs e)
         {
-            Dirty = true;
+            UpdateEnabled();
+            if (!loading)
+            {
+                Dirty = true;
+            }
         }
 
-        private void ButtonCheckNow_Click(object sender, EventArgs e)
+        private void ButtonOpenLogFolder_Click(object sender, EventArgs e)
         {
-            Updater.CheckUpdatesNow();
+            SafeAction.Run("Open Log Folder", () =>
+            {
+                Directory.CreateDirectory(Layer8Log.LogFolder);
+                using (Process.Start("explorer.exe", "\"" + Layer8Log.LogFolder + "\"")) { }
+            });
         }
     }
 }
