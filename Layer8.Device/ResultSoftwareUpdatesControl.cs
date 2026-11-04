@@ -61,9 +61,12 @@ namespace Layer8.Device.PropertiesDialog
                 ObjectQuery query = new ObjectQuery("SELECT * FROM CCM_UpdateStatus");
                 IEnumerable<IGrouping<string, ManagementObject>> updates = Utility.SearchWMI(scope, query).GroupBy(update => (string)update.Properties["Article"].Value, update => update);
 
+                // Read on this background thread; RunWorkerCompleted fills the list on the UI thread.
+                List<ListViewItem> rows = new List<ListViewItem>();
+                e.Result = rows;
                 foreach (IGrouping<string, ManagementObject> update in updates)
                 {
-                    listViewSoftwareUpdates.Items.Add(new ListViewItem()
+                    rows.Add(new ListViewItem()
                     {
                         Text = (string)update.First().Properties["Article"].Value,
                         SubItems = {
@@ -85,6 +88,8 @@ namespace Layer8.Device.PropertiesDialog
             {
                 if (e.Error != null)
                     SccmExceptionDialog.ShowDialog(this, e.Error, "Error");
+                else if (e.Result is List<ListViewItem> rows)
+                    listViewSoftwareUpdates.Items.AddRange(rows.ToArray());
             }
             finally
             {

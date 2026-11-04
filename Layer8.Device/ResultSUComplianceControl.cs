@@ -53,11 +53,21 @@ namespace Layer8.Device.PropertiesDialog
             backgroundWorker.RunWorkerAsync();
         }
 
+        // What the background read found; RunWorkerCompleted shows it on the UI thread.
+        private sealed class ComplianceData
+        {
+            public readonly List<ListViewItem> Rows = new List<ListViewItem>();
+            public string LastScan;
+            public string CabSource;
+            public string CabVersion;
+        }
+
         private void InfoWorker_DoWork(object sender, DoWorkEventArgs e)
         {
             try
             {
                 string host = PropertyManager["Name"].StringValue;
+                ComplianceData data = new ComplianceData();
 
                 ManagementScope scope = Utility.GetWMIScope(host, @"ccm\SoftwareUpdates\DeploymentAgent");
                 ObjectQuery query = new ObjectQuery("SELECT * FROM CCM_AssignmentCompliance");
@@ -74,7 +84,7 @@ namespace Layer8.Device.PropertiesDialog
                         var updateGroup = updateGroups.Where(x => x.Properties["CI_ID"].IntegerValue.Equals(assignment.Properties["AssignedUpdateGroup"].IntegerValue)).FirstOrDefault();
                         if (updateGroup != null)
                         {
-                            listViewSoftwareUpdates.Items.Add(new ListViewItem()
+                            data.Rows.Add(new ListViewItem()
                             {
                                 Text = updateGroup["LocalizedDisplayName"].StringValue,
                                 SubItems = {
@@ -85,23 +95,26 @@ namespace Layer8.Device.PropertiesDialog
                     }
                 }
 
+                // A client that has never scanned has neither of these yet.
                 ManagementObject lastscan = Utility.GetFirstWMIInstance(host, @"ccm\scanagent", "CCM_ScanUpdateSourceHistory");
-
-                DateTime time = ManagementDateTimeConverter.ToDateTime(lastscan["LastCompletionTime"].ToString());
-                labelLastScan.Text = time.ToString("dd'/'MM'/'yyyy HH:mm");
+                data.LastScan = lastscan?["LastCompletionTime"] != null
+                    ? ManagementDateTimeConverter.ToDateTime(lastscan["LastCompletionTime"].ToString()).ToString("g")
+                    : "No scan yet";
 
                 ManagementObject scansource = Utility.GetFirstWMIInstance(host, @"ccm\SoftwareUpdates\WUAhandler", "CCM_UpdateSource");
+                data.CabSource = scansource?["ContentLocation"]?.ToString() ?? string.Empty;
+                data.CabVersion = scansource?["ContentVersion"]?.ToString() ?? string.Empty;
 
-                labelCABSource.Text = scansource["ContentLocation"].ToString();
-                labelCABVersion.Text = scansource["ContentVersion"].ToString();
+                e.Result = data;
             }
             catch (ManagementException ex)
             {
-                MessageBox.Show("An error occured while querying for WMI data: " + ex.Message);
+                // Shown by RunWorkerCompleted; a message box from this background thread would have no owner.
+                throw new InvalidOperationException("An error occurred while querying for WMI data: " + ex.Message, ex);
             }
             catch (UnauthorizedAccessException unauthorizedErr)
             {
-                MessageBox.Show("Connection error " + "(user name or password might be incorrect): " + unauthorizedErr.Message);
+                throw new InvalidOperationException("Connection error (user name or password might be incorrect): " + unauthorizedErr.Message, unauthorizedErr);
             }
             catch (Exception ex)
             {
@@ -115,6 +128,13 @@ namespace Layer8.Device.PropertiesDialog
             {
                 if (e.Error != null)
                     SccmExceptionDialog.ShowDialog(this, e.Error, "Error");
+                else if (e.Result is ComplianceData data)
+                {
+                    listViewSoftwareUpdates.Items.AddRange(data.Rows.ToArray());
+                    labelLastScan.Text = data.LastScan;
+                    labelCABSource.Text = data.CabSource;
+                    labelCABVersion.Text = data.CabVersion;
+                }
             }
             finally
             {

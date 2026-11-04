@@ -44,6 +44,15 @@ namespace Layer8.Device
             Dirty = false;
         }
 
+        // What the background read found; RunWorkerCompleted sets up the controls on the UI thread.
+        private sealed class CacheData
+        {
+            public string Location;
+            public double CacheSizeMB;
+            public double FreeSpaceMB;
+            public List<ManagementObject> Content;
+        }
+
         private void InfoWorker_DoWork(object sender, DoWorkEventArgs e)
         {
             try
@@ -57,24 +66,13 @@ namespace Layer8.Device
 
                 ManagementObject disk = Utility.GetFirstWMIInstance(PropertyManager["Name"].StringValue, @"cimv2", string.Format("Win32_LogicalDisk WHERE DeviceID='{0}:'", location[0]));
 
-                double cacheSizeMB = double.Parse(cacheConfig["Size"].ToString());
-                double freeSpaceMB = double.Parse(disk["FreeSpace"].ToString()) / Utility.BytesPerMegabyte;
-
-                trackBarWithoutFocus1.Maximum = Convert.ToInt32(freeSpaceMB);
-                trackBarWithoutFocus1.TickFrequency = Convert.ToInt32(trackBarWithoutFocus1.Maximum / 10);
-                trackBarWithoutFocus1.LargeChange = trackBarWithoutFocus1.TickFrequency;
-                numericUpDown1.Maximum = trackBarWithoutFocus1.Maximum;
-
-                trackBarWithoutFocus1.Value = Convert.ToInt32(cacheSizeMB);
-
-                labelLocation.Text = location;
-                labelCacheSize.Text = Utility.FormatBytes(cacheSizeMB * Utility.BytesPerMegabyte);
-                labelSpaceToUse.Text = labelCacheSize.Text;
-
-                trackBarWithoutFocus1.Enabled = true;
-                numericUpDown1.Enabled = true;
-
-                UpdateContentListView(cacheContent);
+                e.Result = new CacheData
+                {
+                    Location = location,
+                    CacheSizeMB = double.Parse(cacheConfig["Size"].ToString()),
+                    FreeSpaceMB = double.Parse(disk["FreeSpace"].ToString()) / Utility.BytesPerMegabyte,
+                    Content = cacheContent,
+                };
             }
             catch (Exception ex)
             {
@@ -90,6 +88,8 @@ namespace Layer8.Device
             {
                 if (e.Error != null)
                     SccmExceptionDialog.ShowDialog(this, e.Error, "Error");
+                else if (e.Result is CacheData data)
+                    ShowCache(data);
             }
             finally
             {
@@ -129,6 +129,27 @@ namespace Layer8.Device
             Dirty = false;
 
             return base.ApplyChanges(out errorControl, out showError);
+        }
+
+        private void ShowCache(CacheData data)
+        {
+            // The slider can't go past the free space, but a cache already set larger than the free space
+            // would put its value past the maximum and throw; the maximum covers both.
+            trackBarWithoutFocus1.Maximum = Convert.ToInt32(Math.Max(data.FreeSpaceMB, data.CacheSizeMB));
+            trackBarWithoutFocus1.TickFrequency = Math.Max(1, trackBarWithoutFocus1.Maximum / 10);
+            trackBarWithoutFocus1.LargeChange = trackBarWithoutFocus1.TickFrequency;
+            numericUpDown1.Maximum = trackBarWithoutFocus1.Maximum;
+
+            trackBarWithoutFocus1.Value = Convert.ToInt32(data.CacheSizeMB);
+
+            labelLocation.Text = data.Location;
+            labelCacheSize.Text = Utility.FormatBytes(data.CacheSizeMB * Utility.BytesPerMegabyte);
+            labelSpaceToUse.Text = labelCacheSize.Text;
+
+            trackBarWithoutFocus1.Enabled = true;
+            numericUpDown1.Enabled = true;
+
+            UpdateContentListView(data.Content);
         }
 
         private void UpdateContentListView(List<ManagementObject> items)

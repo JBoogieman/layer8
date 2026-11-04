@@ -8,6 +8,7 @@ using System.Net;
 using System.Management;
 using System.IO;
 using System.Xml.Linq;
+using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
 
@@ -66,6 +67,9 @@ namespace Layer8.Device.PropertiesDialog
 
                 string clientHealthFile = string.Format(@"\\{0}\admin$\CCM\CcmEvalReport.xml", PropertyManager["Name"].StringValue);
 
+                // Read on this background thread; RunWorkerCompleted fills the tab on the UI thread.
+                List<ListViewItem> rows = new List<ListViewItem>();
+                string lastEvaluation;
                 if (File.Exists(clientHealthFile))
                 {
                     XElement clientHealth = XElement.Load(clientHealthFile);
@@ -73,25 +77,24 @@ namespace Layer8.Device.PropertiesDialog
 
                     foreach (XElement node in clientHealth.Descendants(ns + "HealthCheck"))
                     {
-                        listViewClientHealth.Items.Add(new ListViewItem()
+                        rows.Add(new ListViewItem()
                         {
-                            Text = node.Attribute("Description").Value,
+                            Text = (string)node.Attribute("Description") ?? "(no description)",
                             SubItems = { node.Value }
                         });
                     }
 
-                    XElement summary = clientHealth.Descendants(ns + "Summary").First();
-                    if (summary != null)
-                    {
-                        DateTimeFormatInfo formatInfo = CultureInfo.CurrentUICulture.DateTimeFormat;
-                        DateTime time = DateTime.Parse(summary.Attribute("EvaluationTime").Value);
-                        labelLastScan.Text = time.ToString(formatInfo);
-                    }
+                    XElement summary = clientHealth.Descendants(ns + "Summary").FirstOrDefault();
+                    string evaluationTime = (string)summary?.Attribute("EvaluationTime");
+                    lastEvaluation = DateTime.TryParse(evaluationTime, out DateTime time)
+                        ? time.ToString(CultureInfo.CurrentUICulture.DateTimeFormat)
+                        : "Not in CcmEvalReport.xml";
                 }
                 else
                 {
-                    labelLastScan.Text = "CcmEvalReport.xml has not been generated";
+                    lastEvaluation = "CcmEvalReport.xml has not been generated";
                 }
+                e.Result = Tuple.Create(rows, lastEvaluation);
             }
             catch (Exception ex)
             {
@@ -109,6 +112,11 @@ namespace Layer8.Device.PropertiesDialog
             {
                 if (e.Error != null)
                     SccmExceptionDialog.ShowDialog(this, e.Error, "Error");
+                else if (e.Result is Tuple<List<ListViewItem>, string> health)
+                {
+                    listViewClientHealth.Items.AddRange(health.Item1.ToArray());
+                    labelLastScan.Text = health.Item2;
+                }
             }
             finally
             {
