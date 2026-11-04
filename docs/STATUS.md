@@ -1,4 +1,4 @@
-# Layer8 status: November 1, 2026
+# Layer8 status: November 3, 2026
 
 Working notes, not documentation: where Layer8 stands, what's left before a public release, and the ideas list. Update the date and tick boxes as things land.
 
@@ -49,6 +49,12 @@ Inherited from ConfigMgr Quick Tools, smoke-tested Nov 2 (opened and cancelled, 
   - The statistics window labelled both its last rows "Longest Collection Eval"; the second is now "Shortest Collection Eval".
 - **Install Application deadlines** were shifted by the time zone: the client reports them as the device's clock time tagged "+000", and Layer8 converted them as UTC (a 7:21 PM deadline showed as 12:21 PM in Pacific time). Now read as clock time, like Software Center: the fail app's deadline shows 10/31/2026 7:21 PM, when it was created.
 
+- **Nov 3 batch** (tested on DEV01 unless noted):
+  - **Copy Failed Devices shows error codes**, grouped by error, most common first, and copies Device / Error code / Error for Excel. Layer8 Fail App: "1 x 1603 (0x643): Fatal error during installation". Application codes come from SMS_AppDeploymentErrorAssetDetails, update codes from SMS_SUMDeploymentAssetDetails (the update side is untested until the lab has updates).
+  - **Export...** on every progress window saves the run as a UTF-8 CSV named after the action and time.
+  - **Properties tabs fill on the UI thread.** Client Health now lists every health check and the last evaluation time (it stayed blank before). Software Updates Compliance threw "Unexpected WMI query failure" on a client that has never scanned; fixed by looking up the scan history without the helper that throws on no results (retest after the next build). Client Cache also copes with a cache set larger than the free space.
+  - **Dell Driver Pack offers Windows 11 and 10.** Windows 11 loads Dell's current models (Dell Pro 13 and 14, Dell 14 Premium); nothing was imported.
+
 ## Ready-to-publish checklist
 
 ### Testing
@@ -94,8 +100,6 @@ Inherited from ConfigMgr Quick Tools, smoke-tested Nov 2 (opened and cancelled, 
 - **Device properties form** is shared with Quick Tools: with both installed, whichever was installed last supplies the tabs.
 - **Approved console extensions.** Layer8 is an old-style extension, so the console ignores it while "Only allow console extensions that are approved for the hierarchy" is ticked. Locked-down sites often tick it. The long-term fix is packaging Layer8 as an approved extension; research what that takes before promising it.
 - **Other ConfigMgr times may have the same "+000" shift** as Install Application's deadlines: Check Pending Restart's restart deadline goes through the same kind of conversion. Check it against Software Center.
-- **Dell Driver Pack only offers Windows 10, 8.1 and 7**: no Windows 11, which makes it close to useless for a current fleet. HP builds its list from HP's live catalog.
-- **Inherited properties tabs** (Client Health, Software Updates, Software Updates Compliance, Client Cache) fill their lists and labels from a background thread, the same pattern fixed in Collection Evaluation Statistics. In the smoke test Client Health stayed empty, even its "Last Evaluation" label; whether its refresh actually ran couldn't be confirmed. Fix the same way, then retest with update data in the lab.
 - **Lab gaps:** sync software updates (at least one product and classification), and create one task sequence, so update and task sequence features can be tested.
 - **Collection Evaluation Statistics** took about 30 seconds to read colleval.log from CM01 in the lab, and OK didn't close the window until it finished (the X did).
 - **Skipped records count as offline** in the progress totals. A separate "skipped" count would read better.
@@ -107,12 +111,10 @@ Rough size: S is an evening, M a session or two, L a project.
 
 | Idea | Size | Why |
 |---|---|---|
-| Failed devices with error codes: copy or export each device's error code and description, grouped ("12 devices: 0x87D00607") | S–M | Tells you why they failed before you retry |
 | Retry for Available app deployments (see rough edges) | S | Makes Retry work for every app deployment |
 | Retry for configuration baselines and task sequences | M | Baselines are a trigger away; task sequences need their rerun rules respected |
 | Redistribute failed content: on Distribution Status, redistribute to every DP in error | M | Another daily chore that's click-by-click in the console |
 | Windows LAPS lookup (`msLAPS-Password`, encrypted passwords; Entra-backed needs Graph) | M–L | Legacy LAPS is on its way out |
-| Export results to CSV | S | Clipboard works, but a file is easier to attach to a ticket |
 | Settings: devices at a time, timeouts, log level | S | Today these are constants or a registry value |
 | Recent sign-ins in Quick Status | S | Who was on it, not just who is on it |
 | Open one client log in CMTrace over C$ | S | Saves browsing to the log folder |
