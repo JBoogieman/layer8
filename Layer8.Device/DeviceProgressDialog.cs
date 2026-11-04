@@ -99,6 +99,48 @@ namespace Layer8.Device
             };
             copyResults.Click += (s, e) => CopyResults();
             Controls.Add(copyResults);
+
+            // Export: the same rows as a CSV file, for attaching to a ticket or keeping a record of the run.
+            Button exportResults = new Button
+            {
+                Text = "Export...",
+                Size = new System.Drawing.Size(75, buttonOK.Height),
+                Location = new System.Drawing.Point(copyResults.Right + 6, buttonOK.Top),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
+            };
+            exportResults.Click += (s, e) => ExportResults();
+            Controls.Add(exportResults);
+        }
+
+        private void ExportResults()
+        {
+            string name = Title;
+            foreach (char bad in System.IO.Path.GetInvalidFileNameChars()) name = name.Replace(bad, '-');
+            using (SaveFileDialog save = new SaveFileDialog
+            {
+                Title = "Export Results",
+                Filter = "CSV files (*.csv)|*.csv",
+                FileName = string.Format("{0} {1:yyyy-MM-dd HHmm}.csv", name, DateTime.Now),
+            })
+            {
+                if (save.ShowDialog(this) != DialogResult.OK) return;
+
+                StringBuilder csv = new StringBuilder("Device,Status").AppendLine();
+                foreach (ListViewItem host in listViewHosts.Items)
+                {
+                    csv.Append(CsvField(host.Text)).Append(',').Append(CsvField(host.SubItems[1].Text)).AppendLine();
+                }
+                // With a byte order mark, Excel reads the file as UTF-8 instead of guessing.
+                System.IO.File.WriteAllText(save.FileName, csv.ToString(), new UTF8Encoding(true));
+                log.InfoFormat("{0}: exported {1} result row(s) to {2}", Title, listViewHosts.Items.Count, save.FileName);
+            }
+        }
+
+        /// <summary>One CSV field: quoted when it holds a comma, quote or line break, with quotes doubled.</summary>
+        internal static string CsvField(string value)
+        {
+            value = value ?? string.Empty;
+            return value.IndexOfAny(new[] { ',', '"', '\r', '\n' }) < 0 ? value : "\"" + value.Replace("\"", "\"\"") + "\"";
         }
 
         private void CopyResults()
