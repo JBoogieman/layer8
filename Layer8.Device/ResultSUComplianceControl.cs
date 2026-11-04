@@ -95,13 +95,14 @@ namespace Layer8.Device.PropertiesDialog
                     }
                 }
 
-                // A client that has never scanned has neither of these yet.
-                ManagementObject lastscan = Utility.GetFirstWMIInstance(host, @"ccm\scanagent", "CCM_ScanUpdateSourceHistory");
+                // A client that has never scanned has neither of these yet. These overloads return null when nothing
+                // matches; the (host, namespace, class) one throws "Unexpected WMI query failure" instead.
+                ManagementObject lastscan = Utility.GetFirstWMIInstance(Utility.GetWMIScope(host, @"ccm\scanagent"), "SELECT * FROM CCM_ScanUpdateSourceHistory");
                 data.LastScan = lastscan?["LastCompletionTime"] != null
                     ? ManagementDateTimeConverter.ToDateTime(lastscan["LastCompletionTime"].ToString()).ToString("g")
                     : "No scan yet";
 
-                ManagementObject scansource = Utility.GetFirstWMIInstance(host, @"ccm\SoftwareUpdates\WUAhandler", "CCM_UpdateSource");
+                ManagementObject scansource = Utility.GetFirstWMIInstance(Utility.GetWMIScope(host, @"ccm\SoftwareUpdates\WUAhandler"), "SELECT * FROM CCM_UpdateSource");
                 data.CabSource = scansource?["ContentLocation"]?.ToString() ?? string.Empty;
                 data.CabVersion = scansource?["ContentVersion"]?.ToString() ?? string.Empty;
 
