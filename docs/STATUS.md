@@ -16,7 +16,7 @@ Working notes, not documentation: where Layer8 stands, what's left before a publ
 | Client tools (all 12) | DEV01; CM01 for "No ConfigMgr client found" | Install Missing Updates has only ever seen "No missing updates" |
 | Runs on a whole collection | All Systems | The 4 placeholder records are skipped by name |
 | Online Status | DEV01; CM01 ("ping blocked, port 445 answers") | |
-| Remote tools | Ping, Remote Desktop, browse C$, client logs, Computer Management, Event Viewer, Services | Remote Assistance and the PowerShell session start, but the UAC prompt and the session itself haven't been confirmed |
+| Remote tools | Ping, Remote Desktop, browse C$, client logs, Client Log in CMTrace, Computer Management, Event Viewer, Services | Remote Assistance and the PowerShell session start, but the UAC prompt and the session itself haven't been confirmed |
 | Copy Names, Copy Member Names, Copy Results | DEV01, All Systems | |
 | BitLocker Recovery Key | No keys; the lab script's fake key | Key ID filter works ("4c41") |
 | Clear Client Cache | DEV01 | 109.6 MB freed |
@@ -52,14 +52,17 @@ Inherited from ConfigMgr Quick Tools, smoke-tested Nov 2 (opened and cancelled, 
 - **Nov 3 batch** (tested on DEV01 unless noted):
   - **Copy Failed Devices shows error codes**, grouped by error, most common first, and copies Device / Error code / Error for Excel. Layer8 Fail App: "1 x 1603 (0x643): Fatal error during installation". Application codes come from SMS_AppDeploymentErrorAssetDetails, update codes from SMS_SUMDeploymentAssetDetails (the update side is untested until the lab has updates).
   - **Export...** on every progress window saves the run as a UTF-8 CSV named after the action and time.
-  - **Properties tabs fill on the UI thread.** Client Health now lists every health check and the last evaluation time (it stayed blank before). Software Updates Compliance threw "Unexpected WMI query failure" on a client that has never scanned; fixed by looking up the scan history without the helper that throws on no results (retest after the next build). Client Cache also copes with a cache set larger than the free space.
+  - **Properties tabs fill on the UI thread.** Client Health now lists every health check and the last evaluation time (it stayed blank before). Software Updates Compliance threw "Unexpected WMI query failure" on a client that has never scanned; fixed by looking up the scan history without the helper that throws on no results; it now shows "No scan yet". Client Cache also copes with a cache set larger than the free space.
   - **Dell Driver Pack offers Windows 11 and 10.** Windows 11 loads Dell's current models (Dell Pro 13 and 14, Dell 14 Premium); nothing was imported.
+  - **Retry Failed Devices works on Available app deployments.** Evaluation only retries required deployments, so for an Available app Retry now asks each failed device to install that app, the same call Install Application makes. The confirmation says which of the two it will do. Tested on Layer8 Available Fail App (new in the lab script: available, exits 1603): Copy Failed Devices gave "1 x 1603 (0x643)", and Retry reported "Install started" for DEV01. Run Summarization picked up the failure in about a minute this time.
+  - **Client Log in CMTrace** under Remote Tools: pick one of 22 common client logs (or type any name), and Layer8 opens it over C$ in CMTrace (the console's own copy, else the device's). Devices where the log or C$ can't be reached are listed at the end. Tested on DEV01 with AppEnforce: CMTrace opened with no error; the log's contents weren't checked.
 
 ## Ready-to-publish checklist
 
 ### Testing
 
 - [x] Retry Failed Devices end to end: Layer8 Fail App in Error, Retry reaches DEV01; Copy Failed Devices gives the right names (AppEnforce.log on DEV01 not checked)
+- [x] Retry Failed Devices on an Available app deployment (Layer8 Available Fail App: "Install started")
 - [ ] Software update deployment: Retry Failed Devices and Copy Failed Devices on an update deployment with a device in Error
 - [x] Install Application installs Layer8 Test App (state reaches Installed)
 - [x] Monitoring > Deployments > Delete removes a throwaway deployment
@@ -84,18 +87,14 @@ Inherited from ConfigMgr Quick Tools, smoke-tested Nov 2 (opened and cancelled, 
 
 ## Next steps, in order
 
-1. Build and install this commit. Run the lab script again so it adds Layer8 Fail App, run Machine Policy Retrieval on DEV01, and wait for the deadline install to fail.
-2. Monitoring > Deployments: Run Summarization, then Retry Failed Devices and Copy Failed Devices on Layer8 Fail App.
-3. Install Layer8 Test App through Install Application.
-4. Delete a throwaway deployment from Monitoring.
-5. Build DEV02 and repeat the client and remote tool runs against it.
-6. Work down the testing list, then the release list.
+1. Keep adding features that DEV01 alone can test (Settings is next).
+2. Lab: sync software updates for one product and classification, deploy one to Layer8 Dev, and create a task sequence.
+3. Build DEV02 and repeat the client and remote tool runs against it.
+4. Work down the testing list, then the release list.
 
 ## Rough edges to iron out
 
-- **Retry and Available deployments.** Retry triggers evaluation, which retries required deployments. An Available app in Error won't reinstall by itself. Fix: for Available app deployments, call `CCM_Application.Install` for that app on each failed device, the same call Install Application uses.
 - **Retry uses summarized status.** A device that failed minutes ago may be missing, and one that's since recovered may still be listed. Both dialogs say so; Run Summarization first. In the lab, summarization took over an hour to pick up a failure. Worth checking whether `SMS_AppDeploymentAssetDetails` or the client's own state (as Install Application reads it) is the better source.
-- **Retry menu filter.** The Layer8 group on Monitoring > Deployments should only show for application and software update deployments. If the console ignores the filter on a group, the buttons show everywhere and Layer8 explains what it supports. Check which one happens.
 - **Remote Assistance and PowerShell session** prompts unconfirmed (see testing).
 - **Device properties form** is shared with Quick Tools: with both installed, whichever was installed last supplies the tabs.
 - **Approved console extensions.** Layer8 is an old-style extension, so the console ignores it while "Only allow console extensions that are approved for the hierarchy" is ticked. Locked-down sites often tick it. The long-term fix is packaging Layer8 as an approved extension; research what that takes before promising it.
@@ -111,13 +110,11 @@ Rough size: S is an evening, M a session or two, L a project.
 
 | Idea | Size | Why |
 |---|---|---|
-| Retry for Available app deployments (see rough edges) | S | Makes Retry work for every app deployment |
 | Retry for configuration baselines and task sequences | M | Baselines are a trigger away; task sequences need their rerun rules respected |
 | Redistribute failed content: on Distribution Status, redistribute to every DP in error | M | Another daily chore that's click-by-click in the console |
 | Windows LAPS lookup (`msLAPS-Password`, encrypted passwords; Entra-backed needs Graph) | M–L | Legacy LAPS is on its way out |
 | Settings: devices at a time, timeouts, log level | S | Today these are constants or a registry value |
 | Recent sign-ins in Quick Status | S | Who was on it, not just who is on it |
-| Open one client log in CMTrace over C$ | S | Saves browsing to the log folder |
 | Lenovo warranty and driver packs | M | Dell and HP have driver packs; Lenovo is the gap |
 | Retry everything failed for a collection, across deployments | M | One click after an outage |
 | Approved-extension packaging (see rough edges) | L | Needed for sites that only allow approved extensions |
