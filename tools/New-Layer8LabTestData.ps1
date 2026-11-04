@@ -17,6 +17,9 @@
     device in the collection ends up in Error for it. That's the deployment to try Retry Failed Devices on
     (Monitoring > Deployments). Deployment status appears after the next summarization.
 
+    "Layer8 Available Fail App" fails the same way but is only made available: install it from Install
+    Application to put a device in Error, then try Retry Failed Devices, which installs Available apps directly.
+
     The fake recovery key has Key ID 4C415938-0000-4000-8000-000000000001 (its first 8 characters spell "LAY8"
     in hex) and the obviously fake password 111111-222222-333333-444444-555555-666666-777777-888888.
 
@@ -30,7 +33,7 @@
     The computer that gets the fake recovery key. Default: this computer.
 
 .PARAMETER Remove
-    Deletes both test apps, their deployments and the fake key.
+    Deletes the test apps, their deployments and the fake key.
 
 .EXAMPLE
     .\tools\New-Layer8LabTestData.ps1
@@ -48,6 +51,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $appName = 'Layer8 Test App'
 $failAppName = 'Layer8 Fail App'
+$availableFailAppName = 'Layer8 Available Fail App'
 $keyGuid = [guid]'4C415938-0000-4000-8000-000000000001'
 $volumeGuid = [guid]'4C415938-0000-4000-8000-0000000000FF'
 
@@ -100,11 +104,13 @@ try {
     if ($Remove) {
         Remove-LabApp $appName
         Remove-LabApp $failAppName
+        Remove-LabApp $availableFailAppName
     }
     else {
         New-LabApp $appName 'SOFTWARE\Layer8Test' 'cmd.exe /c reg add HKLM\SOFTWARE\Layer8Test /v Installed /d 1 /f /reg:64'
         # Never writes its detection key, and 1603 is "fatal error during installation", so it always ends in Error.
         New-LabApp $failAppName 'SOFTWARE\Layer8FailTest' 'cmd.exe /c exit 1603' -Required
+        New-LabApp $availableFailAppName 'SOFTWARE\Layer8FailTest2' 'cmd.exe /c exit 1603'
     }
 }
 finally {
