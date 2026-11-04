@@ -25,7 +25,7 @@
         <Method>RetryFailedDevices</Method>
       </ActionAssembly>
     </ActionDescription>
-    <ActionDescription Class="AssemblyType" SelectionMode="Single" DisplayName="Copy Failed Devices" MnemonicDisplayName="Copy Failed Devices" Description="Copy the names of the devices in error for this deployment">
+    <ActionDescription Class="AssemblyType" SelectionMode="Single" DisplayName="Copy Failed Devices" MnemonicDisplayName="Copy Failed Devices" Description="Copy the devices in error for this deployment, with their error codes">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>

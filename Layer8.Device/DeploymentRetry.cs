@@ -4,6 +4,7 @@ using Microsoft.ConfigurationManagement.ManagementProvider;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Windows.Forms;
 
 namespace Layer8.Device
@@ -47,6 +48,9 @@ namespace Layer8.Device
             public string RetryDescription;
             public readonly List<int> Ids = new List<int>();
             public readonly List<string> Names = new List<string>();
+            // By device ID: the error code, and the status text where the site has one (software updates do).
+            public readonly Dictionary<int, uint> ErrorCodes = new Dictionary<int, uint>();
+            public readonly Dictionary<int, string> Descriptions = new Dictionary<int, string>();
         }
 
         private static void RetryCore(ActionDescription action, IResultObject deployment)
@@ -69,23 +73,84 @@ namespace Layer8.Device
             }
         }
 
+        /// <summary>
+        /// Copies each device in error with its error code and what the code means, as tab-separated rows for Excel,
+        /// and shows the errors grouped by code, so the reason most devices failed is the first thing you see.
+        /// </summary>
         private static void CopyCore(IResultObject deployment)
         {
-            FailedDevices failed = FindFailed(deployment);
+            FailedDevices failed = FindFailed(deployment, withErrorCodes: true);
             if (failed == null || failed.Ids.Count == 0) return;
 
-            List<string> names = failed.Names.Where(n => !string.IsNullOrEmpty(n)).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
-            Clipboard.SetDataObject(string.Join(Environment.NewLine, names), true, 10, 100);
-            log.InfoFormat("Copied {0} failed device name(s) for {1}", names.Count, failed.Software);
-            MessageBox.Show(string.Format("Copied {0} device name{1} in error for {2}.", names.Count, names.Count == 1 ? "" : "s", failed.Software),
-                            "Copy Failed Devices", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            var rows = failed.Ids.Select((id, i) => new
+            {
+                Name = failed.Names[i] ?? id.ToString(),
+                Code = failed.ErrorCodes.TryGetValue(id, out uint code) ? code : (uint?)null,
+                Text = failed.Descriptions.TryGetValue(id, out string text) && !string.IsNullOrWhiteSpace(text) ? text : null,
+            })
+            .Select(r => new { r.Name, r.Code, Text = r.Text ?? (r.Code.HasValue ? ErrorText(r.Code.Value) : "No error code reported") })
+            .OrderBy(r => r.Code ?? uint.MaxValue).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+            StringBuilder table = new StringBuilder("Device\tError code\tError").AppendLine();
+            foreach (var row in rows)
+            {
+                table.Append(row.Name).Append('\t').Append(row.Code.HasValue ? FormatCode(row.Code.Value) : "").Append('\t').Append(row.Text).AppendLine();
+            }
+            Clipboard.SetDataObject(table.ToString(), true, 10, 100);
+
+            // Most common error first.
+            var groups = rows.GroupBy(r => new { r.Code, r.Text }).OrderByDescending(g => g.Count()).ToList();
+            StringBuilder summary = new StringBuilder();
+            summary.AppendFormat("Copied {0} device{1} in error for {2}, with error codes (pastes into Excel).", rows.Count, rows.Count == 1 ? "" : "s", failed.Software).AppendLine().AppendLine();
+            foreach (var group in groups.Take(10))
+            {
+                summary.AppendFormat("{0} x {1}: {2}", group.Count(), group.Key.Code.HasValue ? FormatCode(group.Key.Code.Value) : "no code", group.Key.Text).AppendLine();
+            }
+            if (groups.Count > 10) summary.AppendFormat("...and {0} more error codes.", groups.Count - 10).AppendLine();
+
+            log.InfoFormat("Copied {0} failed device(s) with error codes for {1} ({2} distinct errors)", rows.Count, failed.Software, groups.Count);
+            MessageBox.Show(summary.ToString(), "Copy Failed Devices", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        /// <summary>Small codes are installer and Windows exit codes, so they read best in decimal too: "1603 (0x643)".</summary>
+        internal static string FormatCode(uint code)
+        {
+            return code < 0x10000 ? string.Format("{0} (0x{0:X})", code) : string.Format("0x{0:X8}", code);
+        }
+
+        // ConfigMgr's own codes that Windows has no text for, among the ones admins see most.
+        private static readonly Dictionary<uint, string> KnownErrors = new Dictionary<uint, string>
+        {
+            { 0x87D00213, "Timeout occurred" },
+            { 0x87D00324, "The application was not detected after installation completed" },
+            { 0x87D00325, "The application was still detected after uninstall completed" },
+            { 0x87D00327, "Script is not signed" },
+            { 0x87D00607, "Content not found" },
+            { 0x87D01106, "Failed to verify the executable file is valid or to construct the associated command line" },
+        };
+
+        /// <summary>What an error code means: ConfigMgr's common codes, then Windows' own text for Windows and installer codes.</summary>
+        internal static string ErrorText(uint code)
+        {
+            if (code == 0) return "No error code reported";
+            if (KnownErrors.TryGetValue(code, out string known)) return known;
+
+            // A Windows code as it is (1603), or wrapped in an HRESULT (0x80070643).
+            uint win32 = (code & 0xFFFF0000) == 0x80070000 ? code & 0xFFFF : code;
+            if (win32 < 0x10000)
+            {
+                string text = new System.ComponentModel.Win32Exception((int)win32).Message.TrimEnd('.', ' ');
+                if (!text.StartsWith("Unknown error", StringComparison.OrdinalIgnoreCase)) return text;
+            }
+            return "No description for this code";
         }
 
         /// <summary>
         /// The devices in Error for a deployment, or null when it isn't an application or software update deployment.
         /// Explains itself (unsupported type, nothing in error) so callers can simply stop.
         /// </summary>
-        private static FailedDevices FindFailed(IResultObject deployment)
+        private static FailedDevices FindFailed(IResultObject deployment, bool withErrorCodes = false)
         {
             int featureType = deployment["FeatureType"].IntegerValue;
             int assignmentId = deployment["AssignmentID"].IntegerValue;
@@ -106,7 +171,7 @@ namespace Layer8.Device
                     failed.RetryDescription = "re-runs its application deployment evaluation";
                     break;
                 case SoftwareUpdateDeployment:
-                    query = string.Format("SELECT ResourceID, DeviceName FROM SMS_SUMDeploymentAssetDetails WHERE AssignmentID = {0} AND StatusType = {1}", assignmentId, ErrorStatus);
+                    query = string.Format("SELECT ResourceID, DeviceName, StatusErrorCode, StatusDescription FROM SMS_SUMDeploymentAssetDetails WHERE AssignmentID = {0} AND StatusType = {1}", assignmentId, ErrorStatus);
                     idColumn = "ResourceID";
                     nameColumn = "DeviceName";
                     failed.RetryMethod = nameof(ClientActions.RetryUpdates);
@@ -126,6 +191,27 @@ namespace Layer8.Device
                     if (failed.Ids.Contains(id)) continue;
                     failed.Ids.Add(id);
                     failed.Names.Add(row[nameColumn].StringValue);
+                    if (featureType == SoftwareUpdateDeployment)
+                    {
+                        // UInt32 codes such as 0x87D00607 don't fit an int, so read them as 64-bit.
+                        failed.ErrorCodes[id] = (uint)row["StatusErrorCode"].LongValue;
+                        failed.Descriptions[id] = row["StatusDescription"].StringValue;
+                    }
+                }
+            }
+
+            // An application's error codes are kept in their own class, one row per device and deployment type.
+            if (withErrorCodes && featureType == ApplicationDeployment && failed.Ids.Count > 0)
+            {
+                string errorQuery = string.Format("SELECT MachineID, ErrorCode FROM SMS_AppDeploymentErrorAssetDetails WHERE AssignmentID = {0}", assignmentId);
+                using (IResultObject rows = deployment.ConnectionManager.QueryProcessor.ExecuteQuery(errorQuery))
+                {
+                    foreach (IResultObject row in rows)
+                    {
+                        int id = row["MachineID"].IntegerValue;
+                        uint code = (uint)row["ErrorCode"].LongValue;
+                        if (code != 0 && (!failed.ErrorCodes.TryGetValue(id, out uint existing) || existing == 0)) failed.ErrorCodes[id] = code;
+                    }
                 }
             }
 
