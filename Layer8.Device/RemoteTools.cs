@@ -57,6 +57,12 @@ namespace Layer8.Device
                 return;
             }
 
+            if (tool == "ClientLogCMTrace")
+            {
+                OpenClientLogs(action, names);
+                return;
+            }
+
             foreach (string name in names)
             {
                 ProcessStartInfo start = StartInfo(tool, name);
@@ -68,6 +74,69 @@ namespace Layer8.Device
                 log.InfoFormat("{0} on {1}: {2} {3}", action.DisplayName, name, start.FileName, start.Arguments);
                 Process.Start(start)?.Dispose();
             }
+        }
+
+        // Client Log in CMTrace: the logs admins open most, offered in the picker. Any other name can be typed.
+        private static readonly string[] CommonLogs =
+        {
+            "AppDiscovery", "AppEnforce", "AppIntentEval", "CAS", "CcmEval", "CcmExec", "ccmsetup", "CcmMessaging",
+            "ClientIDManagerStartup", "ClientLocation", "ContentTransferManager", "DataTransferService", "InventoryAgent",
+            "LocationServices", "PolicyAgent", "PolicyEvaluator", "ScanAgent", "StateMessage", "UpdatesDeployment",
+            "UpdatesHandler", "UpdatesStore", "WUAHandler",
+        };
+        private static string lastLog = "AppEnforce";
+
+        // A log name typed into the picker ends up in a path, so only plain file-name characters.
+        private static readonly Regex ValidLogName = new Regex(@"^[A-Za-z0-9][A-Za-z0-9_.\-]{0,99}$");
+
+        private static void OpenClientLogs(ActionDescription action, List<string> names)
+        {
+            string logName = InputPrompt.AskFromList(action.DisplayName.TrimEnd('.'), "Log to open (pick one, or type the name of any log in C:\\Windows\\CCM\\Logs):", CommonLogs, lastLog);
+            if (logName == null) return;
+            if (logName.EndsWith(".log", StringComparison.OrdinalIgnoreCase)) logName = logName.Substring(0, logName.Length - 4);
+            if (!ValidLogName.IsMatch(logName))
+            {
+                MessageBox.Show("\"" + logName + "\" isn't a log file name.", action.DisplayName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            lastLog = logName;
+
+            List<string> missing = new List<string>();
+            foreach (string name in names)
+            {
+                string path = ClientLogPath(name, logName);
+                if (!File.Exists(path))
+                {
+                    missing.Add(name);
+                    continue;
+                }
+                string cmtrace = FindCMTrace(name);
+                log.InfoFormat("Client Log in CMTrace on {0}: {1} {2}", name, cmtrace, path);
+                Process.Start(Program(cmtrace, "\"" + path + "\""))?.Dispose();
+            }
+            if (missing.Count > 0)
+            {
+                MessageBox.Show(string.Format("{0}.log isn't there (or the C$ share can't be reached) on: {1}", logName, string.Join(", ", missing)),
+                                action.DisplayName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        /// <summary>A client log's path over the C$ share; ccmsetup keeps its own log folder.</summary>
+        public static string ClientLogPath(string name, string log)
+        {
+            return string.Equals(log, "ccmsetup", StringComparison.OrdinalIgnoreCase)
+                ? string.Format(@"\\{0}\C$\Windows\ccmsetup\Logs\ccmsetup.log", name)
+                : string.Format(@"\\{0}\C$\Windows\CCM\Logs\{1}.log", name, log);
+        }
+
+        /// <summary>CMTrace from this computer's ConfigMgr client, or else from the device's.</summary>
+        private static string FindCMTrace(string name)
+        {
+            string local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), @"CCM\CMTrace.exe");
+            if (File.Exists(local)) return local;
+            string remote = string.Format(@"\\{0}\admin$\CCM\CMTrace.exe", name);
+            if (File.Exists(remote)) return remote;
+            throw new FileNotFoundException("CMTrace.exe isn't on this computer (C:\\Windows\\CCM) or on " + name + ".", local);
         }
 
         /// <summary>

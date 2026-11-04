@@ -103,6 +103,18 @@
       </ActionAssembly>
       <DialogId>ClientLogs</DialogId>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Client Log in CMTrace..." MnemonicDisplayName="Client Log in CMTrace..." Description="Open one ConfigMgr client log from the device in CMTrace">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.RemoteTools</Type>
+        <Method>Open</Method>
+      </ActionAssembly>
+      <DialogId>ClientLogCMTrace</DialogId>
+    </ActionDescription>
     <ActionDescription Class="Separator">
       <ShowOn>
         <string>ContextMenu</string>
