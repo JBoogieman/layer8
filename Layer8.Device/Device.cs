@@ -20,7 +20,7 @@ namespace Layer8.Device
         /// </summary>
         public static void OpenSettings(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObject, PropertyDataUpdated dataUpdatedDelegate, Status status)
         {
-            SafeAction.Run(action?.DisplayName ?? "Layer8 Settings", () => Utility.ShowDialog("Layer8Settings", selectedObject));
+            SafeAction.Run(action?.DisplayName ?? "Layer8 Settings", () => Utility.ShowDialog("Layer8Settings", selectedObject, "Layer8 Settings"));
         }
 
         /// <summary>Console entry point: runs AddMulitDeviceCollectionCore behind Layer8's crash guard.</summary>

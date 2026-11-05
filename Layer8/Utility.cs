@@ -530,13 +530,21 @@ namespace Layer8
             return a.CompareTo(b) >= 0 && a.CompareTo(c) <= 0;
         }
 
-        public static DialogResult ShowDialog(string dialogId, IResultObject resultObject)
+        public static DialogResult ShowDialog(string dialogId, IResultObject resultObject, string title = null)
         {
             ISmsForm dialog = DialogFactoryBase.DialogFactory.CreateDialog(dialogId, resultObject, (PropertyDataUpdated)null, false);
             using (dialog.Form)
             {
                 dialog.Initialize();
                 dialog.Form.ShowInTaskbar = false;
+                if (title != null)
+                {
+                    // A property sheet names itself after the selected objects ("DEV01 Properties"), which is wrong
+                    // for a window like Layer8 Settings. It may set that name while loading, so set ours after too.
+                    dialog.Form.Text = title;
+                    dialog.Form.Load += (sender, e) => dialog.Form.Text = title;
+                    dialog.Form.Shown += (sender, e) => dialog.Form.Text = title;
+                }
                 return dialog.Form.ShowDialog();
             }
         }

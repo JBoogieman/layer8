@@ -1,4 +1,4 @@
-# Layer8 status: November 3, 2026
+# Layer8 status: November 5, 2026
 
 Working notes, not documentation: where Layer8 stands, what's left before a public release, and the ideas list. Update the date and tick boxes as things land.
 
@@ -56,6 +56,9 @@ Inherited from ConfigMgr Quick Tools, smoke-tested Nov 2 (opened and cancelled, 
   - **Dell Driver Pack offers Windows 11 and 10.** Windows 11 loads Dell's current models (Dell Pro 13 and 14, Dell 14 Premium); nothing was imported.
   - **Retry Failed Devices works on Available app deployments.** Evaluation only retries required deployments, so for an Available app Retry now asks each failed device to install that app, the same call Install Application makes. The confirmation says which of the two it will do. Tested on Layer8 Available Fail App (new in the lab script: available, exits 1603): Copy Failed Devices gave "1 x 1603 (0x643)", and Retry reported "Install started" for DEV01. Run Summarization picked up the failure in about a minute this time.
   - **Client Log in CMTrace** under Remote Tools: pick one of 22 common client logs (or type any name), and Layer8 opens it over C$ in CMTrace (the console's own copy, else the device's). Devices where the log or C$ can't be reached are listed at the end. Tested on DEV01 with AppEnforce: CMTrace opened with no error; the log's contents weren't checked.
+- **Layer8 Settings...** (Nov 5), at the bottom of the Layer8 menu on Devices and collection members. It replaces Quick Tools' Auto Updates page, whose controls did nothing since Layer8 never checks for updates. Settings: devices contacted at once (default 32, was fixed); a quick offline check before connecting (ports 135 and 445, wait 2 seconds, on by default; Online Status keeps its own check); the log level and the log folder. Saved per user in HKCU\Software\Layer8, read at the start of each run.
+  - Tested Nov 5: opens with one device and with two selected; a change survives reopening; unticking the check greys out its seconds; Quick Status on All Systems with the check on still answered for DEV01 and CM01 and skipped the four placeholders.
+  - Not tested yet: a device that's really offline (switch DEV02 off). The window was titled "DEV01 Properties"; the next build names it Layer8 Settings.
 
 ## Ready-to-publish checklist
 
@@ -67,6 +70,7 @@ Inherited from ConfigMgr Quick Tools, smoke-tested Nov 2 (opened and cancelled, 
 - [x] Install Application installs Layer8 Test App (state reaches Installed)
 - [x] Monitoring > Deployments > Delete removes a throwaway deployment
 - [ ] Second client VM (DEV02): every client tool, remote tool and collection run against a machine that isn't the console
+- [ ] Offline check: with DEV02 switched off, a collection run lists it as offline within a few seconds (and with the check off, after the WMI timeout)
 - [ ] Install Missing Updates with an update actually missing (deploy one update to Layer8 Dev)
 - [ ] Remote Assistance: UAC prompt and offer; PowerShell session opens over WinRM
 - [x] Smoke test the inherited Quick Tools features listed above (Nov 2; see the rough edges for what it found)
@@ -87,7 +91,7 @@ Inherited from ConfigMgr Quick Tools, smoke-tested Nov 2 (opened and cancelled, 
 
 ## Next steps, in order
 
-1. Keep adding features that DEV01 alone can test (Settings is next).
+1. Keep adding features that DEV01 alone can test (next candidates are in the nice-to-haves).
 2. Lab: sync software updates for one product and classification, deploy one to Layer8 Dev, and create a task sequence.
 3. Build DEV02 and repeat the client and remote tool runs against it.
 4. Work down the testing list, then the release list.
@@ -101,6 +105,7 @@ Inherited from ConfigMgr Quick Tools, smoke-tested Nov 2 (opened and cancelled, 
 - **Other ConfigMgr times may have the same "+000" shift** as Install Application's deadlines: Check Pending Restart's restart deadline goes through the same kind of conversion. Check it against Software Center.
 - **Lab gaps:** sync software updates (at least one product and classification), and create one task sequence, so update and task sequence features can be tested.
 - **Collection Evaluation Statistics** took about 30 seconds to read colleval.log from CM01 in the lab, and OK didn't close the window until it finished (the X did).
+- **Show Messages** on the device menu (inherited `Layer8DeviceMsg.xml`) starts statview.exe from a fixed `C:\Program Files (x86)` console path, so it breaks on a console installed anywhere else.
 - **Skipped records count as offline** in the progress totals. A separate "skipped" count would read better.
 - **Large retries** keep every device record in memory until the window closes. Fine at lab scale; watch it on a 1,000-device deployment.
 
@@ -113,7 +118,6 @@ Rough size: S is an evening, M a session or two, L a project.
 | Retry for configuration baselines and task sequences | M | Baselines are a trigger away; task sequences need their rerun rules respected |
 | Redistribute failed content: on Distribution Status, redistribute to every DP in error | M | Another daily chore that's click-by-click in the console |
 | Windows LAPS lookup (`msLAPS-Password`, encrypted passwords; Entra-backed needs Graph) | M–L | Legacy LAPS is on its way out |
-| Settings: devices at a time, timeouts, log level | S | Today these are constants or a registry value |
 | Recent sign-ins in Quick Status | S | Who was on it, not just who is on it |
 | Lenovo warranty and driver packs | M | Dell and HP have driver packs; Lenovo is the gap |
 | Retry everything failed for a collection, across deployments | M | One click after an outage |

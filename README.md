@@ -9,8 +9,8 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 - Client actions on devices and collections
 - Client tools on devices and collections: quick status (signed-in users, uptime, free space on C:, client version), find installed software by name, list and install missing updates, check for a pending restart, full machine policy refresh, group policy update, client health check, clear the client cache, repair the client, turn off provisioning mode. Every run shows one answer per device, works through at most 32 devices at a time, and Copy Results puts the rows on the clipboard for Excel
 - Online status for devices and whole collections: ping, or port 445 when ping is blocked
-- Retry Failed Devices on Monitoring > Deployments: for an application or software update deployment, finds every device in error and re-runs that deployment's evaluation on all of them. Copy Failed Devices puts their names on the clipboard
-- Remote tools on devices: ping, Remote Desktop, Remote Assistance, PowerShell session, browse C$, client logs, Computer Management, Event Viewer, Services
+- Retry Failed Devices on Monitoring > Deployments: for an application or software update deployment, finds every device in error and re-runs that deployment's evaluation on all of them (for an Available app, it installs the app on each instead). Copy Failed Devices puts their names and error codes on the clipboard
+- Remote tools on devices: ping, Remote Desktop, Remote Assistance, PowerShell session, browse C$, client logs, open a client log in CMTrace, Computer Management, Event Viewer, Services
 - Copy device names, or every member of a collection, to the clipboard
 - Extended device properties: update compliance, client health, collection membership
 - Collection management: add resources from a list
@@ -18,6 +18,7 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 - Install Application: list the apps deployed to a device and install one now, like Software Center
 - LAPS password and BitLocker recovery key lookup (from Active Directory; type the Key ID from the recovery screen to find the right key)
 - Software update clean-up and phased deployments
+- Layer8 Settings (on the Layer8 menu): how many devices to contact at once, a quick offline check before connecting, and the log level
 
 ## Building
 
@@ -50,7 +51,7 @@ Early days: see [docs/STATUS.md](docs/STATUS.md) for what's tested, what's left 
 
 ## Logs
 
-Layer8 writes a CMTrace-format log to `%LOCALAPPDATA%\Layer8\Logs\Layer8.log`. Each console session starts with a line showing the Layer8, console and .NET versions. To get more detail, set the log level to `Debug` (it's picked up within a few seconds, no console restart):
+Layer8 writes a CMTrace-format log to `%LOCALAPPDATA%\Layer8\Logs\Layer8.log`. Each console session starts with a line showing the Layer8, console and .NET versions. To get more detail, set the log level to `Debug` in Layer8 Settings, or from a prompt (it's picked up within a few seconds, no console restart):
 
 ```
 reg add HKCU\SOFTWARE\Layer8 /v LogLevel /d Debug /f
