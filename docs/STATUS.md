@@ -58,7 +58,8 @@ Inherited from ConfigMgr Quick Tools, smoke-tested Nov 2 (opened and cancelled, 
   - **Client Log in CMTrace** under Remote Tools: pick one of 22 common client logs (or type any name), and Layer8 opens it over C$ in CMTrace (the console's own copy, else the device's). Devices where the log or C$ can't be reached are listed at the end. Tested on DEV01 with AppEnforce: CMTrace opened with no error; the log's contents weren't checked.
 - **Layer8 Settings...** (Nov 5), at the bottom of the Layer8 menu on Devices and collection members. It replaces Quick Tools' Auto Updates page, whose controls did nothing since Layer8 never checks for updates. Settings: devices contacted at once (default 32, was fixed); a quick offline check before connecting (ports 135 and 445, wait 2 seconds, on by default; Online Status keeps its own check); the log level and the log folder. Saved per user in HKCU\Software\Layer8, read at the start of each run.
   - Tested Nov 5: opens with one device and with two selected; a change survives reopening; unticking the check greys out its seconds; Quick Status on All Systems with the check on still answered for DEV01 and CM01 and skipped the four placeholders.
-  - Not tested yet: a device that's really offline (switch DEV02 off). The window was titled "DEV01 Properties"; the next build names it Layer8 Settings.
+  - The window first took its title from the selection ("DEV01 Properties"); it now says Layer8 Settings (checked Nov 5).
+  - Not tested yet: a device that's really offline (switch DEV02 off).
 
 ## Ready-to-publish checklist
 
