@@ -68,6 +68,30 @@ namespace Layer8.Device
             MessageBox.Show(summary.ToString(), "Redistribute Failed Content", MessageBoxButtons.OK, errors.Count == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
 
+        /// <summary>Console entry point: copies the distribution points in error for the selected content, for a ticket or a DP team.</summary>
+        public static void CopyFailed(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
+        {
+            SafeAction.Run(action?.DisplayName ?? "Copy Failed Distribution Points", () =>
+            {
+                List<Failure> failures = FindFailures(selectedResultObjects);
+                if (failures.Count == 0)
+                {
+                    MessageBox.Show("No distribution point is retrying or failed for the selected content.", "Copy Failed Distribution Points", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                StringBuilder text = new StringBuilder("Content\tPackage ID\tDistribution point\tState").AppendLine();
+                foreach (Failure failure in failures)
+                {
+                    text.Append(failure.PackageName).Append('\t').Append(failure.PackageID).Append('\t').Append(DpName(failure.ServerNALPath)).Append('\t')
+                        .AppendLine(failure.State == 2 ? "Retrying" : "Failed");
+                }
+                Clipboard.SetDataObject(text.ToString(), true, 10, 100);
+                log.InfoFormat("Copied {0} distribution point(s) in error", failures.Count);
+                MessageBox.Show(string.Format("Copied {0} distribution point{1} in error (pastes into Excel).", failures.Count, failures.Count == 1 ? "" : "s"),
+                    "Copy Failed Distribution Points", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            });
+        }
+
         /// <summary>Every DP in error for the selected content (Content Status rows are SMS_ObjectContentExtraInfo).</summary>
         private static List<Failure> FindFailures(IResultObject selection)
         {

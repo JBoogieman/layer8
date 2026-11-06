@@ -23,5 +23,16 @@
         <Method>RedistributeFailed</Method>
       </ActionAssembly>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Copy Failed Distribution Points" MnemonicDisplayName="Copy Failed Distribution Points" Description="Copy the distribution points where the selected content is retrying or failed">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ContentRedistribute</Type>
+        <Method>CopyFailed</Method>
+      </ActionAssembly>
+    </ActionDescription>
   </ActionGroups>
 </ActionDescription>
