@@ -92,7 +92,16 @@ namespace Layer8.Device
             });
         }
 
-        /// <summary>Every DP in error for the selected content (Content Status rows are SMS_ObjectContentExtraInfo).</summary>
+        // SMS_DistributionDPStatus.MessageState: 1 Success, 2 In Progress, 3 Error. Content Status counts its Failed
+        // column from this; anything past In Progress is taken as an error.
+        private const int FirstErrorMessageState = 3;
+
+        /// <summary>
+        /// Every DP in error for the selected content (Content Status rows are SMS_ObjectContentExtraInfo). Two
+        /// records can say so, and they don't always agree: the per-DP status Content Status counts as Failed
+        /// (a package whose source can't be read fails there), and the package summarizer's retrying or failed
+        /// installs. A DP named by either is listed once.
+        /// </summary>
         private static List<Failure> FindFailures(IResultObject selection)
         {
             List<Failure> failures = new List<Failure>();
@@ -101,15 +110,43 @@ namespace Layer8.Device
                 string packageId = item["PackageID"].StringValue;
                 string name = item["SoftwareName"].StringValue;
                 if (string.IsNullOrEmpty(name)) name = packageId;
-                string wql = string.Format("SELECT PackageID, ServerNALPath, State FROM SMS_PackageStatusDistPointsSummarizer WHERE PackageID = '{0}' AND State IN ({1})", packageId, BrokenStates);
-                using (IResultObject rows = selection.ConnectionManager.QueryProcessor.ExecuteQuery(wql))
+
+                Dictionary<string, Failure> byDp = new Dictionary<string, Failure>(StringComparer.OrdinalIgnoreCase);
+
+                string summarizer = string.Format("SELECT PackageID, ServerNALPath, State FROM SMS_PackageStatusDistPointsSummarizer WHERE PackageID = '{0}' AND State IN ({1})", packageId, BrokenStates);
+                using (IResultObject rows = selection.ConnectionManager.QueryProcessor.ExecuteQuery(summarizer))
                 {
                     foreach (IResultObject row in rows)
                     {
-                        failures.Add(new Failure { PackageID = packageId, PackageName = name, ServerNALPath = row["ServerNALPath"].StringValue, State = row["State"].IntegerValue });
+                        string nal = row["ServerNALPath"].StringValue;
+                        byDp[nal] = new Failure { PackageID = packageId, PackageName = name, ServerNALPath = nal, State = row["State"].IntegerValue };
                     }
                 }
+
+                string dpStatus = string.Format("SELECT NALPath, MessageState FROM SMS_DistributionDPStatus WHERE PackageID = '{0}' AND MessageState >= {1}", packageId, FirstErrorMessageState);
+                try
+                {
+                    using (IResultObject rows = selection.ConnectionManager.QueryProcessor.ExecuteQuery(dpStatus))
+                    {
+                        foreach (IResultObject row in rows)
+                        {
+                            string nal = row["NALPath"].StringValue;
+                            if (!string.IsNullOrEmpty(nal) && !byDp.ContainsKey(nal))
+                            {
+                                byDp[nal] = new Failure { PackageID = packageId, PackageName = name, ServerNALPath = nal, State = 3 };
+                            }
+                        }
+                    }
+                }
+                catch (SmsQueryException ex)
+                {
+                    // The summarizer's answer still stands; note why the second record wasn't read.
+                    log.Warn("Couldn't read SMS_DistributionDPStatus for " + packageId, ex);
+                }
+
+                failures.AddRange(byDp.Values);
             }
+            log.InfoFormat("Distribution points in error for the selection: {0}", failures.Count);
             return failures;
         }
 
