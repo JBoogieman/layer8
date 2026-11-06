@@ -29,6 +29,9 @@
     "Layer8 Drift CI" returns NonCompliant, so they're non-compliant. It's deployed to the collection daily.
     That's the baseline to try Retry Failed Devices and Re-evaluate Non-compliant Devices on.
 
+    "Layer8 Test TS" and "Layer8 Fail TS" are custom task sequences with one Run Command Line step that exits 0
+    or 1, made available to the collection: for Task Sequence Export and, later, retrying task sequences.
+
     The fake recovery key has Key ID 4C415938-0000-4000-8000-000000000001 (its first 8 characters spell "LAY8"
     in hex) and the obviously fake password 111111-222222-333333-444444-555555-666666-777777-888888.
 
@@ -64,6 +67,7 @@ $availableFailAppName = 'Layer8 Available Fail App'
 $brokenPackageName = 'Layer8 Broken Package'
 $baselineName = 'Layer8 Test Baseline'
 $baselineCIs = 'Layer8 Error CI', 'Layer8 Drift CI'
+$taskSequences = [ordered]@{ 'Layer8 Test TS' = 0; 'Layer8 Fail TS' = 1 }
 $keyGuid = [guid]'4C415938-0000-4000-8000-000000000001'
 $volumeGuid = [guid]'4C415938-0000-4000-8000-0000000000FF'
 
@@ -166,6 +170,29 @@ function Remove-LabBaseline {
     }
 }
 
+# --- ConfigMgr: a task sequence that works and one that fails ---------------------------------------------
+
+function New-LabTaskSequence([string]$Name, [int]$ExitCode) {
+    if (Get-CMTaskSequence -Name $Name -Fast) {
+        Write-Host "$Name already exists."
+        return
+    }
+    $ts = New-CMTaskSequence -CustomTaskSequence -Name $Name
+    $step = New-CMTSStepRunCommandLine -Name "Exit $ExitCode" -CommandLine "cmd.exe /c exit $ExitCode"
+    Add-CMTaskSequenceStep -InputObject $ts -Step $step
+    New-CMTaskSequenceDeployment -InputObject $ts -CollectionName $Collection -DeployPurpose Available `
+        -Availability Clients | Out-Null
+    Write-Host "Created $Name (exits $ExitCode) and made it available to $Collection."
+}
+
+function Remove-LabTaskSequence([string]$Name) {
+    $ts = Get-CMTaskSequence -Name $Name -Fast
+    if (-not $ts) { return }
+    Get-CMTaskSequenceDeployment -TaskSequenceId $ts.PackageID | Remove-CMTaskSequenceDeployment -Force
+    Remove-CMTaskSequence -TaskSequencePackageId $ts.PackageID -Force
+    Write-Host "Removed $Name and its deployment."
+}
+
 # The console installs its PowerShell module next to its binaries; importing it creates the site drive (LAB:).
 Import-Module (Join-Path (Split-Path $env:SMS_ADMIN_UI_PATH -Parent) 'ConfigurationManager.psd1')
 $siteDrive = Get-PSDrive -PSProvider CMSite -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -179,6 +206,7 @@ try {
         Remove-LabApp $availableFailAppName
         Remove-LabBrokenPackage
         Remove-LabBaseline
+        foreach ($name in $taskSequences.Keys) { Remove-LabTaskSequence $name }
     }
     else {
         New-LabApp $appName 'SOFTWARE\Layer8Test' 'cmd.exe /c reg add HKLM\SOFTWARE\Layer8Test /v Installed /d 1 /f /reg:64'
@@ -187,6 +215,7 @@ try {
         New-LabApp $availableFailAppName 'SOFTWARE\Layer8FailTest2' 'cmd.exe /c exit 1603'
         New-LabBrokenPackage
         New-LabBaseline
+        foreach ($name in $taskSequences.Keys) { New-LabTaskSequence $name $taskSequences[$name] }
     }
 }
 finally {
