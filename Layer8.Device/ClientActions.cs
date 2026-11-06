@@ -450,6 +450,20 @@ namespace Layer8.Device
                 parts.Add(string.Format("C: {0} free of {1}", Utility.FormatBytes(Convert.ToDouble(systemDrive["FreeSpace"]), "0.#"), Utility.FormatBytes(Convert.ToDouble(systemDrive["Size"]), "0")));
             }
 
+            // The IPv4 addresses the device itself reports, which can differ from DNS on VPN or with stale records.
+            List<string> addresses = new List<string>();
+            foreach (ManagementObject adapter in Utility.SearchWMIToList(cimv2, "SELECT IPAddress FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled = TRUE"))
+            {
+                using (adapter)
+                {
+                    foreach (string address in adapter["IPAddress"] as string[] ?? new string[0])
+                    {
+                        if (IPAddress.TryParse(address, out IPAddress parsed) && parsed.AddressFamily == AddressFamily.InterNetwork && !addresses.Contains(address)) addresses.Add(address);
+                    }
+                }
+            }
+            if (addresses.Count > 0) parts.Add(string.Join(", ", addresses));
+
             try
             {
                 ManagementScope ccm = Utility.GetWMIScope(host, "ccm");
