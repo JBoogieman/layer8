@@ -837,13 +837,22 @@ namespace Layer8.Device
             return "Health check started (see CcmEval.log)";
         }
 
-        /// <summary>Starts a program on the device through WMI (Win32_Process.Create); doesn't wait for it to finish.</summary>
+        /// <summary>
+        /// Starts a program on the device through WMI (Win32_Process.Create), hidden; doesn't wait for it to finish.
+        /// On another computer it runs out of sight anyway, but when the device is the one the console runs on,
+        /// Windows would otherwise open its window on the admin's own desktop.
+        /// </summary>
         private static void StartRemoteProcess(string host, string commandLine, string programName)
         {
-            using (ManagementClass process = new ManagementClass(Utility.GetWMIScope(host, "cimv2"), new ManagementPath("Win32_Process"), null))
+            ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
+            using (ManagementClass process = new ManagementClass(cimv2, new ManagementPath("Win32_Process"), null))
+            using (ManagementClass startupClass = new ManagementClass(cimv2, new ManagementPath("Win32_ProcessStartup"), null))
+            using (ManagementObject startup = startupClass.CreateInstance())
             using (ManagementBaseObject inParams = process.GetMethodParameters("Create"))
             {
+                startup["ShowWindow"] = (ushort)0;   // SW_HIDE
                 inParams["CommandLine"] = commandLine;
+                inParams["ProcessStartupInformation"] = startup;
                 using (ManagementBaseObject outParams = process.InvokeMethod("Create", inParams, null))
                 {
                     long code = Convert.ToInt64(outParams?["ReturnValue"] ?? 0);
@@ -953,17 +962,7 @@ namespace Layer8.Device
         public static string CancelRestart(IResultObject resultObject)
         {
             string host = resultObject["Name"].StringValue;
-            ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
-            using (ManagementClass process = new ManagementClass(cimv2, new ManagementPath("Win32_Process"), null))
-            using (ManagementBaseObject inParams = process.GetMethodParameters("Create"))
-            {
-                inParams["CommandLine"] = "shutdown.exe /a";
-                using (ManagementBaseObject outParams = process.InvokeMethod("Create", inParams, null))
-                {
-                    uint code = Convert.ToUInt32(outParams["ReturnValue"]);
-                    if (code != 0) throw new InvalidOperationException(string.Format("Couldn't start shutdown /a (Win32_Process.Create returned {0})", code));
-                }
-            }
+            StartRemoteProcess(host, "shutdown.exe /a", "shutdown.exe");
             log.InfoFormat("Restart cancel requested on {0}", host);
             return "Asked Windows to cancel its scheduled restart";
         }
@@ -1017,18 +1016,8 @@ namespace Layer8.Device
         public static string DefenderQuickScan(IResultObject resultObject)
         {
             string host = resultObject["Name"].StringValue;
-            ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
-            using (ManagementClass process = new ManagementClass(cimv2, new ManagementPath("Win32_Process"), null))
-            using (ManagementBaseObject inParams = process.GetMethodParameters("Create"))
-            {
-                // cmd expands %ProgramFiles% on the device; MpCmdRun.exe is always there, whatever Defender platform version runs.
-                inParams["CommandLine"] = "cmd.exe /c \"\"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -Scan -ScanType 1\"";
-                using (ManagementBaseObject outParams = process.InvokeMethod("Create", inParams, null))
-                {
-                    uint code = Convert.ToUInt32(outParams["ReturnValue"]);
-                    if (code != 0) throw new InvalidOperationException(string.Format("Couldn't start MpCmdRun (Win32_Process.Create returned {0})", code));
-                }
-            }
+            // cmd expands %ProgramFiles% on the device; MpCmdRun.exe is always there, whatever Defender platform version runs.
+            StartRemoteProcess(host, "cmd.exe /c \"\"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -Scan -ScanType 1\"", "MpCmdRun.exe");
             log.InfoFormat("Defender quick scan started on {0}", host);
             return "Quick scan started (Defender Status shows it once it's done)";
         }
