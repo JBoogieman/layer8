@@ -20,6 +20,11 @@
     "Layer8 Available Fail App" fails the same way but is only made available: install it from Install
     Application to put a device in Error, then try Retry Failed Devices, which installs Available apps directly.
 
+    "Layer8 Broken Package" is a legacy package whose source share (\\CM01\Layer8Missing$) doesn't exist, sent
+    to the site's first distribution point, so the DP lands in Error for it. That's the content to try
+    Redistribute Failed Content on (Monitoring > Distribution Status > Content Status). To see a redistribution
+    succeed, create the share on CM01 and redistribute again; delete it afterwards so the package breaks again.
+
     The fake recovery key has Key ID 4C415938-0000-4000-8000-000000000001 (its first 8 characters spell "LAY8"
     in hex) and the obviously fake password 111111-222222-333333-444444-555555-666666-777777-888888.
 
@@ -52,6 +57,7 @@ $ErrorActionPreference = 'Stop'
 $appName = 'Layer8 Test App'
 $failAppName = 'Layer8 Fail App'
 $availableFailAppName = 'Layer8 Available Fail App'
+$brokenPackageName = 'Layer8 Broken Package'
 $keyGuid = [guid]'4C415938-0000-4000-8000-000000000001'
 $volumeGuid = [guid]'4C415938-0000-4000-8000-0000000000FF'
 
@@ -94,6 +100,27 @@ function New-LabApp([string]$Name, [string]$KeyName, [string]$InstallCommand, [s
     }
 }
 
+# --- ConfigMgr: a package whose distribution fails ---------------------------------------------------------
+
+function Remove-LabBrokenPackage {
+    $package = Get-CMPackage -Name $brokenPackageName -Fast
+    if (-not $package) { return }
+    Remove-CMPackage -Id $package.PackageID -Force
+    Write-Host "Removed $brokenPackageName."
+}
+
+function New-LabBrokenPackage {
+    if (Get-CMPackage -Name $brokenPackageName -Fast) {
+        Write-Host "$brokenPackageName already exists."
+        return
+    }
+    # The source share doesn't exist, so the distribution manager can't copy it and the DP lands in Error.
+    $package = New-CMPackage -Name $brokenPackageName -Path '\\CM01\Layer8Missing$\BrokenPackage'
+    $dp = (Get-CMDistributionPoint | Select-Object -First 1).NetworkOSPath.TrimStart('\')
+    Start-CMContentDistribution -PackageId $package.PackageID -DistributionPointName $dp
+    Write-Host "Created $brokenPackageName and sent it to $dp (its source doesn't exist, so it fails)."
+}
+
 # The console installs its PowerShell module next to its binaries; importing it creates the site drive (LAB:).
 Import-Module (Join-Path (Split-Path $env:SMS_ADMIN_UI_PATH -Parent) 'ConfigurationManager.psd1')
 $siteDrive = Get-PSDrive -PSProvider CMSite -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -105,12 +132,14 @@ try {
         Remove-LabApp $appName
         Remove-LabApp $failAppName
         Remove-LabApp $availableFailAppName
+        Remove-LabBrokenPackage
     }
     else {
         New-LabApp $appName 'SOFTWARE\Layer8Test' 'cmd.exe /c reg add HKLM\SOFTWARE\Layer8Test /v Installed /d 1 /f /reg:64'
         # Never writes its detection key, and 1603 is "fatal error during installation", so it always ends in Error.
         New-LabApp $failAppName 'SOFTWARE\Layer8FailTest' 'cmd.exe /c exit 1603' -Required
         New-LabApp $availableFailAppName 'SOFTWARE\Layer8FailTest2' 'cmd.exe /c exit 1603'
+        New-LabBrokenPackage
     }
 }
 finally {
