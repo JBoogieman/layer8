@@ -407,6 +407,17 @@
       </ActionAssembly>
       <DialogId>CollectLogs</DialogId>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Single" DisplayName="Retry All Failed Deployments" MnemonicDisplayName="Retry All Failed Deployments" Description="Retry every application, software update and baseline deployment to this collection on the devices in error">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.DeploymentRetry</Type>
+        <Method>RetryCollection</Method>
+      </ActionAssembly>
+    </ActionDescription>
     <ActionDescription Class="Separator">
       <ShowOn>
         <string>ContextMenu</string>

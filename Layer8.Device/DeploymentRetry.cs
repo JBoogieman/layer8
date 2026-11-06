@@ -285,6 +285,76 @@ namespace Layer8.Device
             return failed;
         }
 
+        /// <summary>
+        /// Device Collections: every application, software update and baseline deployment to the collection that has
+        /// devices in error, retried in one run. Each device gets every retry that applies to it, in one row.
+        /// </summary>
+        public static void RetryCollection(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selected, PropertyDataUpdated dataUpdatedDelegate, Status status)
+        {
+            SafeAction.Run(action?.DisplayName ?? "Retry All Failed Deployments", () =>
+            {
+                string collectionId = selected["CollectionID"].StringValue;
+                string collectionName = selected["Name"].StringValue;
+                string wql = string.Format("SELECT * FROM SMS_DeploymentSummary WHERE CollectionID = '{0}' AND FeatureType IN ({1}, {2}, {3})",
+                    collectionId, ApplicationDeployment, SoftwareUpdateDeployment, BaselineDeployment);
+
+                // device ID -> the deployments to retry on it
+                var work = new Dictionary<int, List<FailedDevices>>();
+                var deployments = new List<FailedDevices>();
+                using (IResultObject summaries = selected.ConnectionManager.QueryProcessor.ExecuteQuery(wql))
+                {
+                    foreach (IResultObject deployment in summaries)
+                    {
+                        FailedDevices failed = FindFailed(deployment);
+                        if (failed.Problem != null || failed.Ids.Count == 0) continue;
+                        deployments.Add(failed);
+                        foreach (int id in failed.Ids)
+                        {
+                            if (!work.TryGetValue(id, out List<FailedDevices> list)) work[id] = list = new List<FailedDevices>();
+                            list.Add(failed);
+                        }
+                    }
+                }
+                if (work.Count == 0)
+                {
+                    MessageBox.Show(string.Format("Nothing is in error for the deployments to {0}.\n\nDeployment status comes from summarization, so very recent failures may not show yet.", collectionName),
+                        "Retry All Failed Deployments", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                string question = string.Format("Retry {0} deployment{1} on the {2} device{3} in error in {4}?\n\n{5}",
+                    deployments.Count, deployments.Count == 1 ? "" : "s", work.Count, work.Count == 1 ? "" : "s", collectionName,
+                    string.Join("\n", deployments.Take(15).Select(d => string.Format("{0} ({1} device{2})", d.Software, d.Ids.Count, d.Ids.Count == 1 ? "" : "s"))));
+                if (MessageBox.Show(question, "Retry All Failed Deployments", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+                List<IResultObject> devices = DevicesById(selected.ConnectionManager, work.Keys.ToList());
+                log.InfoFormat("Retrying {0} deployment(s) on {1} device(s) in {2}", deployments.Count, devices.Count, collectionName);
+                using (DeviceProgressDialog dialog = new DeviceProgressDialog(action, devices, "RetryCollection", device =>
+                {
+                    List<string> results = new List<string>();
+                    foreach (FailedDevices failed in work[device["ResourceID"].IntegerValue])
+                    {
+                        try
+                        {
+                            results.Add(failed.Software + ": " + (ClientActions.WaitForResult(failed.Retry(device)) ?? "started"));
+                        }
+                        catch (Exception ex)
+                        {
+                            // The first failure that means the device can't be reached ends the row as offline.
+                            Exception root = SafeAction.Unwrap(ex);
+                            if (root is DeviceOfflineException || root is System.Runtime.InteropServices.COMException) throw;
+                            results.Add(failed.Software + ": " + root.Message);
+                        }
+                    }
+                    return string.Join("; ", results);
+                }, "Retry All Failed Deployments: " + collectionName))
+                {
+                    dialog.Total = devices.Count;
+                    dialog.ShowDialog();
+                }
+            });
+        }
+
         /// <summary>The SMS_R_System records for the given resource IDs (the progress dialog works on device records).</summary>
         private static List<IResultObject> DevicesById(ConnectionManagerBase connection, List<int> ids)
         {
