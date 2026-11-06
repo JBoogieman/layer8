@@ -21,7 +21,7 @@
       </ShowOn>
       <DialogId>Layer8DriverGrabberWizard</DialogId>
     </ActionDescription>
-    <ActionDescription NamespaceGuid="9D4F1D1A-FAD0-478C-B441-D5A6CD05FCD0" Class="AssemblyType" DisplayName="Client Cache" MnemonicDisplayName="Client Cache" Description="Manage the client cache settings">
+    <ActionDescription NamespaceGuid="9D4F1D1A-FAD0-478C-B441-D5A6CD05FCD0" Class="AssemblyType" SelectionMode="Both" DisplayName="Client Cache" MnemonicDisplayName="Client Cache" Description="Client cache settings for one device, or set the cache size on several">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>

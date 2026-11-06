@@ -122,7 +122,7 @@ namespace Layer8.Device
             { nameof(CollectLogs), null },
         };
 
-        private static void ProcessAction(ScopeNode scopeNode, ActionDescription action, IResultObject resultObjects, string actionName, Func<IResultObject, object> run,
+        internal static void ProcessAction(ScopeNode scopeNode, ActionDescription action, IResultObject resultObjects, string actionName, Func<IResultObject, object> run,
                                           string title = null, bool alwaysShowDialog = false, string confirmQuestion = null)
         {
             bool showProgressDialog = alwaysShowDialog;
