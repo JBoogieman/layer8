@@ -112,6 +112,7 @@ namespace Layer8.Device
             { nameof(ClientHealthCheck), null },
             { nameof(ClearClientCache), "Clear the ConfigMgr client cache on {0}?\n\nCached content is deleted, except content marked to stay in the cache and content a device is using right now. Devices download content again when they next need it." },
             { nameof(RepairClient), "Repair the ConfigMgr client on {0}?\n\nEach client runs ccmrepair, which restarts the SMS Agent Host service and can take several minutes. Watch ccmrepair.log on the device." },
+            { nameof(ClientInfo), null },
         };
 
         private static void ProcessAction(ScopeNode scopeNode, ActionDescription action, IResultObject resultObjects, string actionName, Func<IResultObject, object> run,
@@ -764,6 +765,27 @@ namespace Layer8.Device
             {
                 return null;
             }
+        }
+
+        /// <summary>Site, management point, client version and client GUID, straight from the client.</summary>
+        public static string ClientInfo(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            ManagementScope ccm = Utility.GetWMIScope(host, "ccm");
+            List<string> parts = new List<string>();
+            using (ManagementObject authority = Utility.GetFirstWMIInstance(ccm, "SELECT Name, CurrentManagementPoint FROM SMS_Authority"))
+            {
+                if (authority != null) parts.Add(string.Format("site {0} via {1}", (authority["Name"] as string ?? "").Replace("SMS:", ""), authority["CurrentManagementPoint"]));
+            }
+            using (ManagementObject client = Utility.GetFirstWMIInstance(ccm, "SELECT ClientVersion FROM SMS_Client"))
+            {
+                if (client != null) parts.Add("client " + client["ClientVersion"]);
+            }
+            using (ManagementObject identity = Utility.GetFirstWMIInstance(ccm, "SELECT ClientId FROM CCM_Client"))
+            {
+                if (identity != null) parts.Add(identity["ClientId"] as string);
+            }
+            return parts.Count == 0 ? "No client details" : string.Join("; ", parts);
         }
 
         public static void ClientAction(IResultObject resultObject, string scheduleId, bool fullScan)

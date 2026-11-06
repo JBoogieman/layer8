@@ -299,5 +299,17 @@
       </ActionAssembly>
       <DialogId>TurnOffProvisioningMode</DialogId>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Client Info" MnemonicDisplayName="Client Info" Description="Site, management point, client version and client GUID, from the client">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>ClientInfo</DialogId>
+    </ActionDescription>
   </ActionGroups>
 </ActionDescription>
