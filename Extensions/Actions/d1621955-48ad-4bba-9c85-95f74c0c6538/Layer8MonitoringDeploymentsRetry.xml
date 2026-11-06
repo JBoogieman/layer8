@@ -36,6 +36,19 @@
         <Method>CopyFailedDevices</Method>
       </ActionAssembly>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Single" DisplayName="Re-evaluate Non-compliant Devices" MnemonicDisplayName="Re-evaluate Non-compliant Devices" Description="Re-evaluate the baseline now on every device that reports non-compliant">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.DeploymentRetry</Type>
+        <Method>ReevaluateNonCompliant</Method>
+      </ActionAssembly>
+      <MatchPattern>^6$</MatchPattern>
+      <MatchValueToTest>##SUB:FeatureType##</MatchValueToTest>
+    </ActionDescription>
     <ActionDescription Class="AssemblyType" SelectionMode="Single" DisplayName="Layer8 Settings..." MnemonicDisplayName="Layer8 Settings" Description="Devices contacted at once, the quick offline check and the log level">
       <ShowOn>
         <string>DefaultHomeTab</string>

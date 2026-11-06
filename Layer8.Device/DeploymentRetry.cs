@@ -40,6 +40,12 @@ namespace Layer8.Device
         }
 
         /// <summary>Console entry point: copies the names of the devices in Error for the selected deployment.</summary>
+        /// <summary>Console entry point for baselines: re-evaluates every non-compliant device (not in error, just drifted) now.</summary>
+        public static void ReevaluateNonCompliant(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
+        {
+            SafeAction.Run(action?.DisplayName ?? "Re-evaluate Non-compliant Devices", () => RetryCore(action, selectedResultObjects, nonCompliant: true));
+        }
+
         public static void CopyFailedDevices(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
         {
             SafeAction.Run(action?.DisplayName ?? "Copy Failed Devices", () => CopyCore(selectedResultObjects));
@@ -62,20 +68,22 @@ namespace Layer8.Device
             public readonly Dictionary<int, string> Descriptions = new Dictionary<int, string>();
         }
 
-        private static void RetryCore(ActionDescription action, IResultObject deployment)
+        private static void RetryCore(ActionDescription action, IResultObject deployment, bool nonCompliant = false)
         {
-            FailedDevices failed = FindFailed(deployment);
+            FailedDevices failed = FindFailed(deployment, nonCompliant: nonCompliant);
             if (ShowProblem(failed)) return;
 
             string question = string.Format(
-                "Retry {0} on the {1} device{2} in error ({3})?\n\nEach device {4}. Deployment status catches up at the next summarization.",
-                failed.Software, failed.Ids.Count, failed.Ids.Count == 1 ? "" : "s", failed.Collection, failed.RetryDescription);
-            if (MessageBox.Show(question, "Retry Failed Devices", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+                "{5} {0} on the {1} device{2} {6} ({3})?\n\nEach device {4}. Deployment status catches up at the next summarization.",
+                failed.Software, failed.Ids.Count, failed.Ids.Count == 1 ? "" : "s", failed.Collection, failed.RetryDescription,
+                nonCompliant ? "Re-evaluate" : "Retry", nonCompliant ? "that aren't compliant" : "in error");
+            string caption = nonCompliant ? "Re-evaluate Non-compliant Devices" : "Retry Failed Devices";
+            if (MessageBox.Show(question, caption, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
 
             List<IResultObject> devices = DevicesById(deployment.ConnectionManager, failed.Ids);
             log.InfoFormat("Retrying {0} ({1}) on {2} device(s) in error", failed.Software, failed.Collection, devices.Count);
 
-            using (DeviceProgressDialog dialog = new DeviceProgressDialog(action, devices, failed.RetryName, failed.Retry, "Retry Failed Devices: " + failed.Software))
+            using (DeviceProgressDialog dialog = new DeviceProgressDialog(action, devices, failed.RetryName, failed.Retry, caption + ": " + failed.Software))
             {
                 dialog.Total = devices.Count;
                 dialog.ShowDialog();
@@ -167,7 +175,7 @@ namespace Layer8.Device
         /// The devices in Error for a deployment. Shows nothing itself: when there's nothing to do (an unsupported
         /// deployment type, or no device in error) it says why in Problem, so a caller can show it or skip quietly.
         /// </summary>
-        private static FailedDevices FindFailed(IResultObject deployment, bool withErrorCodes = false)
+        private static FailedDevices FindFailed(IResultObject deployment, bool withErrorCodes = false, bool nonCompliant = false)
         {
             int featureType = deployment["FeatureType"].IntegerValue;
             int assignmentId = deployment["AssignmentID"].IntegerValue;
@@ -178,6 +186,12 @@ namespace Layer8.Device
             };
 
             string query, idColumn, nameColumn;
+            if (nonCompliant && featureType != BaselineDeployment)
+            {
+                failed.Problem = "Re-evaluating non-compliant devices works for configuration baseline deployments.";
+                return failed;
+            }
+
             switch (featureType)
             {
                 case ApplicationDeployment:
@@ -209,8 +223,10 @@ namespace Layer8.Device
                     failed.RetryDescription = "scans for updates and re-evaluates its update deployments now, so required updates are tried again";
                     break;
                 case BaselineDeployment:
-                    // One row per device and CI in error, with the CI's error code.
-                    query = string.Format("SELECT AssetID, AssetName, ErrorCode, ErrorDescription FROM SMS_DCMDeploymentErrorAssetDetails WHERE AssignmentID = {0}", assignmentId);
+                    // One row per device and CI in error (with the CI's error code), or per device and CI that's non-compliant.
+                    query = nonCompliant
+                        ? string.Format("SELECT AssetID, AssetName FROM SMS_DCMDeploymentNonCompliantAssetDetails WHERE AssignmentID = {0}", assignmentId)
+                        : string.Format("SELECT AssetID, AssetName, ErrorCode, ErrorDescription FROM SMS_DCMDeploymentErrorAssetDetails WHERE AssignmentID = {0}", assignmentId);
                     idColumn = "AssetID";
                     nameColumn = "AssetName";
                     string baselineName = Regex.Replace(deployment["ModelName"].StringValue ?? string.Empty, @"/\d+$", "");
@@ -233,7 +249,7 @@ namespace Layer8.Device
                     if (failed.Ids.Contains(id)) continue;
                     failed.Ids.Add(id);
                     failed.Names.Add(row[nameColumn].StringValue);
-                    if (featureType == BaselineDeployment)
+                    if (featureType == BaselineDeployment && !nonCompliant)
                     {
                         failed.ErrorCodes[id] = (uint)row["ErrorCode"].LongValue;
                         failed.Descriptions[id] = row["ErrorDescription"].StringValue;
@@ -264,7 +280,7 @@ namespace Layer8.Device
 
             if (failed.Ids.Count == 0)
             {
-                failed.Problem = string.Format("No devices are in error for {0} on {1}.\n\nDeployment status comes from state messages and summarization, so a device that failed in the last few minutes may not show yet.", failed.Software, failed.Collection);
+                failed.Problem = string.Format((nonCompliant ? "No devices are non-compliant" : "No devices are in error") + " for {0} on {1}.\n\nDeployment status comes from state messages and summarization, so a device that failed in the last few minutes may not show yet.", failed.Software, failed.Collection);
             }
             return failed;
         }
