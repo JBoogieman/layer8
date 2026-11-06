@@ -109,6 +109,43 @@ namespace Layer8.Device
         /// Console entry point: copies the selected devices' names to the clipboard, one per line. For a
         /// selected collection it copies the names of all its members instead.
         /// </summary>
+        // Copy Device Info's columns: what a ticket needs, all from the site's record, so offline devices work too.
+        private static readonly string[] InfoColumns = { "Name", "ResourceID", "ClientVersion", "CNIsOnline", "CNLastOnlineTime", "UserName", "PrimaryUser", "DeviceOS", "ADSiteName", "LastMPServerName" };
+
+        /// <summary>Console entry point: copies a tab-separated row per selected device, with a header row, for Excel or a ticket.</summary>
+        public static void CopyDeviceInfo(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
+        {
+            SafeAction.Run(action?.DisplayName ?? "Copy Device Info", () =>
+            {
+                System.Text.StringBuilder text = new System.Text.StringBuilder(string.Join("\t", InfoColumns)).AppendLine();
+                int count = 0;
+                foreach (IResultObject device in selectedObjects)
+                {
+                    text.AppendLine(string.Join("\t", InfoColumns.Select(column => ColumnText(device, column))));
+                    count++;
+                }
+                System.Windows.Forms.Clipboard.SetDataObject(text.ToString(), true, 10, 100);
+                log.InfoFormat("Copy Device Info: copied {0} device(s)", count);
+                System.Windows.Forms.MessageBox.Show(string.Format("Copied {0} device{1} (pastes into Excel).", count, count == 1 ? "" : "s"), "Copy Device Info",
+                    System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+            });
+        }
+
+        /// <summary>A column as text, or empty when this node's objects don't have it (collection members have fewer).</summary>
+        private static string ColumnText(IResultObject device, string property)
+        {
+            try
+            {
+                object value = device[property].ObjectValue;
+                if (value is DateTime when) return when.Year > 2000 ? when.ToString("g") : string.Empty;
+                return value?.ToString() ?? string.Empty;
+            }
+            catch (Exception)
+            {
+                return string.Empty;
+            }
+        }
+
         public static void CopyNames(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
         {
             SafeAction.Run(action?.DisplayName ?? "Copy Names", () => CopyNamesCore(action, selectedObjects));
