@@ -119,6 +119,7 @@ namespace Layer8.Device
             { nameof(DefenderStatus), null },
             { nameof(DefenderQuickScan), "Start a Microsoft Defender quick scan on {0}?\n\nA quick scan takes a few minutes and uses some CPU and disk while it runs." },
             { nameof(BitLockerStatus), null },
+            { nameof(CollectLogs), null },
         };
 
         private static void ProcessAction(ScopeNode scopeNode, ActionDescription action, IResultObject resultObjects, string actionName, Func<IResultObject, object> run,
@@ -927,6 +928,44 @@ namespace Layer8.Device
                 }
                 string protectedText = protection == 1 ? "protected" : protection == 0 ? "not protected" : "protection unknown";
                 return "C: " + protectedText + (state.Length > 0 ? ", " + state : "");
+            }
+        }
+
+        /// <summary>Copies the device's ConfigMgr client logs and zips them on this computer's desktop, in Layer8 Logs.</summary>
+        public static string CollectLogs(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            string source = string.Format(@"\\{0}\C$\Windows\CCM\Logs", host);
+            if (!Directory.Exists(source)) throw new DeviceOfflineException("Can't reach " + source);
+
+            string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Layer8 Logs");
+            string work = Path.Combine(Path.GetTempPath(), "Layer8-" + host + "-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(work);
+            try
+            {
+                int copied = 0;
+                // .log and the rolled-over .lo_ files. The client has them open, so share them both ways: File.Copy
+                // asks for read-only sharing and fails on a log that's being written.
+                foreach (string file in Directory.EnumerateFiles(source, "*.lo?"))
+                {
+                    using (FileStream input = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                    using (FileStream output = File.Create(Path.Combine(work, Path.GetFileName(file))))
+                    {
+                        input.CopyTo(output);
+                    }
+                    copied++;
+                }
+
+                Directory.CreateDirectory(folder);
+                string zip = Path.Combine(folder, string.Format("{0} {1:yyyy-MM-dd HHmm}.zip", host, DateTime.Now));
+                if (File.Exists(zip)) File.Delete(zip);
+                System.IO.Compression.ZipFile.CreateFromDirectory(work, zip, System.IO.Compression.CompressionLevel.Optimal, false);
+                log.InfoFormat("Collected {0} client logs from {1} into {2}", copied, host, zip);
+                return string.Format("{0} logs saved to {1}", copied, zip);
+            }
+            finally
+            {
+                try { Directory.Delete(work, true); } catch (IOException) { }
             }
         }
 

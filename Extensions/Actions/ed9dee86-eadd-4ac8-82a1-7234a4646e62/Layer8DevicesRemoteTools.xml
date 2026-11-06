@@ -115,6 +115,18 @@
       </ActionAssembly>
       <DialogId>ClientLogCMTrace</DialogId>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Collect Client Logs" MnemonicDisplayName="Collect Client Logs" Description="Copy the ConfigMgr client logs and zip them to Desktop\Layer8 Logs">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>CollectLogs</DialogId>
+    </ActionDescription>
     <ActionDescription Class="Separator">
       <ShowOn>
         <string>ContextMenu</string>
