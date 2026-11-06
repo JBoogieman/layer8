@@ -51,6 +51,10 @@ namespace Layer8.Device
         private readonly ActionDescription action;
         private readonly HashSet<ListViewItem> retryable = new HashSet<ListViewItem>();
         private Button runAgain;
+
+        // One summary line in the log per run, for change tickets.
+        private readonly System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
+        private bool summaryLogged;
         private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(typeof(DeviceProgressDialog));
 
         public DeviceProgressDialog()
@@ -205,6 +209,8 @@ namespace Layer8.Device
 
         private void DeviceProgressDialog_Shown(object sender, EventArgs e)
         {
+            stopwatch.Start();
+
             // Widen here, not in the constructor: the console's dialog base sizes the window while it loads, so
             // an earlier size doesn't stick. 600 (at 100% scaling) fits answers like Quick Status's; the controls
             // are anchored, so they stretch with it.
@@ -358,6 +364,7 @@ namespace Layer8.Device
                 IsLoading = false;
                 buttonOK.Enabled = true;
                 EnableRunAgain();
+                LogSummary();
 
                 // Fit the Status column to the longest answer, never narrower than the space it has. The console's
                 // list wraps a real ListView, so a header's Width doesn't reach it; its own AutoResizeColumn does.
@@ -371,6 +378,15 @@ namespace Layer8.Device
                 listViewHosts.AutoResizeColumn(columnHeaderStatus.Index,
                     longest + LogicalToDeviceUnits(16) > available ? ColumnHeaderAutoResizeStyle.ColumnContent : ColumnHeaderAutoResizeStyle.HeaderSize);
             }
+        }
+
+        private void LogSummary()
+        {
+            if (summaryLogged || Total == 0) return;
+            summaryLogged = true;
+            stopwatch.Stop();
+            log.InfoFormat("{0} finished: {1} devices, {2} completed, {3} offline, {4} failed, {5} skipped, in {6:mm\\:ss}",
+                Title, Total, completed, offline, failed, skipped, stopwatch.Elapsed);
         }
 
         private void EnableRunAgain()
