@@ -371,5 +371,17 @@
       </ActionAssembly>
       <DialogId>DefenderQuickScan</DialogId>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="BitLocker Status" MnemonicDisplayName="BitLocker Status" Description="Whether C: is protected by BitLocker and how far encryption has got (no recovery keys)">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>BitLockerStatus</DialogId>
+    </ActionDescription>
   </ActionGroups>
 </ActionDescription>

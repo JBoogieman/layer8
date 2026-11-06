@@ -118,6 +118,7 @@ namespace Layer8.Device
             { nameof(ResetPolicy), "Reset all ConfigMgr policy on {0}?\n\nEach client drops its machine policy and downloads it again, which takes a few minutes and re-runs the evaluation of required deployments." },
             { nameof(DefenderStatus), null },
             { nameof(DefenderQuickScan), "Start a Microsoft Defender quick scan on {0}?\n\nA quick scan takes a few minutes and uses some CPU and disk while it runs." },
+            { nameof(BitLockerStatus), null },
         };
 
         private static void ProcessAction(ScopeNode scopeNode, ActionDescription action, IResultObject resultObjects, string actionName, Func<IResultObject, object> run,
@@ -900,6 +901,33 @@ namespace Layer8.Device
             }
             log.InfoFormat("Defender quick scan started on {0}", host);
             return "Quick scan started (Defender Status shows it once it's done)";
+        }
+
+        // Win32_EncryptableVolume.GetConversionStatus: ConversionStatus.
+        private static readonly string[] ConversionStates = { "fully decrypted", "fully encrypted", "encrypting", "decrypting", "encryption paused", "decryption paused" };
+
+        /// <summary>Is C: protected, and is it still encrypting? Read-only; never touches recovery passwords.</summary>
+        public static string BitLockerStatus(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            ManagementScope scope = Utility.GetWMIScope(host, @"cimv2\Security\MicrosoftVolumeEncryption");
+            using (ManagementObject volume = Utility.GetFirstWMIInstance(scope, "SELECT * FROM Win32_EncryptableVolume WHERE DriveLetter = 'C:'"))
+            {
+                if (volume == null) return "C: isn't an encryptable volume";
+                uint protection = Convert.ToUInt32(volume["ProtectionStatus"] ?? 2u);   // 0 off, 1 on, 2 unknown (locked)
+                string state = "";
+                using (ManagementBaseObject conversion = volume.InvokeMethod("GetConversionStatus", null, null))
+                {
+                    if (conversion != null && Convert.ToUInt32(conversion["ReturnValue"]) == 0)
+                    {
+                        uint status = Convert.ToUInt32(conversion["ConversionStatus"]);
+                        state = status < ConversionStates.Length ? ConversionStates[status] : "conversion state " + status;
+                        if (status == 2 || status == 3 || status == 4 || status == 5) state += " " + conversion["EncryptionPercentage"] + "%";
+                    }
+                }
+                string protectedText = protection == 1 ? "protected" : protection == 0 ? "not protected" : "protection unknown";
+                return "C: " + protectedText + (state.Length > 0 ? ", " + state : "");
+            }
         }
 
         public static void ClientAction(IResultObject resultObject, string scheduleId, bool fullScan)
