@@ -163,6 +163,15 @@ namespace Layer8.Device
                 return;
             }
 
+            // A big run asks first (Layer8 Settings), unless the action already asked its own question.
+            int confirmAbove = Layer8Settings.ConfirmAbove;
+            if (confirmQuestion == null && confirmAbove > 0 && total > confirmAbove &&
+                MessageBox.Show(string.Format("Run {0} on {1}?", action.DisplayName, targetDescription), action.DisplayName,
+                                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            {
+                return;
+            }
+
             if (showProgressDialog)
             {
                 deviceProgressDialog = new DeviceProgressDialog(action, resultObjects, actionName, run, title)

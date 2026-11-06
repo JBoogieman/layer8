@@ -36,6 +36,10 @@ namespace Layer8
             numericDevicesAtOnce.Maximum = Layer8Settings.MaxDevicesAtOnce;
             numericDevicesAtOnce.Value = Layer8Settings.DevicesAtOnce;
 
+            numericConfirmAbove.Minimum = Layer8Settings.MinConfirmAbove;
+            numericConfirmAbove.Maximum = Layer8Settings.MaxConfirmAbove;
+            numericConfirmAbove.Value = Layer8Settings.ConfirmAbove;
+
             checkReachable.Checked = Layer8Settings.CheckReachable;
             numericReachableSeconds.Minimum = Layer8Settings.MinReachableSeconds;
             numericReachableSeconds.Maximum = Layer8Settings.MaxReachableSeconds;
@@ -64,6 +68,7 @@ namespace Layer8
             try
             {
                 Layer8Settings.DevicesAtOnce = (int)numericDevicesAtOnce.Value;
+                Layer8Settings.ConfirmAbove = (int)numericConfirmAbove.Value;
                 Layer8Settings.CheckReachable = checkReachable.Checked;
                 Layer8Settings.ReachableSeconds = (int)numericReachableSeconds.Value;
                 if (comboLogLevel.SelectedItem is string level && Enum.TryParse(level, out LogLevel parsed))
@@ -80,8 +85,8 @@ namespace Layer8
                 return false;
             }
 
-            log.InfoFormat("Settings saved: {0} devices at once; offline check {1}, {2} s; log level {3}",
-                (int)numericDevicesAtOnce.Value, checkReachable.Checked ? "on" : "off", (int)numericReachableSeconds.Value, comboLogLevel.SelectedItem);
+            log.InfoFormat("Settings saved: {0} devices at once; ask above {1}; offline check {2}, {3} s; log level {4}",
+                (int)numericDevicesAtOnce.Value, (int)numericConfirmAbove.Value, checkReachable.Checked ? "on" : "off", (int)numericReachableSeconds.Value, comboLogLevel.SelectedItem);
 
             Dirty = false;
 

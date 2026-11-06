@@ -15,6 +15,10 @@ namespace Layer8
         public const int MinDevicesAtOnce = 1;
         public const int MaxDevicesAtOnce = 256;
 
+        public const int DefaultConfirmAbove = 100;
+        public const int MinConfirmAbove = 0;
+        public const int MaxConfirmAbove = 100000;
+
         public const bool DefaultCheckReachable = true;
 
         public const int DefaultReachableSeconds = 2;
@@ -22,6 +26,7 @@ namespace Layer8
         public const int MaxReachableSeconds = 30;
 
         private const string DevicesAtOnceValue = "DevicesAtOnce";
+        private const string ConfirmAboveValue = "ConfirmAbove";
         private const string CheckReachableValue = "CheckReachable";
         private const string ReachableSecondsValue = "ReachableSeconds";
 
@@ -30,6 +35,16 @@ namespace Layer8
         {
             get { return ReadInt(DevicesAtOnceValue, DefaultDevicesAtOnce, MinDevicesAtOnce, MaxDevicesAtOnce); }
             set { WriteInt(DevicesAtOnceValue, Clamp(value, MinDevicesAtOnce, MaxDevicesAtOnce)); }
+        }
+
+        /// <summary>
+        /// Ask before an action runs on more devices than this (0 = never ask). Machine Policy on All Systems is
+        /// one click; this makes a fleet-wide run a deliberate choice.
+        /// </summary>
+        public static int ConfirmAbove
+        {
+            get { return ReadInt(ConfirmAboveValue, DefaultConfirmAbove, MinConfirmAbove, MaxConfirmAbove); }
+            set { WriteInt(ConfirmAboveValue, Clamp(value, MinConfirmAbove, MaxConfirmAbove)); }
         }
 
         /// <summary>

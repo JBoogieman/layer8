@@ -31,6 +31,8 @@
             this.groupBoxDevices = new System.Windows.Forms.GroupBox();
             this.labelDevicesAtOnce = new System.Windows.Forms.Label();
             this.numericDevicesAtOnce = new System.Windows.Forms.NumericUpDown();
+            this.labelConfirmAbove = new System.Windows.Forms.Label();
+            this.numericConfirmAbove = new System.Windows.Forms.NumericUpDown();
             this.checkReachable = new System.Windows.Forms.CheckBox();
             this.labelReachableSeconds = new System.Windows.Forms.Label();
             this.numericReachableSeconds = new System.Windows.Forms.NumericUpDown();
@@ -44,6 +46,7 @@
             this.labelSavedFor = new System.Windows.Forms.Label();
             this.groupBoxDevices.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericDevicesAtOnce)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericConfirmAbove)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericReachableSeconds)).BeginInit();
             this.groupBoxLogging.SuspendLayout();
             this.SuspendLayout();
@@ -54,13 +57,15 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBoxDevices.Controls.Add(this.labelDevicesAtOnce);
             this.groupBoxDevices.Controls.Add(this.numericDevicesAtOnce);
+            this.groupBoxDevices.Controls.Add(this.labelConfirmAbove);
+            this.groupBoxDevices.Controls.Add(this.numericConfirmAbove);
             this.groupBoxDevices.Controls.Add(this.checkReachable);
             this.groupBoxDevices.Controls.Add(this.labelReachableSeconds);
             this.groupBoxDevices.Controls.Add(this.numericReachableSeconds);
             this.groupBoxDevices.Controls.Add(this.labelReachableHelp);
             this.groupBoxDevices.Location = new System.Drawing.Point(10, 10);
             this.groupBoxDevices.Name = "groupBoxDevices";
-            this.groupBoxDevices.Size = new System.Drawing.Size(360, 160);
+            this.groupBoxDevices.Size = new System.Drawing.Size(360, 190);
             this.groupBoxDevices.TabIndex = 0;
             this.groupBoxDevices.TabStop = false;
             this.groupBoxDevices.Text = "Actions on many devices";
@@ -81,11 +86,28 @@
             this.numericDevicesAtOnce.Size = new System.Drawing.Size(70, 20);
             this.numericDevicesAtOnce.TabIndex = 1;
             this.numericDevicesAtOnce.ValueChanged += new System.EventHandler(this.Setting_Changed);
+            // 
+            // labelConfirmAbove
+            // 
+            this.labelConfirmAbove.AutoSize = true;
+            this.labelConfirmAbove.Location = new System.Drawing.Point(12, 56);
+            this.labelConfirmAbove.Name = "labelConfirmAbove";
+            this.labelConfirmAbove.Size = new System.Drawing.Size(220, 13);
+            this.labelConfirmAbove.TabIndex = 6;
+            this.labelConfirmAbove.Text = "Ask before running on more devices than:";
+            // 
+            // numericConfirmAbove
+            // 
+            this.numericConfirmAbove.Location = new System.Drawing.Point(270, 54);
+            this.numericConfirmAbove.Name = "numericConfirmAbove";
+            this.numericConfirmAbove.Size = new System.Drawing.Size(70, 20);
+            this.numericConfirmAbove.TabIndex = 7;
+            this.numericConfirmAbove.ValueChanged += new System.EventHandler(this.Setting_Changed);
             //
             // checkReachable
             //
             this.checkReachable.AutoSize = true;
-            this.checkReachable.Location = new System.Drawing.Point(15, 56);
+            this.checkReachable.Location = new System.Drawing.Point(15, 86);
             this.checkReachable.Name = "checkReachable";
             this.checkReachable.Size = new System.Drawing.Size(270, 17);
             this.checkReachable.TabIndex = 2;
@@ -96,7 +118,7 @@
             // labelReachableSeconds
             //
             this.labelReachableSeconds.AutoSize = true;
-            this.labelReachableSeconds.Location = new System.Drawing.Point(32, 84);
+            this.labelReachableSeconds.Location = new System.Drawing.Point(32, 114);
             this.labelReachableSeconds.Name = "labelReachableSeconds";
             this.labelReachableSeconds.Size = new System.Drawing.Size(150, 13);
             this.labelReachableSeconds.TabIndex = 3;
@@ -104,7 +126,7 @@
             //
             // numericReachableSeconds
             //
-            this.numericReachableSeconds.Location = new System.Drawing.Point(270, 82);
+            this.numericReachableSeconds.Location = new System.Drawing.Point(270, 112);
             this.numericReachableSeconds.Name = "numericReachableSeconds";
             this.numericReachableSeconds.Size = new System.Drawing.Size(70, 20);
             this.numericReachableSeconds.TabIndex = 4;
@@ -114,7 +136,7 @@
             //
             this.labelReachableHelp.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.labelReachableHelp.Location = new System.Drawing.Point(12, 112);
+            this.labelReachableHelp.Location = new System.Drawing.Point(12, 142);
             this.labelReachableHelp.Name = "labelReachableHelp";
             this.labelReachableHelp.Size = new System.Drawing.Size(336, 40);
             this.labelReachableHelp.TabIndex = 5;
@@ -129,7 +151,7 @@
             this.groupBoxLogging.Controls.Add(this.labelLogFileCaption);
             this.groupBoxLogging.Controls.Add(this.labelLogFile);
             this.groupBoxLogging.Controls.Add(this.buttonOpenLogFolder);
-            this.groupBoxLogging.Location = new System.Drawing.Point(10, 180);
+            this.groupBoxLogging.Location = new System.Drawing.Point(10, 210);
             this.groupBoxLogging.Name = "groupBoxLogging";
             this.groupBoxLogging.Size = new System.Drawing.Size(360, 130);
             this.groupBoxLogging.TabIndex = 1;
@@ -189,11 +211,11 @@
             //
             this.labelSavedFor.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.labelSavedFor.Location = new System.Drawing.Point(10, 322);
+            this.labelSavedFor.Location = new System.Drawing.Point(10, 352);
             this.labelSavedFor.Name = "labelSavedFor";
             this.labelSavedFor.Size = new System.Drawing.Size(360, 30);
             this.labelSavedFor.TabIndex = 2;
-            this.labelSavedFor.Text = "Saved for your Windows account. Changes apply to the next action you start.";
+            this.labelSavedFor.Text = "Saved for your Windows account. Changes apply to the next action you start. 0 devices means never ask.";
             //
             // OptionsControl
             //
@@ -203,10 +225,11 @@
             this.Controls.Add(this.groupBoxLogging);
             this.Controls.Add(this.labelSavedFor);
             this.Name = "OptionsControl";
-            this.Size = new System.Drawing.Size(380, 420);
+            this.Size = new System.Drawing.Size(380, 450);
             this.groupBoxDevices.ResumeLayout(false);
             this.groupBoxDevices.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericDevicesAtOnce)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericConfirmAbove)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericReachableSeconds)).EndInit();
             this.groupBoxLogging.ResumeLayout(false);
             this.groupBoxLogging.PerformLayout();
@@ -219,6 +242,8 @@
         private System.Windows.Forms.GroupBox groupBoxDevices;
         private System.Windows.Forms.Label labelDevicesAtOnce;
         private System.Windows.Forms.NumericUpDown numericDevicesAtOnce;
+        private System.Windows.Forms.Label labelConfirmAbove;
+        private System.Windows.Forms.NumericUpDown numericConfirmAbove;
         private System.Windows.Forms.CheckBox checkReachable;
         private System.Windows.Forms.Label labelReachableSeconds;
         private System.Windows.Forms.NumericUpDown numericReachableSeconds;
