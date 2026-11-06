@@ -2,6 +2,8 @@
 using Microsoft.ConfigurationManagement.AdminConsole.Schema;
 using Microsoft.ConfigurationManagement.ManagementProvider;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Management;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -44,6 +46,11 @@ namespace Layer8.Device
         // Placeholder records (Unknown Computer, Provisioning Device): counted apart, so they aren't mistaken for offline devices.
         private int skipped;
         private Label labelSkipped;
+
+        // Run Again on Failed: the rows that ended offline or in error, and what's needed to run them again.
+        private readonly ActionDescription action;
+        private readonly HashSet<ListViewItem> retryable = new HashSet<ListViewItem>();
+        private Button runAgain;
         private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(typeof(DeviceProgressDialog));
 
         public DeviceProgressDialog()
@@ -87,6 +94,7 @@ namespace Layer8.Device
         public DeviceProgressDialog(ActionDescription action, System.Collections.IEnumerable selectedResultObjects, string actionName, Func<IResultObject, object> run, string title = null) : this()
         {
             resultObjects = selectedResultObjects;
+            this.action = action;
             this.actionName = actionName;
             this.run = run;
             checkReachable = Layer8Settings.CheckReachable && actionName != nameof(ClientActions.OnlineStatus);
@@ -115,6 +123,18 @@ namespace Layer8.Device
             exportResults.Click += (s, e) => ExportResults();
             Controls.Add(exportResults);
 
+            // Run Again on Failed: a new run on just the devices that ended offline or in error.
+            runAgain = new Button
+            {
+                Text = "Run Again on Failed",
+                Size = new System.Drawing.Size(125, buttonOK.Height),
+                Location = new System.Drawing.Point(exportResults.Right + 6, buttonOK.Top),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
+                Enabled = false,
+            };
+            runAgain.Click += (s, e) => RunAgainOnFailed();
+            Controls.Add(runAgain);
+
             labelSkipped = new Label
             {
                 AutoSize = true,
@@ -123,6 +143,22 @@ namespace Layer8.Device
                 Visible = false,
             };
             Controls.Add(labelSkipped);
+        }
+
+        private void RunAgainOnFailed()
+        {
+            List<IResultObject> again;
+            lock (retryable)
+            {
+                again = retryable.Select(row => (IResultObject)row.Tag).ToList();
+            }
+            if (again.Count == 0) return;
+            log.InfoFormat("{0}: running again on {1} device(s) that failed", Title, again.Count);
+            using (DeviceProgressDialog dialog = new DeviceProgressDialog(action, again, actionName, run, Title + " (again)"))
+            {
+                dialog.Total = again.Count;
+                dialog.ShowDialog();
+            }
         }
 
         private void ExportResults()
@@ -186,7 +222,8 @@ namespace Layer8.Device
                 ListViewItem item = new ListViewItem()
                 {
                     Text = resultObject["Name"].StringValue,
-                    SubItems = { "Queued" }
+                    SubItems = { "Queued" },
+                    Tag = resultObject,   // for Run Again on Failed
                 };
 
                 listViewHosts.Items.Add(item);
@@ -278,6 +315,7 @@ namespace Layer8.Device
                     Interlocked.Increment(ref failed);
                 }
                 Interlocked.Increment(ref other);
+                lock (retryable) retryable.Add(item);
                 log.Warn(string.Format("{0} on {1}: {2}", actionName, item.Text, status), root);
             }
 
@@ -319,6 +357,7 @@ namespace Layer8.Device
             {
                 IsLoading = false;
                 buttonOK.Enabled = true;
+                EnableRunAgain();
 
                 // Fit the Status column to the longest answer, never narrower than the space it has. The console's
                 // list wraps a real ListView, so a header's Width doesn't reach it; its own AutoResizeColumn does.
@@ -334,11 +373,18 @@ namespace Layer8.Device
             }
         }
 
+        private void EnableRunAgain()
+        {
+            if (runAgain == null) return;
+            lock (retryable) runAgain.Enabled = retryable.Count > 0;
+        }
+
         private void ButtonCancel_Click(object sender, EventArgs e)
         {
             CancellationTokenSource.Cancel();
             IsLoading = false;
             buttonOK.Enabled = true;
+            EnableRunAgain();
         }
 
         private void ButtonOK_Click(object sender, EventArgs e)
