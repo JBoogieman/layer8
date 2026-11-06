@@ -87,6 +87,7 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="ClientCache.cs" />
+    <Compile Include="ContentRedistribute.cs" />
     <Compile Include="DeviceProgressDialog.cs">
       <SubType>Form</SubType>
     </Compile>

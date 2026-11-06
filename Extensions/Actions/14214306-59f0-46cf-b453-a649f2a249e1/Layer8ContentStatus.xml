@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription NamespaceGuid="5C2E9B47-3A61-4F0D-8E2B-7D94A1C6B350" Class="Group" SelectionMode="Both" DisplayName="Layer8" MnemonicDisplayName="Layer8" Description="Layer8 tools for this content" NodeInConsole="14214306-59f0-46cf-b453-a649f2a249e1" RibbonDisplayType="TextAndSmallImage">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <ImagesDescription>
+    <ResourceAssembly>
+      <Assembly>Layer8.dll</Assembly>
+      <Type>Layer8.Properties.Resources.resources</Type>
+    </ResourceAssembly>
+    <ImageResourceName>tools</ImageResourceName>
+  </ImagesDescription>
+  <ActionGroups>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Redistribute Failed Content" MnemonicDisplayName="Redistribute Failed Content" Description="Send the selected content again to every distribution point where it's retrying or failed">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ContentRedistribute</Type>
+        <Method>RedistributeFailed</Method>
+      </ActionAssembly>
+    </ActionDescription>
+  </ActionGroups>
+</ActionDescription>
