@@ -51,6 +51,8 @@ namespace Layer8.Device
             public string RetryName;
             public Func<IResultObject, object> Retry;
             public string RetryDescription;
+            // Set when there's nothing to do: the deployment type isn't supported, or no device is in error.
+            public string Problem;
             public readonly List<int> Ids = new List<int>();
             public readonly List<string> Names = new List<string>();
             // By device ID: the error code, and the status text where the site has one (software updates do).
@@ -61,7 +63,7 @@ namespace Layer8.Device
         private static void RetryCore(ActionDescription action, IResultObject deployment)
         {
             FailedDevices failed = FindFailed(deployment);
-            if (failed == null || failed.Ids.Count == 0) return;
+            if (ShowProblem(failed)) return;
 
             string question = string.Format(
                 "Retry {0} on the {1} device{2} in error ({3})?\n\nEach device {4}. Deployment status catches up at the next summarization.",
@@ -85,7 +87,7 @@ namespace Layer8.Device
         private static void CopyCore(IResultObject deployment)
         {
             FailedDevices failed = FindFailed(deployment, withErrorCodes: true);
-            if (failed == null || failed.Ids.Count == 0) return;
+            if (ShowProblem(failed)) return;
 
             var rows = failed.Ids.Select((id, i) => new
             {
@@ -116,6 +118,14 @@ namespace Layer8.Device
 
             log.InfoFormat("Copied {0} failed device(s) with error codes for {1} ({2} distinct errors)", rows.Count, failed.Software, groups.Count);
             MessageBox.Show(summary.ToString(), "Copy Failed Devices", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        /// <summary>Shows why there's nothing to do, if there isn't. True means stop.</summary>
+        private static bool ShowProblem(FailedDevices failed)
+        {
+            if (failed.Problem == null) return false;
+            MessageBox.Show(failed.Problem, "Layer8", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return true;
         }
 
         /// <summary>Small codes are installer and Windows exit codes, so they read best in decimal too: "1603 (0x643)".</summary>
@@ -152,8 +162,8 @@ namespace Layer8.Device
         }
 
         /// <summary>
-        /// The devices in Error for a deployment, or null when it isn't an application or software update deployment.
-        /// Explains itself (unsupported type, nothing in error) so callers can simply stop.
+        /// The devices in Error for a deployment. Shows nothing itself: when there's nothing to do (an unsupported
+        /// deployment type, or no device in error) it says why in Problem, so a caller can show it or skip quietly.
         /// </summary>
         private static FailedDevices FindFailed(IResultObject deployment, bool withErrorCodes = false)
         {
@@ -197,8 +207,8 @@ namespace Layer8.Device
                     failed.RetryDescription = "scans for updates and re-evaluates its update deployments now, so required updates are tried again";
                     break;
                 default:
-                    MessageBox.Show("This works for application and software update deployments.", "Layer8", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return null;
+                    failed.Problem = "This works for application and software update deployments.";
+                    return failed;
             }
 
             using (IResultObject rows = deployment.ConnectionManager.QueryProcessor.ExecuteQuery(query))
@@ -236,9 +246,7 @@ namespace Layer8.Device
 
             if (failed.Ids.Count == 0)
             {
-                MessageBox.Show(
-                    string.Format("No devices are in error for {0} on {1}.\n\nDeployment status comes from state messages and summarization, so a device that failed in the last few minutes may not show yet.", failed.Software, failed.Collection),
-                    "Layer8", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                failed.Problem = string.Format("No devices are in error for {0} on {1}.\n\nDeployment status comes from state messages and summarization, so a device that failed in the last few minutes may not show yet.", failed.Software, failed.Collection);
             }
             return failed;
         }
