@@ -173,6 +173,8 @@ namespace Layer8.Device
                     return Program(Path.Combine(windows, "explorer.exe"), string.Format(@"\\{0}\C$", name));
                 case "ClientLogs":
                     return Program(Path.Combine(windows, "explorer.exe"), string.Format(@"\\{0}\C$\Windows\CCM\Logs", name));
+                case "BrowseCache":
+                    return Program(Path.Combine(windows, "explorer.exe"), string.Format(@"\\{0}\C$\Windows\ccmcache", name));
                 case "ComputerManagement":
                     return Program(Path.Combine(system, "mmc.exe"), "compmgmt.msc /computer=" + name);
                 case "EventViewer":
