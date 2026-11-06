@@ -311,5 +311,22 @@
       </ActionAssembly>
       <DialogId>TurnOffProvisioningMode</DialogId>
     </ActionDescription>
+    <ActionDescription Class="Separator">
+      <ShowOn>
+        <string>ContextMenu</string>
+        <string>DefaultHomeTab</string>
+      </ShowOn>
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Layer8 Settings..." MnemonicDisplayName="Layer8 Settings" Description="Devices contacted at once, the quick offline check and the log level">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.Device</Type>
+        <Method>OpenSettings</Method>
+      </ActionAssembly>
+    </ActionDescription>
   </ActionGroups>
 </ActionDescription>
