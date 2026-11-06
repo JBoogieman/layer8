@@ -25,6 +25,10 @@
     Redistribute Failed Content on (Monitoring > Distribution Status > Content Status). To see a redistribution
     succeed, create the share on CM01 and redistribute again; delete it afterwards so the package breaks again.
 
+    "Layer8 Test Baseline" holds two script CIs: "Layer8 Error CI" throws, so its devices end in Error, and
+    "Layer8 Drift CI" returns NonCompliant, so they're non-compliant. It's deployed to the collection daily.
+    That's the baseline to try Retry Failed Devices and Re-evaluate Non-compliant Devices on.
+
     The fake recovery key has Key ID 4C415938-0000-4000-8000-000000000001 (its first 8 characters spell "LAY8"
     in hex) and the obviously fake password 111111-222222-333333-444444-555555-666666-777777-888888.
 
@@ -58,6 +62,8 @@ $appName = 'Layer8 Test App'
 $failAppName = 'Layer8 Fail App'
 $availableFailAppName = 'Layer8 Available Fail App'
 $brokenPackageName = 'Layer8 Broken Package'
+$baselineName = 'Layer8 Test Baseline'
+$baselineCIs = 'Layer8 Error CI', 'Layer8 Drift CI'
 $keyGuid = [guid]'4C415938-0000-4000-8000-000000000001'
 $volumeGuid = [guid]'4C415938-0000-4000-8000-0000000000FF'
 
@@ -121,6 +127,45 @@ function New-LabBrokenPackage {
     Write-Host "Created $brokenPackageName and sent it to $dp (its source doesn't exist, so it fails)."
 }
 
+# --- ConfigMgr: a baseline that errors and drifts --------------------------------------------------------
+
+function New-LabScriptCI([string]$Name, [string]$Discovery) {
+    $ci = Get-CMConfigurationItem -Name $Name
+    if ($ci) { return $ci }
+    $ci = New-CMConfigurationItem -Name $Name -CreationType WindowsOS
+    Add-CMComplianceSettingScript -InputObject $ci -SettingName "$Name setting" -DataType String `
+        -DiscoveryScriptLanguage PowerShell -DiscoveryScriptText $Discovery `
+        -ValueRule -ExpressionOperator IsEquals -ExpectedValue 'Compliant' -RuleName "$Name rule" `
+        -NoncomplianceSeverity Warning -Is64Bit | Out-Null
+    Get-CMConfigurationItem -Name $Name
+}
+
+function New-LabBaseline {
+    if (Get-CMBaseline -Name $baselineName) {
+        Write-Host "$baselineName already exists."
+        return
+    }
+    $errorCI = New-LabScriptCI $baselineCIs[0] 'throw "Layer8 test: this setting always errors"'
+    $driftCI = New-LabScriptCI $baselineCIs[1] "'NonCompliant'"
+    New-CMBaseline -Name $baselineName | Out-Null
+    Set-CMBaseline -Name $baselineName -AddOSConfigurationItem $errorCI.CI_ID, $driftCI.CI_ID
+    New-CMBaselineDeployment -Name $baselineName -CollectionName $Collection `
+        -Schedule (New-CMSchedule -RecurInterval Days -RecurCount 1) | Out-Null
+    Write-Host "Created $baselineName (one CI errors, one is non-compliant) and deployed it to $Collection."
+}
+
+function Remove-LabBaseline {
+    if (Get-CMBaseline -Name $baselineName) {
+        Get-CMBaselineDeployment -Name $baselineName | Remove-CMBaselineDeployment -Force
+        Remove-CMBaseline -Name $baselineName -Force
+        Write-Host "Removed $baselineName and its deployment."
+    }
+    foreach ($name in $baselineCIs) {
+        $ci = Get-CMConfigurationItem -Name $name
+        if ($ci) { Remove-CMConfigurationItem -Id $ci.CI_ID -Force }
+    }
+}
+
 # The console installs its PowerShell module next to its binaries; importing it creates the site drive (LAB:).
 Import-Module (Join-Path (Split-Path $env:SMS_ADMIN_UI_PATH -Parent) 'ConfigurationManager.psd1')
 $siteDrive = Get-PSDrive -PSProvider CMSite -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -133,6 +178,7 @@ try {
         Remove-LabApp $failAppName
         Remove-LabApp $availableFailAppName
         Remove-LabBrokenPackage
+        Remove-LabBaseline
     }
     else {
         New-LabApp $appName 'SOFTWARE\Layer8Test' 'cmd.exe /c reg add HKLM\SOFTWARE\Layer8Test /v Installed /d 1 /f /reg:64'
@@ -140,6 +186,7 @@ try {
         New-LabApp $failAppName 'SOFTWARE\Layer8FailTest' 'cmd.exe /c exit 1603' -Required
         New-LabApp $availableFailAppName 'SOFTWARE\Layer8FailTest2' 'cmd.exe /c exit 1603'
         New-LabBrokenPackage
+        New-LabBaseline
     }
 }
 finally {
