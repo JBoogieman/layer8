@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<SmsFormData FormatVersion="1.0" xmlns="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework">
+  <Form Id="{7A3D5E21-4C86-4B9F-A0D2-E15B93C87F44}" CustomData="RemoveResourcesList" FormType="CustomDialog">
+    <Assembly Name="Layer8" Namespace="Layer8.CollectionManagement" ClassType="RemoveResourcesListDialog" />
+  </Form>
+</SmsFormData>

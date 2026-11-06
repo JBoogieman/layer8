@@ -182,10 +182,24 @@ namespace Layer8.CollectionManagement
 
         private void AddToCollectionAndClose()
         {
-            List<IResultObject> list = new List<IResultObject>();
-            foreach (ListViewItem listViewItem in listViewSelectedResources.Items)
+            List<IResultObject> resources = listViewSelectedResources.Items.Cast<ListViewItem>().Select(item => (IResultObject)item.Tag).ToList();
+            if (!ApplyToCollection(resources)) return;
+
+            DataUpdatedDelegate(this, new List<PropertyDataUpdateItem>()
             {
-                IResultObject resource = (IResultObject)listViewItem.Tag;
+                new PropertyDataUpdateItem(SelectedObject, PropertyDataUpdateAction.Update)
+            });
+
+            DialogResult = DialogResult.OK;
+            Close();
+        }
+
+        /// <summary>Adds a direct rule per device. Remove Resources List overrides this. False keeps the window open.</summary>
+        protected virtual bool ApplyToCollection(List<IResultObject> resources)
+        {
+            List<IResultObject> list = new List<IResultObject>();
+            foreach (IResultObject resource in resources)
+            {
                 IResultObject instance = ConnectionManager.CreateEmbeddedObjectInstance("SMS_CollectionRuleDirect");
                 instance["ResourceClassName"].StringValue = "SMS_R_System";
                 instance["RuleName"].StringValue = resource["Name"].StringValue;
@@ -200,14 +214,7 @@ namespace Layer8.CollectionManagement
                     list
                 }
             });
-
-            DataUpdatedDelegate(this, new List<PropertyDataUpdateItem>()
-            {
-                new PropertyDataUpdateItem(SelectedObject, PropertyDataUpdateAction.Update)
-            });
-
-            DialogResult = DialogResult.OK;
-            Close();
+            return true;
         }
 
         private void ListViewSelectedResources_MouseDoubleClick(object sender, MouseEventArgs e)
@@ -231,7 +238,7 @@ namespace Layer8.CollectionManagement
         {
             if (listViewSelectedResources.Items.Count == 0)
             {
-                System.Windows.MessageBox.Show("Select one or more resources to add to the collection.", "Configuration Manager", MessageBoxButton.OK, MessageBoxImage.Exclamation);
+                System.Windows.MessageBox.Show("Search for one or more resources first.", "Configuration Manager", MessageBoxButton.OK, MessageBoxImage.Exclamation);
                 listViewSelectedResources.Focus();
             }
             else
