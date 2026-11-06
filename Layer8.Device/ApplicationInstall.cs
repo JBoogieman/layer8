@@ -44,7 +44,7 @@ namespace Layer8.Device
         internal sealed class DeployedApp
         {
             public string Id, Revision, Name, Version, State;
-            public bool IsMachineTarget, Installed, CanInstall;
+            public bool IsMachineTarget, Installed, CanInstall, CanUninstall, CanRepair;
             public DateTime? Deadline;
         }
 
@@ -90,6 +90,8 @@ namespace Layer8.Device
                         State = StateText(installState, app["EvaluationState"], app["ErrorCode"]),
                         // When the client doesn't report its allowed actions, let Install try: the client answers either way.
                         CanInstall = machine && !installed && (allowed == null || allowed.Contains("Install", StringComparer.OrdinalIgnoreCase)),
+                        CanUninstall = machine && installed && (allowed == null || allowed.Contains("Uninstall", StringComparer.OrdinalIgnoreCase)),
+                        CanRepair = machine && installed && allowed != null && allowed.Contains("Repair", StringComparer.OrdinalIgnoreCase),
                     });
                 }
             }
@@ -131,9 +133,15 @@ namespace Layer8.Device
         /// <summary>Installs now: immediate, high priority, no restart even if one is needed (the deployment's own settings decide restarts later).</summary>
         internal static void Install(string host, DeployedApp app)
         {
+            Enforce(host, app, "Install");
+        }
+
+        /// <summary>CCM_Application.Install, Uninstall or Repair: all three take the same parameters.</summary>
+        internal static void Enforce(string host, DeployedApp app, string method)
+        {
             ManagementScope clientSdk = Utility.GetWMIScope(host, @"ccm\ClientSDK");
             using (ManagementClass applications = new ManagementClass(clientSdk, new ManagementPath("CCM_Application"), null))
-            using (ManagementBaseObject inParams = applications.GetMethodParameters("Install"))
+            using (ManagementBaseObject inParams = applications.GetMethodParameters(method))
             {
                 inParams["Id"] = app.Id;
                 inParams["Revision"] = app.Revision;
@@ -141,13 +149,13 @@ namespace Layer8.Device
                 inParams["EnforcePreference"] = 0u;   // immediate
                 inParams["Priority"] = "High";
                 inParams["IsRebootIfNeeded"] = false;
-                using (ManagementBaseObject outParams = applications.InvokeMethod("Install", inParams, null))
+                using (ManagementBaseObject outParams = applications.InvokeMethod(method, inParams, null))
                 {
                     long code = Convert.ToInt64(outParams?["ReturnValue"] ?? 0);
-                    if (code != 0) throw new InvalidOperationException(string.Format("CCM_Application.Install returned error {0} (0x{0:X}).", code));
+                    if (code != 0) throw new InvalidOperationException(string.Format("CCM_Application.{1} returned error {0} (0x{0:X}).", code, method));
                 }
             }
-            log.InfoFormat("Install of '{0}' {1} requested on {2}", app.Name, app.Version, host);
+            log.InfoFormat("{0} of '{1}' {2} requested on {3}", method, app.Name, app.Version, host);
         }
 
         // CCM_Application.EvaluationState, numbered as in Microsoft's client SDK reference. Null means there's nothing
@@ -223,6 +231,8 @@ namespace Layer8.Device
             private readonly Label status;
             private readonly Button install;
             private readonly Button refresh;
+            private readonly Button uninstall;
+            private readonly Button repair;
 
             public ApplicationsDialog(string host)
             {
@@ -263,7 +273,9 @@ namespace Layer8.Device
                 {
                     DeployedApp app = Selected();
                     install.Enabled = app?.CanInstall == true;
-                    if (app != null && !app.CanInstall) status.Text = WhyNotInstallable(app);
+                    uninstall.Enabled = app?.CanUninstall == true;
+                    repair.Enabled = app?.CanRepair == true;
+                    if (app != null && !app.CanInstall && !app.CanUninstall) status.Text = WhyNotInstallable(app);
                 };
                 list.DoubleClick += (s, e) => InstallSelected();
                 list.Resize += (s, e) => FitColumns();
@@ -271,17 +283,21 @@ namespace Layer8.Device
                 status = new Label
                 {
                     Location = new Point(12, 302),
-                    Size = new Size(420, 26),
+                    Size = new Size(290, 26),
                     Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                     Text = "Loading...",
                 };
+                uninstall = new Button { Text = "Uninstall", Location = new Point(309, 302), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, Enabled = false };
+                uninstall.Click += (s, e) => EnforceSelected("Uninstall");
+                repair = new Button { Text = "Repair", Location = new Point(390, 302), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, Enabled = false };
+                repair.Click += (s, e) => EnforceSelected("Repair");
                 install = new Button { Text = "Install", Location = new Point(471, 302), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, Enabled = false };
                 install.Click += (s, e) => InstallSelected();
                 refresh = new Button { Text = "Refresh", Location = new Point(552, 302), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
                 refresh.Click += (s, e) => Reload();
                 Button close = new Button { Text = "Close", DialogResult = DialogResult.Cancel, Location = new Point(633, 302), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
 
-                Controls.AddRange(new Control[] { intro, list, status, install, refresh, close });
+                Controls.AddRange(new Control[] { intro, list, status, uninstall, repair, install, refresh, close });
                 CancelButton = close;
                 ResumeLayout(false);
                 PerformLayout();
@@ -298,6 +314,8 @@ namespace Layer8.Device
             {
                 refresh.Enabled = false;
                 install.Enabled = false;
+                uninstall.Enabled = false;
+                repair.Enabled = false;
                 status.Text = "Loading the applications deployed to " + host + "...";
                 Task.Run(() => LoadApps(host)).ContinueWith(task =>
                 {
@@ -345,6 +363,29 @@ namespace Layer8.Device
                 }
                 int spare = list.ClientSize.Width - list.Columns[0].Width - list.Columns[1].Width - list.Columns[2].Width;
                 if (spare > list.Columns[3].Width) list.Columns[3].Width = spare;
+            }
+
+            private void EnforceSelected(string method)
+            {
+                DeployedApp app = Selected();
+                if (app == null) return;
+                string verb = method == "Uninstall" ? "Uninstall " + app.Name + " " + app.Version + " from " : "Repair " + app.Name + " " + app.Version + " on ";
+                if (MessageBox.Show(verb + host + " now?", "Install Application", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+                uninstall.Enabled = repair.Enabled = install.Enabled = false;
+                status.Text = string.Format("Asking {0} to {1} {2}...", host, method.ToLowerInvariant(), app.Name);
+                Task.Run(() => Enforce(host, app, method)).ContinueWith(task =>
+                {
+                    if (IsDisposed) return;
+                    if (task.Exception != null)
+                    {
+                        Exception error = SafeAction.Unwrap(task.Exception);
+                        log.Warn(method + " of " + app.Name + " on " + host + " failed", error);
+                        status.Text = method + " failed: " + error.Message;
+                        return;
+                    }
+                    status.Text = method + " started for " + app.Name + ". Refresh to follow its status.";
+                }, TaskScheduler.FromCurrentSynchronizationContext());
             }
 
             private void InstallSelected()
