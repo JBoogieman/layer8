@@ -115,6 +115,7 @@ namespace Layer8.Device
             { nameof(ClientInfo), null },
             { nameof(RestartComputer), "Restart {0} in 5 minutes?\n\nWhoever is signed in gets a 5-minute warning, then Windows restarts even if programs have unsaved work. Cancel Restart stops it during those 5 minutes." },
             { nameof(CancelRestart), null },
+            { nameof(ResetPolicy), "Reset all ConfigMgr policy on {0}?\n\nEach client drops its machine policy and downloads it again, which takes a few minutes and re-runs the evaluation of required deployments." },
         };
 
         private static void ProcessAction(ScopeNode scopeNode, ActionDescription action, IResultObject resultObjects, string actionName, Func<IResultObject, object> run,
@@ -832,6 +833,22 @@ namespace Layer8.Device
             }
             log.InfoFormat("Restart cancel requested on {0}", host);
             return "Asked Windows to cancel its scheduled restart";
+        }
+
+        /// <summary>Purges the client's machine policy and asks for it again (SMS_Client.ResetPolicy, then Machine Policy).</summary>
+        public static string ResetPolicy(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            ManagementScope ccm = Utility.GetWMIScope(host, "ccm");
+            using (ManagementClass client = new ManagementClass(ccm, new ManagementPath("SMS_Client"), null))
+            using (ManagementBaseObject inParams = client.GetMethodParameters("ResetPolicy"))
+            {
+                inParams["uFlags"] = 1u;   // 1 = purge all machine policy, not just what has expired
+                using (client.InvokeMethod("ResetPolicy", inParams, null)) { }
+            }
+            ClientAction(resultObject, "{00000000-0000-0000-0000-000000000021}", false);   // Machine Policy Retrieval and Evaluation
+            log.InfoFormat("Policy reset on {0}", host);
+            return "Policy reset; machine policy requested";
         }
 
         public static void ClientAction(IResultObject resultObject, string scheduleId, bool fullScan)

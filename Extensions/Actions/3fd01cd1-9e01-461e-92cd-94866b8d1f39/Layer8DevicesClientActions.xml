@@ -335,5 +335,17 @@
       </ActionAssembly>
       <DialogId>CancelRestart</DialogId>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Reset Policy" MnemonicDisplayName="Reset Policy" Description="Purge the client policy and download it again (for clients stuck on old policy)">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>ResetPolicy</DialogId>
+    </ActionDescription>
   </ActionGroups>
 </ActionDescription>
