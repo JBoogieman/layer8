@@ -41,6 +41,9 @@ namespace Layer8.Device
         private int offline;
         private int failed;
         private int other;
+        // Placeholder records (Unknown Computer, Provisioning Device): counted apart, so they aren't mistaken for offline devices.
+        private int skipped;
+        private Label labelSkipped;
         private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(typeof(DeviceProgressDialog));
 
         public DeviceProgressDialog()
@@ -113,6 +116,15 @@ namespace Layer8.Device
             };
             exportResults.Click += (s, e) => ExportResults();
             Controls.Add(exportResults);
+
+            labelSkipped = new Label
+            {
+                AutoSize = true,
+                Anchor = labelOther.Anchor,
+                Location = new System.Drawing.Point(labelOther.Left + LogicalToDeviceUnits(40), labelOther.Top),
+                Visible = false,
+            };
+            Controls.Add(labelSkipped);
         }
 
         private void ExportResults()
@@ -211,8 +223,7 @@ namespace Layer8.Device
             // machines: answer at once instead of waiting for a connection that can't happen.
             if (!RemoteTools.IsComputerName(item.Text))
             {
-                Interlocked.Increment(ref offline);
-                Interlocked.Increment(ref other);
+                Interlocked.Increment(ref skipped);
                 SetStatus(item, "Skipped: not a computer name");
                 OnUiThread(UpdateProgress);
                 return;
@@ -296,9 +307,15 @@ namespace Layer8.Device
 
         internal void UpdateProgress()
         {
-            clientActionProgressBar.UpdateValues(completed, offline, failed);
+            // The bar has to reach its total, so skipped records ride with offline there; the labels keep them apart.
+            clientActionProgressBar.UpdateValues(completed, offline + skipped, failed);
             labelCompleted.Text = completed.ToString();
             labelOther.Text = other.ToString();
+            if (labelSkipped != null)
+            {
+                labelSkipped.Visible = skipped > 0;
+                labelSkipped.Text = "Skipped: " + skipped;
+            }
 
             if (clientActionProgressBar.Value == clientActionProgressBar.Maximum)
             {
