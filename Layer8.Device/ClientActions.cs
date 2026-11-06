@@ -442,13 +442,18 @@ namespace Layer8.Device
             ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
 
             string op = null;
+            string typed = null;
             Version wanted = null;
+            // A test compares as many parts as were typed: "= 156" matches any 156.x, "< 131" means older than 131.
+            int parts = 0;
             System.Text.RegularExpressions.Match test = VersionTest.Match(search);
             if (test.Success && test.Groups["name"].Value.Length > 0)
             {
                 search = test.Groups["name"].Value;
                 op = test.Groups["op"].Value;
-                wanted = ParseVersion(test.Groups["version"].Value);
+                typed = test.Groups["version"].Value;
+                parts = typed.Split('.').Length;
+                wanted = FirstParts(ParseVersion(typed), parts);
             }
 
             List<string> found = new List<string>();
@@ -467,7 +472,7 @@ namespace Layer8.Device
                             string entry = ((program["DisplayName"] as string) + " " + installedVersion).Trim();
                             if (op != null)
                             {
-                                Version installed = ParseVersion(installedVersion);
+                                Version installed = FirstParts(ParseVersion(installedVersion), parts);
                                 if (installed == null) entry += " (version not comparable)";
                                 else if (!Compare(installed, op, wanted)) continue;
                             }
@@ -483,7 +488,7 @@ namespace Layer8.Device
             }
             if (classesRead == 0 && missingClass != null) throw missingClass;   // neither class: no ConfigMgr client
 
-            if (found.Count == 0) return op == null ? "Not installed" : string.Format("No {0} {1} {2}", search, op, wanted);
+            if (found.Count == 0) return op == null ? "Not installed" : string.Format("No {0} {1} {2}", search, op, typed);
             found.Sort(StringComparer.OrdinalIgnoreCase);
             if (found.Count > ShownInRow) log.InfoFormat("FindSoftware '{0}' on {1}, all {2}: {3}", search, host, found.Count, string.Join("; ", found));
             return "Installed: " + Summarize(found, "; ");
@@ -497,6 +502,19 @@ namespace Layer8.Device
             string value = numbers.Groups[1].Value;
             if (value.IndexOf('.') < 0) value += ".0";
             return Version.TryParse(value, out Version version) ? version : null;
+        }
+
+        /// <summary>The first parts of a version, missing parts as 0: 156.0.4314.58 to 1 part is 156.0.</summary>
+        private static Version FirstParts(Version version, int parts)
+        {
+            if (version == null) return null;
+            switch (parts)
+            {
+                case 1: return new Version(version.Major, 0);
+                case 2: return new Version(version.Major, version.Minor);
+                case 3: return new Version(version.Major, version.Minor, Math.Max(0, version.Build));
+                default: return new Version(version.Major, version.Minor, Math.Max(0, version.Build), Math.Max(0, version.Revision));
+            }
         }
 
         private static bool Compare(Version installed, string op, Version wanted)
