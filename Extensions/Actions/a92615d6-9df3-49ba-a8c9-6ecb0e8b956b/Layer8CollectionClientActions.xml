@@ -335,6 +335,18 @@
       </ActionAssembly>
       <DialogId>RestartComputer</DialogId>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Cancel Restart" MnemonicDisplayName="Cancel Restart" Description="Cancel a restart Windows has scheduled, such as Restart Computer (not ConfigMgr restart countdowns)">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>CancelRestart</DialogId>
+    </ActionDescription>
     <ActionDescription Class="Separator">
       <ShowOn>
         <string>ContextMenu</string>

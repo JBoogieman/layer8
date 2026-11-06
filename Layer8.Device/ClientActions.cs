@@ -114,6 +114,7 @@ namespace Layer8.Device
             { nameof(RepairClient), "Repair the ConfigMgr client on {0}?\n\nEach client runs ccmrepair, which restarts the SMS Agent Host service and can take several minutes. Watch ccmrepair.log on the device." },
             { nameof(ClientInfo), null },
             { nameof(RestartComputer), "Restart {0} in 5 minutes?\n\nWhoever is signed in gets a 5-minute warning, then Windows restarts even if programs have unsaved work. Cancel Restart stops it during those 5 minutes." },
+            { nameof(CancelRestart), null },
         };
 
         private static void ProcessAction(ScopeNode scopeNode, ActionDescription action, IResultObject resultObjects, string actionName, Func<IResultObject, object> run,
@@ -812,6 +813,25 @@ namespace Layer8.Device
             }
             log.InfoFormat("Restart requested on {0}, in 5 minutes", host);
             return "Restarting in 5 minutes";
+        }
+
+        /// <summary>Cancels a restart Windows has scheduled (shutdown /a). ConfigMgr's own restart countdown is not affected.</summary>
+        public static string CancelRestart(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
+            using (ManagementClass process = new ManagementClass(cimv2, new ManagementPath("Win32_Process"), null))
+            using (ManagementBaseObject inParams = process.GetMethodParameters("Create"))
+            {
+                inParams["CommandLine"] = "shutdown.exe /a";
+                using (ManagementBaseObject outParams = process.InvokeMethod("Create", inParams, null))
+                {
+                    uint code = Convert.ToUInt32(outParams["ReturnValue"]);
+                    if (code != 0) throw new InvalidOperationException(string.Format("Couldn't start shutdown /a (Win32_Process.Create returned {0})", code));
+                }
+            }
+            log.InfoFormat("Restart cancel requested on {0}", host);
+            return "Asked Windows to cancel its scheduled restart";
         }
 
         public static void ClientAction(IResultObject resultObject, string scheduleId, bool fullScan)
