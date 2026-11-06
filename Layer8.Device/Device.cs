@@ -110,18 +110,33 @@ namespace Layer8.Device
         /// selected collection it copies the names of all its members instead.
         /// </summary>
         // Copy Device Info's columns: what a ticket needs, all from the site's record, so offline devices work too.
-        private static readonly string[] InfoColumns = { "Name", "ResourceID", "ClientVersion", "CNIsOnline", "CNLastOnlineTime", "UserName", "PrimaryUser", "DeviceOS", "ADSiteName", "LastMPServerName" };
+        // Each pair is the site data's property and the header Copy Device Info gives it.
+        private static readonly string[,] InfoColumns =
+        {
+            { "Name", "Name" },
+            { "ResourceID", "Resource ID" },
+            { "ClientVersion", "Client Version" },
+            { "CNIsOnline", "Online" },
+            { "CNLastOnlineTime", "Last Online" },
+            { "UserName", "Last User" },
+            { "PrimaryUser", "Primary User" },
+            { "DeviceOS", "Operating System" },
+            { "ADSiteName", "AD Site" },
+            { "LastMPServerName", "Management Point" },
+        };
 
         /// <summary>Console entry point: copies a tab-separated row per selected device, with a header row, for Excel or a ticket.</summary>
         public static void CopyDeviceInfo(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
         {
             SafeAction.Run(action?.DisplayName ?? "Copy Device Info", () =>
             {
-                System.Text.StringBuilder text = new System.Text.StringBuilder(string.Join("\t", InfoColumns)).AppendLine();
+                int columns = InfoColumns.GetLength(0);
+                System.Text.StringBuilder text = new System.Text.StringBuilder(
+                    string.Join("\t", Enumerable.Range(0, columns).Select(i => InfoColumns[i, 1]))).AppendLine();
                 int count = 0;
                 foreach (IResultObject device in selectedObjects)
                 {
-                    text.AppendLine(string.Join("\t", InfoColumns.Select(column => ColumnText(device, column))));
+                    text.AppendLine(string.Join("\t", Enumerable.Range(0, columns).Select(i => ColumnText(device, InfoColumns[i, 0]))));
                     count++;
                 }
                 System.Windows.Forms.Clipboard.SetDataObject(text.ToString(), true, 10, 100);
@@ -136,8 +151,13 @@ namespace Layer8.Device
         {
             try
             {
+                if (property == "CNLastOnlineTime")
+                {
+                    DateTime? when = ClientActions.SiteTime(device, property);
+                    return when.HasValue ? when.Value.ToString("g") : string.Empty;
+                }
                 object value = device[property].ObjectValue;
-                if (value is DateTime when) return when.Year > 2000 ? when.ToString("g") : string.Empty;
+                if (value is DateTime given) return given.Year > 2000 ? given.ToString("g") : string.Empty;
                 return value?.ToString() ?? string.Empty;
             }
             catch (Exception)

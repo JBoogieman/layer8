@@ -266,15 +266,48 @@ namespace Layer8.Device
         /// </summary>
         private static string LastOnline(IResultObject resultObject)
         {
+            DateTime? when = SiteTime(resultObject, "CNLastOnlineTime");
+            return when.HasValue ? string.Format("; last online {0:g} (site data)", when.Value) : string.Empty;
+        }
+
+        /// <summary>
+        /// A date from the site's record of an object, in local time, or null when the record doesn't carry it or
+        /// it's blank. The SMS Provider hands dates over as WMI text in UTC ("20261104005423.877000+***", where
+        /// *** means no offset); the console shows them in local time, and so does this.
+        /// </summary>
+        internal static DateTime? SiteTime(IResultObject resultObject, string property)
+        {
+            object value;
             try
             {
-                DateTime when = resultObject["CNLastOnlineTime"].DateTimeValue;
-                return when.Year > 2000 ? string.Format("; last online {0:g} (site data)", when) : string.Empty;
+                value = resultObject[property].ObjectValue;
             }
             catch (Exception)
             {
-                return string.Empty;
+                return null;
             }
+
+            if (value is DateTime given)
+            {
+                return given.Year > 2000 ? given : (DateTime?)null;
+            }
+
+            string text = value as string;
+            if (text == null || text.Length < 14 ||
+                !DateTime.TryParseExact(text.Substring(0, 14), "yyyyMMddHHmmss", System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, out DateTime utc))
+            {
+                return null;
+            }
+
+            // A value with a real offset ("-480" minutes) is local to that offset: take it off to get UTC.
+            if (text.Length >= 25 && (text[21] == '+' || text[21] == '-') &&
+                int.TryParse(text.Substring(22, 3), out int minutes))
+            {
+                utc = utc.AddMinutes(text[21] == '+' ? -minutes : minutes);
+            }
+
+            return utc.Year > 2000 ? utc.ToLocalTime() : (DateTime?)null;
         }
 
         private static string OnlineStatusCore(IResultObject resultObject)
