@@ -1,83 +1,29 @@
 ﻿using Microsoft.ConfigurationManagement.AdminConsole;
 using Microsoft.ConfigurationManagement.ManagementProvider;
 using Microsoft.ConfigurationManagement.AdminConsole.Schema;
-using Microsoft.ConfigurationManagement.AdminConsole.DialogFramework;
-using System;
-using System.Windows;
+using System.Windows.Forms;
 
 namespace Layer8.Device
 {
     public static class ClientCache
     {
-        //private static DeviceProgressDialog deviceProgressDialog;
-
         /// <summary>Console entry point: runs ChangeClientCacheCore behind Layer8's crash guard.</summary>
         public static void ChangeClientCache(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
         {
-            SafeAction.Run(action?.DisplayName ?? "ChangeClientCache", () => ChangeClientCacheCore(sender, scopeNode, action, selectedResultObjects, dataUpdatedDelegate, status));
+            SafeAction.Run(action?.DisplayName ?? "Client Cache", () => ChangeClientCacheCore(selectedResultObjects));
         }
 
-        private static void ChangeClientCacheCore(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
+        private static void ChangeClientCacheCore(IResultObject selectedResultObjects)
         {
-            bool showProgressDialog = false;
+            // The window shows one client's cache and its contents; several devices need a different tool.
             if (selectedResultObjects.ObjectClass == "SMS_Collection" || selectedResultObjects.Count > 1)
             {
-                showProgressDialog = true;
+                MessageBox.Show("Client Cache opens for one device at a time. To empty the cache on many devices, use Client Actions > Clear Client Cache.",
+                    "Client Cache", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
             }
 
-            int total = selectedResultObjects.Count;
-
-            if (selectedResultObjects.ObjectClass == "SMS_Collection")
-            {
-                try
-                {
-                    total = 0;
-                    string query = string.Format("SELECT * FROM SMS_FullCollectionMembership WHERE CollectionID='{0}'", selectedResultObjects["CollectionID"].StringValue);
-                    // query processor does not have count implemented?!?!?
-                    foreach (IResultObject tmp in selectedResultObjects.ConnectionManager.QueryProcessor.ExecuteQuery(query))
-                    {
-                        total++;
-                    }
-
-                    selectedResultObjects = selectedResultObjects.ConnectionManager.QueryProcessor.ExecuteQuery(query);
-                }
-                catch (SmsQueryException ex)
-                {
-                    SccmExceptionDialog.ShowDialog(SnapIn.Console, ex);
-                    return;
-                }
-            }
-
-            if (showProgressDialog)
-            {
-                MessageBox.Show("Not implemented yet!", "Configuration Manager", MessageBoxButton.YesNo, MessageBoxImage.Exclamation);
-                //Type type = typeof(ClientCache);
-                //MethodInfo methodInfo = type.GetMethod("ChangeClientCacheSize");
-
-                //deviceProgressDialog = new DeviceProgressDialog(action, selectedResultObjects, methodInfo)
-                //{
-                //    Total = total
-                //};
-                //deviceProgressDialog.ShowDialog();
-            }
-            else
-            {
-                Utility.ShowDialog("Layer8DeviceCache", selectedResultObjects);
-            }
-
+            Utility.ShowDialog("Layer8DeviceCache", selectedResultObjects);
         }
-
-        public static void ChangeClientCacheSize(IResultObject resultObject)
-        {
-            try
-            {
-
-            }
-            catch (Exception)
-            {
-                throw;
-            }
-        }
-
     }
 }
