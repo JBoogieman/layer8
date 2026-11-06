@@ -117,6 +117,7 @@ namespace Layer8.Device
             { nameof(CancelRestart), null },
             { nameof(ResetPolicy), "Reset all ConfigMgr policy on {0}?\n\nEach client drops its machine policy and downloads it again, which takes a few minutes and re-runs the evaluation of required deployments." },
             { nameof(DefenderStatus), null },
+            { nameof(DefenderQuickScan), "Start a Microsoft Defender quick scan on {0}?\n\nA quick scan takes a few minutes and uses some CPU and disk while it runs." },
         };
 
         private static void ProcessAction(ScopeNode scopeNode, ActionDescription action, IResultObject resultObjects, string actionName, Func<IResultObject, object> run,
@@ -879,6 +880,26 @@ namespace Layer8.Device
                 parts.Add(quickScanAge >= uint.MaxValue ? "no quick scan yet" : string.Format("last quick scan {0} day(s) ago", quickScanAge));
                 return string.Join(", ", parts);
             }
+        }
+
+        /// <summary>Starts a Defender quick scan and returns at once (MpCmdRun runs on the device; a WMI scan call would wait for it).</summary>
+        public static string DefenderQuickScan(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
+            using (ManagementClass process = new ManagementClass(cimv2, new ManagementPath("Win32_Process"), null))
+            using (ManagementBaseObject inParams = process.GetMethodParameters("Create"))
+            {
+                // cmd expands %ProgramFiles% on the device; MpCmdRun.exe is always there, whatever Defender platform version runs.
+                inParams["CommandLine"] = "cmd.exe /c \"\"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -Scan -ScanType 1\"";
+                using (ManagementBaseObject outParams = process.InvokeMethod("Create", inParams, null))
+                {
+                    uint code = Convert.ToUInt32(outParams["ReturnValue"]);
+                    if (code != 0) throw new InvalidOperationException(string.Format("Couldn't start MpCmdRun (Win32_Process.Create returned {0})", code));
+                }
+            }
+            log.InfoFormat("Defender quick scan started on {0}", host);
+            return "Quick scan started (Defender Status shows it once it's done)";
         }
 
         public static void ClientAction(IResultObject resultObject, string scheduleId, bool fullScan)

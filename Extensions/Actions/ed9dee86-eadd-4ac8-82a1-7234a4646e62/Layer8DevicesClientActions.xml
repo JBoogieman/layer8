@@ -359,5 +359,17 @@
       </ActionAssembly>
       <DialogId>DefenderStatus</DialogId>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Defender Quick Scan" MnemonicDisplayName="Defender Quick Scan" Description="Start a Microsoft Defender quick scan">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>DefenderQuickScan</DialogId>
+    </ActionDescription>
   </ActionGroups>
 </ActionDescription>
