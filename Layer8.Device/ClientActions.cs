@@ -81,7 +81,7 @@ namespace Layer8.Device
                 Func<IResultObject, object> run;
                 if (tool == nameof(FindSoftware))
                 {
-                    string search = InputPrompt.Ask("Find Software", "Software name, or part of it (for example Chrome, 7-Zip or Office):", softwareSearch);
+                    string search = InputPrompt.Ask("Find Software", "Software name, or part of it (for example Chrome, 7-Zip or Office). Add a version test to find old ones: Chrome < 131", softwareSearch);
                     if (search == null) return;
                     softwareSearch = search;
                     title = "Find Software: " + search;
@@ -390,10 +390,24 @@ namespace Layer8.Device
         /// view of Add/Remove Programs (Win32Reg_AddRemovePrograms and its 64-bit twin), which matches what
         /// hardware inventory reports, but live.
         /// </summary>
+        // "Chrome < 131": a name, then an optional comparison against the installed version.
+        private static readonly System.Text.RegularExpressions.Regex VersionTest =
+            new System.Text.RegularExpressions.Regex(@"^\s*(?<name>.*?)\s*(?<op><=|>=|<|>|=)\s*(?<version>\d+(\.\d+){0,3})\s*$");
+
         public static string FindSoftware(IResultObject resultObject, string search)
         {
             string host = resultObject["Name"].StringValue;
             ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
+
+            string op = null;
+            Version wanted = null;
+            System.Text.RegularExpressions.Match test = VersionTest.Match(search);
+            if (test.Success && test.Groups["name"].Value.Length > 0)
+            {
+                search = test.Groups["name"].Value;
+                op = test.Groups["op"].Value;
+                wanted = ParseVersion(test.Groups["version"].Value);
+            }
 
             List<string> found = new List<string>();
             ManagementException missingClass = null;
@@ -407,7 +421,14 @@ namespace Layer8.Device
                     {
                         using (program)
                         {
-                            string entry = ((program["DisplayName"] as string) + " " + (program["Version"] as string)).Trim();
+                            string installedVersion = program["Version"] as string;
+                            string entry = ((program["DisplayName"] as string) + " " + installedVersion).Trim();
+                            if (op != null)
+                            {
+                                Version installed = ParseVersion(installedVersion);
+                                if (installed == null) entry += " (version not comparable)";
+                                else if (!Compare(installed, op, wanted)) continue;
+                            }
                             if (!found.Contains(entry, StringComparer.OrdinalIgnoreCase)) found.Add(entry);
                         }
                     }
@@ -420,10 +441,33 @@ namespace Layer8.Device
             }
             if (classesRead == 0 && missingClass != null) throw missingClass;   // neither class: no ConfigMgr client
 
-            if (found.Count == 0) return "Not installed";
+            if (found.Count == 0) return op == null ? "Not installed" : string.Format("No {0} {1} {2}", search, op, wanted);
             found.Sort(StringComparer.OrdinalIgnoreCase);
             if (found.Count > ShownInRow) log.InfoFormat("FindSoftware '{0}' on {1}, all {2}: {3}", search, host, found.Count, string.Join("; ", found));
             return "Installed: " + Summarize(found, "; ");
+        }
+
+        /// <summary>A version from Add/Remove Programs text: "131" becomes 131.0, anything after the numbers is ignored.</summary>
+        private static Version ParseVersion(string text)
+        {
+            System.Text.RegularExpressions.Match numbers = System.Text.RegularExpressions.Regex.Match(text ?? string.Empty, @"^\s*(\d+(\.\d+){0,3})");
+            if (!numbers.Success) return null;
+            string value = numbers.Groups[1].Value;
+            if (value.IndexOf('.') < 0) value += ".0";
+            return Version.TryParse(value, out Version version) ? version : null;
+        }
+
+        private static bool Compare(Version installed, string op, Version wanted)
+        {
+            int order = installed.CompareTo(wanted);
+            switch (op)
+            {
+                case "<": return order < 0;
+                case "<=": return order <= 0;
+                case ">": return order > 0;
+                case ">=": return order >= 0;
+                default: return order == 0;
+            }
         }
 
         // Rows stay readable: list this many items, then "(+N more)". The log gets the full list.
