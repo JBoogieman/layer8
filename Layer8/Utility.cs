@@ -632,73 +632,51 @@ namespace Layer8
         public string SubKey { get; set; } = "SOFTWARE\\Layer8";
         public RegistryKey BaseRegistryKey { get; set; } = Registry.CurrentUser;
 
+        // Every read tolerates a missing key, a missing value and a value someone hand-edited into the wrong
+        // type: it falls back to the default instead of throwing inside a wizard page.
         protected object Read(string KeyName)
         {
-            object result = default;
-
             try
             {
-                RegistryKey rk = BaseRegistryKey;
-                RegistryKey sk1 = rk.OpenSubKey(SubKey);
-
-                return sk1 == null ? result : sk1.GetValue(KeyName);
+                using (RegistryKey key = BaseRegistryKey.OpenSubKey(SubKey))
+                {
+                    return key?.GetValue(KeyName);
+                }
             }
-            catch (Exception) { }
-
-            return result;
+            catch (Exception)
+            {
+                return null;
+            }
         }
 
         public int ReadInt(string KeyName)
         {
-            object obj = Read(KeyName);
-
-            return obj != null ? int.Parse(obj.ToString()) : 0;
+            return int.TryParse(Read(KeyName)?.ToString(), out int value) ? value : 0;
         }
 
         public double? ReadDouble(string KeyName)
         {
-            object obj = Read(KeyName);
-            double? result = null;
-            if (obj != null)
-            {
-                result = double.Parse(obj.ToString());
-            }
-
-            return result;
+            return double.TryParse(Read(KeyName)?.ToString(), out double value) ? value : (double?)null;
         }
 
         public bool ReadBool(string KeyName)
         {
-            bool result = default;
-            string resultStr = (string)Read(KeyName);
-            if (!string.IsNullOrEmpty(resultStr))
-            {
-                result = bool.Parse(resultStr);
-            }
-
-            return result;
+            return bool.TryParse(Read(KeyName)?.ToString(), out bool value) && value;
         }
 
         public string ReadString(string KeyName)
         {
-            string result = string.Empty;
-            string resultStr = (string)Read(KeyName);
-            if (!string.IsNullOrEmpty(resultStr))
-            {
-                result = resultStr;
-            }
-
-            return result;
+            return Read(KeyName)?.ToString() ?? string.Empty;
         }
 
         public bool Write(string KeyName, object Value)
         {
             try
             {
-                using (RegistryKey rk = BaseRegistryKey)
+                // BaseRegistryKey is the shared HKCU root: open and close only the subkey.
+                using (RegistryKey key = BaseRegistryKey.CreateSubKey(SubKey))
                 {
-                    RegistryKey sk1 = rk.CreateSubKey(SubKey);
-                    sk1.SetValue(KeyName, Value);
+                    key.SetValue(KeyName, Value);
                 }
 
                 return true;
