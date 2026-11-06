@@ -113,6 +113,7 @@ namespace Layer8.Device
             { nameof(ClearClientCache), "Clear the ConfigMgr client cache on {0}?\n\nCached content is deleted, except content marked to stay in the cache and content a device is using right now. Devices download content again when they next need it." },
             { nameof(RepairClient), "Repair the ConfigMgr client on {0}?\n\nEach client runs ccmrepair, which restarts the SMS Agent Host service and can take several minutes. Watch ccmrepair.log on the device." },
             { nameof(ClientInfo), null },
+            { nameof(RestartComputer), "Restart {0} in 5 minutes?\n\nWhoever is signed in gets a 5-minute warning, then Windows restarts even if programs have unsaved work. Cancel Restart stops it during those 5 minutes." },
         };
 
         private static void ProcessAction(ScopeNode scopeNode, ActionDescription action, IResultObject resultObjects, string actionName, Func<IResultObject, object> run,
@@ -786,6 +787,31 @@ namespace Layer8.Device
                 if (identity != null) parts.Add(identity["ClientId"] as string);
             }
             return parts.Count == 0 ? "No client details" : string.Join("; ", parts);
+        }
+
+        /// <summary>Restarts the device after a 5-minute warning to whoever is signed in.</summary>
+        public static string RestartComputer(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
+            using (ManagementObject os = Utility.GetFirstWMIInstance(cimv2, "SELECT * FROM Win32_OperatingSystem"))
+            {
+                if (os == null) throw new InvalidOperationException("No Win32_OperatingSystem on this device");
+                using (ManagementBaseObject inParams = os.GetMethodParameters("Win32ShutdownTracker"))
+                {
+                    inParams["Timeout"] = 300u;                                  // seconds of warning
+                    inParams["Comment"] = "IT is restarting this computer in 5 minutes. Save your work now.";
+                    inParams["ReasonCode"] = 0x80040001u;                        // planned, application, maintenance
+                    inParams["Flags"] = 6;                                       // 2 restart + 4 force
+                    using (ManagementBaseObject outParams = os.InvokeMethod("Win32ShutdownTracker", inParams, null))
+                    {
+                        uint code = Convert.ToUInt32(outParams["ReturnValue"]);
+                        if (code != 0) throw new InvalidOperationException(string.Format("Windows refused the restart (Win32ShutdownTracker returned {0})", code));
+                    }
+                }
+            }
+            log.InfoFormat("Restart requested on {0}, in 5 minutes", host);
+            return "Restarting in 5 minutes";
         }
 
         public static void ClientAction(IResultObject resultObject, string scheduleId, bool fullScan)
