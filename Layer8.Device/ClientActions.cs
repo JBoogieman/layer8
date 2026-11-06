@@ -241,6 +241,35 @@ namespace Layer8.Device
         /// </summary>
         public static string OnlineStatus(IResultObject resultObject)
         {
+            try
+            {
+                return OnlineStatusCore(resultObject);
+            }
+            catch (DeviceOfflineException ex)
+            {
+                throw new DeviceOfflineException(ex.Message + LastOnline(resultObject));
+            }
+        }
+
+        /// <summary>
+        /// "; last online (when) (site data)" from the console's own record of the device, or "" when the record
+        /// doesn't carry it (collection members and Retry's device lists don't).
+        /// </summary>
+        private static string LastOnline(IResultObject resultObject)
+        {
+            try
+            {
+                DateTime when = resultObject["CNLastOnlineTime"].DateTimeValue;
+                return when.Year > 2000 ? string.Format("; last online {0:g} (site data)", when) : string.Empty;
+            }
+            catch (Exception)
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string OnlineStatusCore(IResultObject resultObject)
+        {
             string host = resultObject["Name"].StringValue;
             IPAddress address = Resolve(host);
             using (Ping ping = new Ping())
