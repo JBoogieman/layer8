@@ -359,6 +359,18 @@
       </ActionAssembly>
       <DialogId>ResetPolicy</DialogId>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Defender Status" MnemonicDisplayName="Defender Status" Description="Microsoft Defender antivirus and real-time protection, signature age and last quick scan">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>DefenderStatus</DialogId>
+    </ActionDescription>
     <ActionDescription Class="Separator">
       <ShowOn>
         <string>ContextMenu</string>

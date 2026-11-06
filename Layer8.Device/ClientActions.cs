@@ -116,6 +116,7 @@ namespace Layer8.Device
             { nameof(RestartComputer), "Restart {0} in 5 minutes?\n\nWhoever is signed in gets a 5-minute warning, then Windows restarts even if programs have unsaved work. Cancel Restart stops it during those 5 minutes." },
             { nameof(CancelRestart), null },
             { nameof(ResetPolicy), "Reset all ConfigMgr policy on {0}?\n\nEach client drops its machine policy and downloads it again, which takes a few minutes and re-runs the evaluation of required deployments." },
+            { nameof(DefenderStatus), null },
         };
 
         private static void ProcessAction(ScopeNode scopeNode, ActionDescription action, IResultObject resultObjects, string actionName, Func<IResultObject, object> run,
@@ -849,6 +850,35 @@ namespace Layer8.Device
             ClientAction(resultObject, "{00000000-0000-0000-0000-000000000021}", false);   // Machine Policy Retrieval and Evaluation
             log.InfoFormat("Policy reset on {0}", host);
             return "Policy reset; machine policy requested";
+        }
+
+        /// <summary>Microsoft Defender at a glance: antivirus and real-time protection, signature age, last quick scan.</summary>
+        public static string DefenderStatus(IResultObject resultObject)
+        {
+            string host = resultObject["Name"].StringValue;
+            ManagementScope defender;
+            try
+            {
+                defender = Utility.GetWMIScope(host, @"Microsoft\Windows\Defender");
+            }
+            catch (ManagementException ex) when (ex.ErrorCode == ManagementStatus.InvalidNamespace)
+            {
+                return "No Microsoft Defender on this device";
+            }
+            using (ManagementObject status = Utility.GetFirstWMIInstance(defender, "SELECT AntivirusEnabled, RealTimeProtectionEnabled, AntivirusSignatureLastUpdated, AntivirusSignatureAge, QuickScanAge FROM MSFT_MpComputerStatus"))
+            {
+                if (status == null) return "Defender reports no status (another antivirus may be in charge)";
+                List<string> parts = new List<string>
+                {
+                    IsTrue(status["AntivirusEnabled"]) ? "AV on" : "AV OFF",
+                    IsTrue(status["RealTimeProtectionEnabled"]) ? "real-time on" : "real-time OFF",
+                };
+                DateTime? signatures = ToDateTime(status["AntivirusSignatureLastUpdated"]);
+                parts.Add(string.Format("signatures {0} day(s) old{1}", status["AntivirusSignatureAge"], signatures.HasValue ? " (" + signatures.Value.ToString("g") + ")" : ""));
+                long quickScanAge = Convert.ToInt64(status["QuickScanAge"] ?? uint.MaxValue);
+                parts.Add(quickScanAge >= uint.MaxValue ? "no quick scan yet" : string.Format("last quick scan {0} day(s) ago", quickScanAge));
+                return string.Join(", ", parts);
+            }
         }
 
         public static void ClientAction(IResultObject resultObject, string scheduleId, bool fullScan)
