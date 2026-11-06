@@ -146,6 +146,8 @@ namespace Layer8
 
         private void InfoWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
         {
+            // Closed while it was still reading: nothing left to fill.
+            if (IsDisposed) return;
             try
             {
                 if (e.Error != null)
@@ -189,14 +191,20 @@ namespace Layer8
             labelCollShortTime.Text = Math.Round(stats.Seconds.Min(), 3).ToString() + " sec";
         }
 
+        // Only the latest evaluation run matters, and it's at the end of the log. The site server is writing the
+        // file, so share it rather than ask for it alone, and read the last 4 MB instead of all of it.
+        private const int TailBytes = 4 * 1024 * 1024;
+
         private static string ReadInput(string fileName)
         {
-            string output;
-            using (StreamReader reader = new StreamReader(fileName))
+            using (FileStream stream = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
             {
-                output = reader.ReadToEnd();
+                if (stream.Length > TailBytes) stream.Seek(-TailBytes, SeekOrigin.End);
+                using (StreamReader reader = new StreamReader(stream))
+                {
+                    return reader.ReadToEnd();
+                }
             }
-            return output;
         }
 
         private void ButtonOK_Click(object sender, EventArgs e)
