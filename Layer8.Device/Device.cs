@@ -14,6 +14,34 @@ namespace Layer8.Device
 {
     public static class Device
     {
+        private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(typeof(Device));
+
+        /// <summary>
+        /// Developer tool, not shipped in the MSI (see Extensions.Dev): logs the selected objects' class and every
+        /// property, to learn what a console node hands Layer8 before writing a feature for it.
+        /// </summary>
+        public static void ProbeSelection(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObject, PropertyDataUpdated dataUpdatedDelegate, Status status)
+        {
+            SafeAction.Run("Probe Selection", () =>
+            {
+                int count = 0;
+                foreach (IResultObject item in selectedObject)
+                {
+                    System.Text.StringBuilder text = new System.Text.StringBuilder("Probe: " + item.ObjectClass);
+                    foreach (string name in item.PropertyNames)
+                    {
+                        object value;
+                        try { value = item[name].ObjectValue; }
+                        catch (Exception ex) { value = "(" + ex.GetType().Name + ")"; }
+                        text.AppendLine().Append("  ").Append(name).Append(" = ").Append(value);
+                    }
+                    log.Info(text.ToString());
+                    count++;
+                }
+                System.Windows.Forms.MessageBox.Show(string.Format("Logged {0} object(s) with all their properties to {1}", count, Layer8Log.LogFile), "Probe Selection");
+            });
+        }
+
         /// <summary>
         /// Console entry point for Layer8 Settings... on the Layer8 menu. The settings aren't about the selected
         /// device; the console just opens its settings window (a property sheet) on whatever is selected.

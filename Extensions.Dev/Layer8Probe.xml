@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription NamespaceGuid="2E9D6F0A-8C7B-4E51-9B3A-4C8F1D2E7A60" Class="AssemblyType" SelectionMode="Both" DisplayName="Layer8 Probe Selection" MnemonicDisplayName="Layer8 Probe Selection" Description="Developer tool: log the selected objects' class and properties">
+  <ShowOn>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <ActionAssembly>
+    <Assembly>Layer8.Device.dll</Assembly>
+    <Type>Layer8.Device.Device</Type>
+    <Method>ProbeSelection</Method>
+  </ActionAssembly>
+</ActionDescription>

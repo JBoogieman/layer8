@@ -1,0 +1,6 @@
+# Console nodes that get Layer8Probe.xml when you run .\tools\Dev-Loop.ps1 -WithDevTools. One GUID per line.
+ed9dee86-eadd-4ac8-82a1-7234a4646e62  Assets and Compliance > Devices
+3fd01cd1-9e01-461e-92cd-94866b8d1f39  a device collection's members
+a92615d6-9df3-49ba-a8c9-6ecb0e8b956b  Device Collections
+d1621955-48ad-4bba-9c85-95f74c0c6538  Monitoring > Deployments
+14214306-59f0-46cf-b453-a649f2a249e1  Monitoring > Distribution Status > Content Status
