@@ -11,10 +11,10 @@
     </ResourceAssembly>
     <ImageResourceName>tools</ImageResourceName>
   </ImagesDescription>
-  <MatchPattern>^(1|5)$</MatchPattern>
+  <MatchPattern>^(1|5|6)$</MatchPattern>
   <MatchValueToTest>##SUB:FeatureType##</MatchValueToTest>
   <ActionGroups>
-    <ActionDescription Class="AssemblyType" SelectionMode="Single" DisplayName="Retry Failed Devices" MnemonicDisplayName="Retry Failed Devices" Description="Re-run the deployment on every device in error: application evaluation, or an update scan and evaluation">
+    <ActionDescription Class="AssemblyType" SelectionMode="Single" DisplayName="Retry Failed Devices" MnemonicDisplayName="Retry Failed Devices" Description="Re-run the deployment on every device in error: application evaluation, an update scan and evaluation, or baseline evaluation">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>

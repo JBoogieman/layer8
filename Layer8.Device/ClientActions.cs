@@ -1065,6 +1065,59 @@ namespace Layer8.Device
             }
         }
 
+        /// <summary>
+        /// Re-evaluates one deployed configuration baseline now, like Evaluate on the client's Configurations tab.
+        /// Found by its unique name (the deployment's ModelName, without a trailing revision) or, failing that, its display name.
+        /// </summary>
+        public static string EvaluateBaseline(IResultObject resultObject, string baselineName, string displayName)
+        {
+            string host = resultObject["Name"].StringValue;
+            ManagementScope dcm = Utility.GetWMIScope(host, @"ccm\dcm");
+            ManagementObject baseline = null;
+            foreach (ManagementObject candidate in Utility.SearchWMIToList(dcm, "SELECT * FROM SMS_DesiredConfiguration"))
+            {
+                bool match = string.Equals(candidate["Name"] as string, baselineName, StringComparison.OrdinalIgnoreCase)
+                             || (baseline == null && string.Equals(candidate["DisplayName"] as string, displayName, StringComparison.OrdinalIgnoreCase));
+                if (match && (baseline == null || string.Equals(candidate["Name"] as string, baselineName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    baseline?.Dispose();
+                    baseline = candidate;
+                }
+                else
+                {
+                    candidate.Dispose();
+                }
+            }
+            if (baseline == null) throw new InvalidOperationException("This device doesn't have the baseline yet (run Machine Policy first)");
+
+            using (baseline)
+            using (ManagementClass desired = new ManagementClass(dcm, new ManagementPath("SMS_DesiredConfiguration"), null))
+            using (ManagementBaseObject inParams = desired.GetMethodParameters("TriggerEvaluation"))
+            {
+                inParams["Name"] = baseline["Name"];
+                inParams["Version"] = baseline["Version"];
+                inParams["IsMachineTarget"] = true;
+                inParams["IsEnforced"] = true;
+                // Newer clients have PolicyType; when the baseline carries one it must be passed back.
+                if (HasProperty(inParams, "PolicyType") && HasProperty(baseline, "PolicyType") && baseline["PolicyType"] != null)
+                {
+                    inParams["PolicyType"] = baseline["PolicyType"];
+                }
+                using (desired.InvokeMethod("TriggerEvaluation", inParams, null)) { }
+            }
+            log.InfoFormat("Baseline '{0}' evaluation started on {1}", displayName, host);
+            return "Baseline evaluation started";
+        }
+
+        private static bool HasProperty(ManagementBaseObject wmiObject, string name)
+        {
+            foreach (PropertyData property in wmiObject.Properties)
+            {
+                if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
+
         public static void ClientAction(IResultObject resultObject, string scheduleId, bool fullScan)
         {
             try

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace Layer8.Device
@@ -21,6 +22,7 @@ namespace Layer8.Device
         // SMS_DeploymentSummary.FeatureType values this works for.
         private const int ApplicationDeployment = 1;
         private const int SoftwareUpdateDeployment = 5;
+        private const int BaselineDeployment = 6;
 
         // SMS_DeploymentSummary.DeploymentIntent: 1 Required, 2 Available.
         private const int AvailableIntent = 2;
@@ -206,8 +208,19 @@ namespace Layer8.Device
                     failed.Retry = device => ClientActions.RetryUpdates(device);
                     failed.RetryDescription = "scans for updates and re-evaluates its update deployments now, so required updates are tried again";
                     break;
+                case BaselineDeployment:
+                    // One row per device and CI in error, with the CI's error code.
+                    query = string.Format("SELECT AssetID, AssetName, ErrorCode, ErrorDescription FROM SMS_DCMDeploymentErrorAssetDetails WHERE AssignmentID = {0}", assignmentId);
+                    idColumn = "AssetID";
+                    nameColumn = "AssetName";
+                    string baselineName = Regex.Replace(deployment["ModelName"].StringValue ?? string.Empty, @"/\d+$", "");
+                    string displayName = failed.Software;
+                    failed.RetryName = nameof(ClientActions.EvaluateBaseline);
+                    failed.Retry = device => ClientActions.EvaluateBaseline(device, baselineName, displayName);
+                    failed.RetryDescription = "re-evaluates the baseline now";
+                    break;
                 default:
-                    failed.Problem = "This works for application and software update deployments.";
+                    failed.Problem = "This works for application, software update and configuration baseline deployments.";
                     return failed;
             }
 
@@ -220,6 +233,11 @@ namespace Layer8.Device
                     if (failed.Ids.Contains(id)) continue;
                     failed.Ids.Add(id);
                     failed.Names.Add(row[nameColumn].StringValue);
+                    if (featureType == BaselineDeployment)
+                    {
+                        failed.ErrorCodes[id] = (uint)row["ErrorCode"].LongValue;
+                        failed.Descriptions[id] = row["ErrorDescription"].StringValue;
+                    }
                     if (featureType == SoftwareUpdateDeployment)
                     {
                         // UInt32 codes such as 0x87D00607 don't fit an int, so read them as 64-bit.
