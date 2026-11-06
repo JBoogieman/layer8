@@ -72,9 +72,8 @@ namespace Layer8.Device
                         if (result.Properties.Contains("ms-mcs-admpwdexpirationtime"))
                         {
                             long value = (long)result.Properties["ms-mcs-admpwdexpirationtime"][0];
-                            DateTime expire = DateTime.FromFileTimeUtc(value);
-
-                            labelExpire.Text = expire.ToString();
+                            // A FILETIME is UTC; FromFileTime converts it to this machine's local time.
+                            labelExpire.Text = DateTime.FromFileTime(value).ToString("g");
                         }
                         if (result.Properties.Contains("ms-mcs-admpwd"))
                         {
