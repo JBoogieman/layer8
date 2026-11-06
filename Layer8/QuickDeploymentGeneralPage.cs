@@ -20,8 +20,6 @@ namespace Layer8
             InitializeComponent();
 
             pageData.ProgressBarStyle = ProgressBarStyle.Continuous;
-
-            Updater.CheckUpdates();
         }
 
         public override void InitializePageControl()

@@ -25,8 +25,6 @@ namespace Layer8.SoftwareUpdates
             Headline = "Clean up selected software updates from groups";
 
             InitializeComponent();
-
-            Updater.CheckUpdates();
         }
 
         public override void InitializePageControl()

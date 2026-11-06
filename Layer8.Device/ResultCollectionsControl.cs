@@ -18,8 +18,6 @@ namespace Layer8.Device.PropertiesDialog
             InitializeComponent();
 
             Title = "Collections";
-
-            Updater.CheckUpdates();
         }
 
         public override void InitializePageControl()

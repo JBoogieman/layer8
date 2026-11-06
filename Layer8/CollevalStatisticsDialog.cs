@@ -26,7 +26,6 @@ namespace Layer8
 
             Title = action.DisplayName;
 
-            Updater.CheckUpdates();
 
             connectionManager = Microsoft.ConfigurationManagement.AdminConsole.UtilityClass.ConnectionManagerFromScope(scopeNode, "WQL");
 

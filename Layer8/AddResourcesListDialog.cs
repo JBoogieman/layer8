@@ -31,7 +31,6 @@ namespace Layer8.CollectionManagement
 
             Title = "Add Resources to Collection";
 
-            Updater.CheckUpdates();
 
             controlsInspector = new ControlsInspector();
             controlsInspector.AddControl(listViewSelectedResources, new ControlDataStateEvaluator(ValidateResourceValue), "Search for resources");

@@ -27,8 +27,6 @@ namespace Layer8.CollectionManagement
             FormTitle = "Incremental Collections";
             Title = "Select Collections";
             Headline = "Disable incremental updates for selected collections";
-
-            Updater.CheckUpdates();
         }
 
         public override void InitializePageControl()

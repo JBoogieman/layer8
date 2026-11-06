@@ -60,8 +60,6 @@ namespace Layer8.Device
             clientActionProgressBar.Style = ProgressBarStyle.Blocks;
 
             UpdateProgress();
-
-            Updater.CheckUpdates();
         }
 
         /// <summary>For the console's selection (devices, or collection members).</summary>

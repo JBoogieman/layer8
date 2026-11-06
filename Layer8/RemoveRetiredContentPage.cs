@@ -27,8 +27,6 @@ namespace Layer8
             Headline = "Remove content from retired applications";
             Title = "Select Applications";
             FormTitle = "Clean Up Retired Content";
-
-            Updater.CheckUpdates();
         }
 
         public override void InitializePageControl()

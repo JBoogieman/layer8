@@ -30,8 +30,6 @@ namespace Layer8.DriverManager
             InitializeComponent();
 
             pageData.ProgressBarStyle = ProgressBarStyle.Continuous;
-
-            Updater.CheckUpdates();
         }
 
         public override void InitializePageControl()

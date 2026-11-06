@@ -20,8 +20,6 @@ namespace Layer8.Device
             resultObjects = selectedResultObjects;
 
             Title = action.DisplayName + ": " + resultObjects["Name"].StringValue;
-
-            Updater.CheckUpdates();
         }
 
         /// <summary>Console entry point: runs ShowCore behind Layer8's crash guard.</summary>

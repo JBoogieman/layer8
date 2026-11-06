@@ -24,8 +24,6 @@ namespace Layer8.Device
             InitializeComponent();
 
             Title = "Client Cache";
-
-            Updater.CheckUpdates();
         }
 
         public override void InitializePageControl()

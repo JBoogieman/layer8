@@ -141,7 +141,6 @@
       <DependentUpon>RemoveRetiredContentPage.cs</DependentUpon>
     </Compile>
     <Compile Include="TaskSequenceImportExport.cs" />
-    <Compile Include="Updater.cs" />
     <Compile Include="Utility.cs" />
   </ItemGroup>
   <ItemGroup>
