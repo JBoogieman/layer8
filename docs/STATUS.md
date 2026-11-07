@@ -1,11 +1,10 @@
-# Layer8 status: November 5, 2026
+# Layer8 status: November 6, 2026
 
 Working notes, not documentation: where Layer8 stands, what's left before a public release, and the ideas list. Update the date and tick boxes as things land.
 
 **In one line:** there are enough features for a first release. Testing is the gap: everything has been run in one lab with a single client.
 
-- Version in the code: 0.1.0 (nothing tagged yet)
-- Repo: private
+- Version in the code: 0.1.2 (nothing tagged yet)
 - Lab: site server CM01 (no ConfigMgr client) and DEV01 (console and client). There's no second client yet, so a "remote" run so far means DEV01 reaching itself by name, plus CM01 as the "no client" case.
 
 ## What's been tested
@@ -22,7 +21,8 @@ Working notes, not documentation: where Layer8 stands, what's left before a publ
 | Clear Client Cache | DEV01 | 109.6 MB freed |
 | Install Application | DEV01 | Installed Layer8 Test App from the window; it reached Installed. Shows the fail app's 1603 (0x643) |
 | Driver Manager | Catalog download | Dell and HP driver pack imports not tested |
-| MSI | Install; closing open consoles | 3 consoles closed, exit 0. Upgrade, uninstall and the SYSTEM/3010 path not tested |
+| MSI | Install; closing open consoles; uninstall | 3 consoles closed, exit 0. Uninstall (0.1.1) removed Layer8's files and kept the console's `Extensions\Actions` and `Forms`. Upgrade and the SYSTEM/3010 path not tested |
+| Approved console extension | DEV01 console, 0.1.2 signed with a lab certificate | Import, approve, enable notifications, local install. Menus, Show Messages' icon, Layer8 Settings, Client Cache, Driver Grabber, Add Resources and the device properties tabs (Microsoft's and Layer8's) all work. Require Extension, Revoke Approval and Delete not tested |
 | Logging | DEV01 | Log level change picked up without a restart |
 
 Inherited from ConfigMgr Quick Tools, smoke-tested Nov 2 (opened and cancelled, nothing changed):
@@ -85,9 +85,10 @@ Inherited from ConfigMgr Quick Tools, smoke-tested Nov 2 (opened and cancelled, 
 - [ ] Read through the repo for anything lab-specific (names, site codes, paths)
 - [ ] LICENSE keeps Peter Szalatnay's MIT notice; README credit stays
 - [ ] README: screenshots, the console version tested, known limitations
-- [ ] README: a short AI disclosure
-- [ ] Decide on signing. An unsigned MSI shows "unknown publisher" and SmartScreen warnings. Acceptable for a first release if the README says so
-- [ ] Bump to 0.2.0 in `SharedAssemblyInfo.cs`, tag `v0.2.0`, GitHub release with the MSI and release notes
+- [x] README: a short AI disclosure
+- [ ] Decide on signing. An unsigned MSI shows "unknown publisher" and SmartScreen warnings. A release cab can ship unsigned (sites import it with "Allow extension to be unsigned") or each site signs its own build with its own certificate (`Build-Layer8Extension.ps1 -CertificateThumbprint`); INSTALL.md covers both
+- [x] Approved console extension packaging (`tools\Build-Layer8Extension.ps1`, tested Nov 6) and docs/INSTALL.md
+- [ ] Bump to 0.2.0 in `SharedAssemblyInfo.cs`, tag `v0.2.0`, GitHub release with the MSI, the cab and release notes
 - [ ] Make the repo public
 
 ## Next steps, in order
@@ -102,11 +103,10 @@ Inherited from ConfigMgr Quick Tools, smoke-tested Nov 2 (opened and cancelled, 
 - **Retry uses summarized status.** A device that failed minutes ago may be missing, and one that's since recovered may still be listed. Both dialogs say so; Run Summarization first. In the lab, summarization took over an hour to pick up a failure. Worth checking whether `SMS_AppDeploymentAssetDetails` or the client's own state (as Install Application reads it) is the better source.
 - **Remote Assistance and PowerShell session** prompts unconfirmed (see testing).
 - **Device properties form** is shared with Quick Tools: with both installed, whichever was installed last supplies the tabs.
-- **Approved console extensions.** Layer8 is an old-style extension, so the console ignores it while "Only allow console extensions that are approved for the hierarchy" is ticked. Locked-down sites often tick it. The long-term fix is packaging Layer8 as an approved extension; research what that takes before promising it.
+- **Approved console extension quirks** (found Nov 6, none documented by Microsoft; details in [INSTALL.md](INSTALL.md)): the console only loads approved extensions while `XmlStorage\Extensions\Actions` exists, and it looks for DLLs named in menu XML and dialog page XML in different folders, so `Build-Layer8Extension.ps1` rewrites those paths in the cab's copies. A signed cab also needs signed DLLs. The console logs a harmless `Error: …\Forms\..\bin\Layer8` line when a Layer8 window opens.
 - **Other ConfigMgr times may have the same "+000" shift** as Install Application's deadlines: Check Pending Restart's restart deadline goes through the same kind of conversion. Check it against Software Center.
 - **Lab gaps:** sync software updates (at least one product and classification), and create one task sequence, so update and task sequence features can be tested.
 - **Collection Evaluation Statistics** took about 30 seconds to read colleval.log from CM01 in the lab, and OK didn't close the window until it finished (the X did).
-- **Show Messages** on the device menu (inherited `Layer8DeviceMsg.xml`) starts statview.exe from a fixed `C:\Program Files (x86)` console path, so it breaks on a console installed anywhere else.
 - **Skipped records count as offline** in the progress totals. A separate "skipped" count would read better.
 - **Large retries** keep every device record in memory until the window closes. Fine at lab scale; watch it on a 1,000-device deployment.
 
@@ -122,4 +122,3 @@ Rough size: S is an evening, M a session or two, L a project.
 | Recent sign-ins in Quick Status | S | Who was on it, not just who is on it |
 | Lenovo warranty and driver packs | M | Dell and HP have driver packs; Lenovo is the gap |
 | Retry everything failed for a collection, across deployments | M | One click after an outage |
-| Approved-extension packaging (see rough edges) | L | Needed for sites that only allow approved extensions |

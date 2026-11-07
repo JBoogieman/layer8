@@ -25,25 +25,27 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 1. Install the ConfigMgr console and Visual Studio with the .NET desktop development workload (.NET Framework 4.8).
 2. Open `Layer8.sln` and build.
 
-Console references resolve automatically (see `Directory.Build.props`). If your console is installed somewhere unusual, build with `-p:ConfigMgrConsoleBin=<path to AdminConsole\bin>`. To build the installer, run `tools\Build-Layer8Msi.ps1`. It builds everything in Release and produces `Build\Installer\Release\Layer8.msi` (the first run downloads the WiX Toolset from nuget.org).
+Console references resolve automatically (see `Directory.Build.props`). If your console is installed somewhere unusual, build with `-p:ConfigMgrConsoleBin=<path to AdminConsole\bin>`.
+
+To build the packages, run `tools\Build-Layer8Msi.ps1` (everything in Release, then `Build\Installer\Release\Layer8.msi`; the first run downloads the WiX Toolset from nuget.org), then `tools\Build-Layer8Extension.ps1` for `Build\Extension\Layer8-<version>.cab` (add `-CertificateThumbprint` to sign it).
 
 ## Installing
 
-From an elevated prompt:
+There are two ways to put Layer8 in a console. They give you the same menus. [docs/INSTALL.md](docs/INSTALL.md) explains how each one works, what it needs, step by step with screenshots, and what to do when the menus don't show up.
 
-```
-msiexec /i Layer8.msi /qn
-```
+| | Approved console extension (`Layer8-<version>.cab`) | MSI (`Layer8.msi`) |
+|---|---|---|
+| How | Import it into the site once and approve it; each console installs it from the Console Extensions node | Run it on each computer with the console, or deploy it with MECM |
+| Sites with **Only allow console extensions that are approved for the hierarchy** on | Works | Ignored by the console |
+| Signing | Signed with a certificate the site trusts, or unsigned if the hierarchy allows it | Not needed |
 
-The MSI finds the console through the registry, puts Layer8's DLLs in the console's `bin` folder and its menus in `XmlStorage\Extensions`, and shows up in Add/Remove Programs. `msiexec /x Layer8.msi /qn` removes it, and a newer Layer8.msi upgrades an installed one in place. It refuses to install on a machine without the console.
-
-An open console locks Layer8's DLLs, so the installer asks it to close, the same as clicking its X. A silent install running as SYSTEM (an MECM deployment) can't reach a signed-in user's console; then Windows replaces the files at the next restart and msiexec returns 3010, which MECM treats as a soft reboot.
+If that hierarchy setting is on, use the cab. Never put both on the same console: every menu would show up twice.
 
 ## Developer install
 
 From an elevated PowerShell with the console closed, run `tools\Install-Layer8Dev.ps1`. It builds Layer8, copies it into the console's folders and records every file it placed; `tools\Uninstall-Layer8Dev.ps1` removes exactly those files. In a lab, `tools\New-Layer8LabTestData.ps1` creates a test app, an app that always fails (for Retry Failed Devices) and a fake BitLocker recovery key to test against (`-Remove` deletes them). Don't use it on a machine where the MSI is installed: both put the same files in the same places, so uninstall one before using the other. If PowerShell blocks the script, run it as `powershell -ExecutionPolicy Bypass -File tools\Install-Layer8Dev.ps1`.
 
-Layer8 is an old-style console extension, so the console ignores it while **Only allow console extensions that are approved for the hierarchy** is ticked (Administration > Site Configuration > Sites > Hierarchy Settings > General).
+The developer install puts Layer8 in the same places as the MSI, so the console ignores it too while **Only allow console extensions that are approved for the hierarchy** is ticked (Administration > Site Configuration > Sites > Hierarchy Settings > General). Uninstalling it leaves the console's own `XmlStorage\Extensions\Actions` and `Forms` folders in place: the console needs `Actions` to load approved extensions.
 
 ## Status
 
@@ -64,3 +66,5 @@ The log rolls over to `Layer8.lo_` at 2 MB, the same way ConfigMgr's own logs do
 ## Credits and license
 
 Based on ConfigMgr Quick Tools by Peter Szalatnay. Released under the MIT license; see [LICENSE](LICENSE).
+
+AI was used to help bring this vision to life.
