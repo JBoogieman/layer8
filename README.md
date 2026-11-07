@@ -49,7 +49,7 @@ The developer install puts Layer8 in the same places as the MSI, so the console 
 
 ## Status
 
-Early days: see [docs/STATUS.md](docs/STATUS.md) for what's tested, what's left before a public release, and the ideas list. Layer8 has its own assembly names, namespaces and console IDs, so its menus and dialogs no longer clash with ConfigMgr Quick Tools. Layer8 ships only its own DLLs, so the two never share a file in the console's bin folder. The one overlap left: both replace the device properties form, so with both installed, whichever was installed last supplies those tabs. Automatic update checks have been removed.
+Early days: see [docs/STATUS.md](docs/STATUS.md) for what's been tested, what hasn't, the known rough edges and the ideas list. Layer8 has its own assembly names, namespaces and console IDs, so its menus and dialogs no longer clash with ConfigMgr Quick Tools. Layer8 ships only its own DLLs, so the two never share a file in the console's bin folder. The one overlap left: both replace the device properties form, so with both installed, whichever was installed last supplies those tabs. Automatic update checks have been removed.
 
 ## Logs
 
