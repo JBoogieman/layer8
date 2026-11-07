@@ -11,7 +11,9 @@
                                           console extensions that are approved for the hierarchy" turned on
                                           ignores extensions installed this way.
       Layer8-<version>.cab (this script)  Imported once on the site, approved there, then installed from the
-                                          console by each admin. Works with that setting on.
+                                          console by each admin. Works with that setting on. The console only
+                                          loads it while AdminConsole\XmlStorage\Extensions\Actions exists (a
+                                          stock console has it, empty); see docs\INSTALL.md.
 
     Put one or the other on a console, never both: on a hierarchy that allows both, every Layer8 menu would
     show twice.
@@ -27,15 +29,35 @@
     Layer8's device and collection-member menus share file names, and four of those files are byte-for-byte the
     same. So a file whose name is used on more than one node gets the node's first GUID block added to its name
     (Layer8Devices.ed9dee86.xml), and a file whose content is used more than once gets a comment naming its node.
-    The repo's Extensions folder stays as it is; only the cab's copies change.
+
+    The console installs the cab into AdminConsole\Extensions\<ID>\<version>\ (Actions\<node>, Forms, bin), not into
+    AdminConsole\bin, and where it looks for a DLL named in the XML depends on where the name is:
+      Menu XML, <Assembly>          The extension's own bin. Layer8's DLLs are found there; the console's own
+                                    (icons and "is this enabled?" checks from AdminUI.*.dll) aren't, so the cab's
+                                    copies point those at ..\..\..\..\bin\, which is AdminConsole\bin.
+      Dialog XML, <Assembly Name>   The extension's own bin too, also for pages that don't name their own DLL.
+                                    Left as it is: Layer8's DLLs are found, and the console finds its own.
+      Dialog XML, <Page Assembly>   AdminConsole\bin. Layer8's DLLs aren't there, so the cab's copies point
+                                    those at ..\Extensions\<ID>\<version>\bin\.
+    Both paths are relative, so they work wherever the console is installed. (Found by testing on console
+    5.2509; Microsoft doesn't document it.)
+
+    The repo's Extensions folder stays as it is (Layer8.msi puts everything in AdminConsole\bin, where the names
+    work as written); only the cab's copies change.
 
 .PARAMETER Configuration
     Release (default) or Debug: which build's DLLs to package.
 
 .PARAMETER CertificateThumbprint
-    Signs the cab with this code-signing certificate from your certificate store (Authenticode, SHA-256, with a
-    timestamp). Without it the cab is unsigned, and a site imports it only with "Hierarchy approved console
-    extensions can be unsigned" turned on (Hierarchy Settings, General tab).
+    Signs Layer8's four DLLs and then the cab with this code-signing certificate from your certificate store
+    (Authenticode, SHA-256, with a timestamp). A site checks the DLLs inside a signed cab too: a signed cab with
+    unsigned DLLs fails to import with "Failed to verify the signature of the cab or its content". The site server
+    has to trust the certificate (its root in Trusted Root Certification Authorities, the certificate itself in
+    Trusted Publishers).
+
+    Without it nothing is signed, and a site imports the cab only with "Hierarchy approved console extensions can
+    be unsigned" turned on (Hierarchy Settings, General tab) and "Allow extension to be unsigned" ticked in the
+    import wizard.
 
 .PARAMETER TimestampServer
     The timestamp server used when signing, so the signature stays valid after the certificate expires.
@@ -69,6 +91,25 @@ $description = 'Right-click tools for the Configuration Manager console: client 
 # The same DLLs Layer8.msi installs (Layer8.Setup\Package.wxs).
 $dlls = 'Layer8.dll', 'Layer8.Device.dll', 'Layer8.DriverManager.dll', 'Layer8.IniFileParser.dll'
 
+# The signing certificate, found first so a typo fails before anything is built.
+$certificate = $null
+if ($CertificateThumbprint) {
+    $thumbprint = $CertificateThumbprint -replace '\s', ''
+    $certificate = Get-ChildItem Cert:\CurrentUser\My, Cert:\LocalMachine\My -CodeSigningCert | Where-Object Thumbprint -eq $thumbprint | Select-Object -First 1
+    if (-not $certificate) { throw "No code-signing certificate with thumbprint $thumbprint in CurrentUser\My or LocalMachine\My." }
+}
+$untrustedWarned = $false
+function Set-Layer8Signature([string]$path) {
+    $signature = Set-AuthenticodeSignature -FilePath $path -Certificate $certificate -HashAlgorithm SHA256 -TimestampServer $TimestampServer
+    if (-not $signature.SignerCertificate) { throw "Signing $path failed: $($signature.StatusMessage)" }
+    # A certificate whose root this computer doesn't trust (a self-signed lab certificate) still signs; the site
+    # server is the one that has to trust it.
+    if ($signature.Status -ne 'Valid' -and -not $script:untrustedWarned) {
+        Write-Warning "Signed, but this computer doesn't trust the certificate: $($signature.StatusMessage)"
+        $script:untrustedWarned = $true
+    }
+}
+
 $buildDir = Join-Path $repo "Build\$Configuration"
 foreach ($dll in $dlls) {
     if (-not (Test-Path (Join-Path $buildDir $dll))) { throw "$dll isn't in $buildDir. Run .\tools\Build-Layer8Msi.ps1 first." }
@@ -84,20 +125,52 @@ function Get-Sha256([string]$path) {
     (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
 }
 
-# Writes a copy of an XML file with a comment naming the console node, so its hash differs from the other copies.
-function Copy-WithNodeComment([string]$source, [string]$target, [string]$node) {
+# Layer8's own DLLs by the names the XML uses for them ("Layer8.Device" or "Layer8.Device.dll").
+$layer8Assemblies = @($dlls | ForEach-Object { $_ -replace '\.dll$', '' })
+function Test-Layer8Assembly([string]$assembly) {
+    $layer8Assemblies -contains ($assembly.Trim() -replace '\.dll$', '')
+}
+
+# Menu XML: the console looks in Layer8's bin, so a console DLL gets a path back to AdminConsole\bin.
+# From AdminConsole\Extensions\<ID>\<version>\bin, four levels up is AdminConsole.
+function Convert-MenuXml([string]$text) {
+    [regex]::Replace($text, '<Assembly>([^<]+)</Assembly>', {
+        param($match)
+        $assembly = $match.Groups[1].Value.Trim()
+        if ((Test-Layer8Assembly $assembly) -or $assembly -match '[\\/]') { return $match.Value }
+        "<Assembly>..\..\..\..\bin\$assembly</Assembly>"
+    })
+}
+
+# Dialog XML: for a page's own Assembly attribute the console looks in AdminConsole\bin, so a Layer8 DLL gets a
+# path to Layer8's bin. The form's <Assembly Name> is looked up in Layer8's bin already and stays as it is.
+$dialogAssemblyPath = "..\Extensions\$extensionId\$($version.ToString())\bin\"
+function Convert-DialogXml([string]$text) {
+    [regex]::Replace($text, '(<Page\s[^>]*?\sAssembly\s*=\s*")([^"]+)(")', {
+        param($match)
+        $assembly = $match.Groups[2].Value
+        if (-not (Test-Layer8Assembly $assembly)) { return $match.Value }
+        $match.Groups[1].Value + $dialogAssemblyPath + $assembly.Trim() + $match.Groups[3].Value
+    })
+}
+
+# Writes the cab's copy of an XML file: converted by $convert, optionally with a comment naming its console node
+# (so its hash differs from other copies of the same file), keeping the file's byte-order mark if it has one.
+function Write-CabCopy([string]$source, [string]$target, [scriptblock]$convert, [string]$node) {
     $bytes = [IO.File]::ReadAllBytes($source)
     $bom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
     $skip = 0
     if ($bom) { $skip = 3 }
-    $text = [Text.Encoding]::UTF8.GetString($bytes, $skip, $bytes.Length - $skip)
-    $comment = "<!-- Layer8: this copy is for console node $node -->"
-    if ($text.StartsWith('<?xml')) {
-        $end = $text.IndexOf('?>') + 2
-        $text = $text.Insert($end, "`r`n$comment")
-    }
-    else {
-        $text = "$comment`r`n$text"
+    $text = & $convert ([Text.Encoding]::UTF8.GetString($bytes, $skip, $bytes.Length - $skip))
+    if ($node) {
+        $comment = "<!-- Layer8: this copy is for console node $node -->"
+        if ($text.StartsWith('<?xml')) {
+            $end = $text.IndexOf('?>') + 2
+            $text = $text.Insert($end, "`r`n$comment")
+        }
+        else {
+            $text = "$comment`r`n$text"
+        }
     }
     [IO.File]::WriteAllText($target, $text, (New-Object Text.UTF8Encoding($bom)))
 }
@@ -118,15 +191,17 @@ foreach ($action in $actions) {
     if ($sharedNames -contains $action.Name) {
         $action.CabName = '{0}.{1}.xml' -f [IO.Path]::GetFileNameWithoutExtension($action.Name), $action.Node.Substring(0, 8)
     }
-    $target = Join-Path $contents $action.CabName
-    if ($sharedHashes -contains $action.Hash) { Copy-WithNodeComment $action.Source $target $action.Node }
-    else { Copy-Item -LiteralPath $action.Source -Destination $target }
+    $node = $null
+    if ($sharedHashes -contains $action.Hash) { $node = $action.Node }
+    Write-CabCopy $action.Source (Join-Path $contents $action.CabName) ${function:Convert-MenuXml} $node
 }
 
 # 2. The dialog XML and the DLLs.
 $forms = @(Get-ChildItem (Join-Path $repo 'Extensions\Forms') -Filter *.xml -File | Sort-Object Name)
-foreach ($form in $forms) { Copy-Item -LiteralPath $form.FullName -Destination (Join-Path $contents $form.Name) }
+foreach ($form in $forms) { Write-CabCopy $form.FullName (Join-Path $contents $form.Name) ${function:Convert-DialogXml} $null }
 foreach ($dll in $dlls) { Copy-Item -LiteralPath (Join-Path $buildDir $dll) -Destination (Join-Path $contents $dll) }
+# Signed before their hashes go into the manifest (signing changes the file). Only the cab's copies are signed.
+if ($certificate) { foreach ($dll in $dlls) { Set-Layer8Signature (Join-Path $contents $dll) } }
 
 # 3. Every file in the cab needs its own name and its own hash.
 $packaged = @(Get-ChildItem $contents -File)
@@ -202,6 +277,8 @@ $lines = @(
     '.Set FolderSizeThreshold=0'
     '.Set MaxCabinetSize=0'
     '.Set MaxDiskFileCount=0'
+    # Room for an Authenticode signature. Without it Set-AuthenticodeSignature can't sign the cab.
+    '.Set ReservePerCabinetSize=6144'
 )
 $lines += "`"$manifest`" `"manifest.xml`""
 foreach ($file in $packaged | Sort-Object Name) { $lines += "`"$($file.FullName)`" `"$($file.Name)`"" }
@@ -212,17 +289,10 @@ $output = & $makecab /F $ddf 2>&1
 if ($LASTEXITCODE -or -not (Test-Path $cab)) { throw "makecab failed:`n$($output -join "`n")" }
 Remove-Item $ddf, (Join-Path $outDir 'Layer8.rpt'), (Join-Path $outDir 'Layer8.inf') -Force -ErrorAction SilentlyContinue
 
-# 6. Sign, if asked.
+# 6. Sign the cab, if asked (the DLLs inside were signed in step 2).
 $signedBy = $null
-if ($CertificateThumbprint) {
-    $thumbprint = $CertificateThumbprint -replace '\s', ''
-    $certificate = Get-ChildItem Cert:\CurrentUser\My, Cert:\LocalMachine\My -CodeSigningCert | Where-Object Thumbprint -eq $thumbprint | Select-Object -First 1
-    if (-not $certificate) { throw "No code-signing certificate with thumbprint $thumbprint in CurrentUser\My or LocalMachine\My." }
-    $signature = Set-AuthenticodeSignature -FilePath $cab -Certificate $certificate -HashAlgorithm SHA256 -TimestampServer $TimestampServer
-    if (-not $signature.SignerCertificate) { throw "Signing failed: $($signature.StatusMessage)" }
-    # A certificate whose root this computer doesn't trust (a self-signed lab certificate) still signs; the
-    # site server is the one that has to trust it.
-    if ($signature.Status -ne 'Valid') { Write-Warning "Signed, but this computer doesn't trust the certificate: $($signature.StatusMessage)" }
+if ($certificate) {
+    Set-Layer8Signature $cab
     $signedBy = $certificate.Subject
 }
 
@@ -231,6 +301,6 @@ Write-Host "Built Layer8 $version as a console extension"
 Write-Host "  $cab"
 Write-Host "  SHA-256 $(Get-Sha256 $cab)"
 Write-Host "  $($actions.Count) menu files on $(@($actions | Group-Object Node).Count) console nodes, $($forms.Count) dialog files, $($dlls.Count) DLLs"
-if ($signedBy) { Write-Host "  Signed by $signedBy" }
-else { Write-Host "  Unsigned: the site needs 'Hierarchy approved console extensions can be unsigned' turned on to import it." }
+if ($signedBy) { Write-Host "  Cab and DLLs signed by $signedBy" }
+else { Write-Host "  Unsigned: import it with 'Allow extension to be unsigned' ticked (needs 'Hierarchy approved console extensions can be unsigned')." }
 Write-Host "  What went in: $contents"

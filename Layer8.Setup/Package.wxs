@@ -7,6 +7,7 @@
     2. Copies Layer8's DLLs (and the libraries they use) into the console's bin folder.
     3. Copies the menu (Actions) and dialog (Forms) XML into the console's XmlStorage\Extensions folder.
     4. Uninstalls cleanly, and a newer Layer8.msi replaces an older one in place (a "major upgrade").
+       Uninstalling leaves the console's own (empty) Extensions\Actions and \Forms folders in place.
 
   Install it silently, the way MECM would:  msiexec /i Layer8.msi /qn
   An open console is asked to close (see CloseConsole below).
@@ -84,7 +85,10 @@
       <Directory Id="CONSOLEDIR" Name="ConfigMgrConsole">
         <Directory Id="CONSOLEBIN" Name="bin" />
         <Directory Id="XMLSTORAGE" Name="XmlStorage">
-          <Directory Id="EXTENSIONSDIR" Name="Extensions" />
+          <Directory Id="EXTENSIONSDIR" Name="Extensions">
+            <Directory Id="EXTENSIONACTIONSDIR" Name="Actions" />
+            <Directory Id="EXTENSIONFORMSDIR" Name="Forms" />
+          </Directory>
         </Directory>
       </Directory>
     </StandardDirectory>
@@ -104,13 +108,34 @@
       The console XML: everything under the repo's Extensions folder, keeping its folder structure
       (Actions\<console node GUID>\Layer8*.xml and Forms\*.xml).
     -->
-    <ComponentGroup Id="ConsoleExtensions" Directory="EXTENSIONSDIR">
-      <Files Include="$(var.ExtensionsDir)**" />
+    <ComponentGroup Id="ConsoleActions" Directory="EXTENSIONACTIONSDIR">
+      <Files Include="$(var.ExtensionsDir)Actions\**" />
+    </ComponentGroup>
+    <ComponentGroup Id="ConsoleForms" Directory="EXTENSIONFORMSDIR">
+      <Files Include="$(var.ExtensionsDir)Forms\**" />
+    </ComponentGroup>
+
+    <!--
+      The console ships XmlStorage\Extensions\Actions and \Forms empty, and it only loads approved console
+      extensions (the Layer8 cab, Community hub items) while Actions exists. Uninstalling a package can delete
+      folders it leaves empty, including ones it didn't create (an earlier Layer8.msi removed both), and that
+      quietly breaks every approved extension on the console. These two components are permanent: never
+      removed, so neither are the folders.
+    -->
+    <ComponentGroup Id="KeepConsoleFolders">
+      <Component Id="KeepConsoleActionsFolder" Directory="EXTENSIONACTIONSDIR" Guid="F61EB721-0413-4A7D-BF05-2F5EB304B5AA" Permanent="yes">
+        <CreateFolder />
+      </Component>
+      <Component Id="KeepConsoleFormsFolder" Directory="EXTENSIONFORMSDIR" Guid="8E7B5300-698E-4B77-8AA1-01C50AFC7DC9" Permanent="yes">
+        <CreateFolder />
+      </Component>
     </ComponentGroup>
 
     <Feature Id="Layer8">
       <ComponentGroupRef Id="Layer8Binaries" />
-      <ComponentGroupRef Id="ConsoleExtensions" />
+      <ComponentGroupRef Id="ConsoleActions" />
+      <ComponentGroupRef Id="ConsoleForms" />
+      <ComponentGroupRef Id="KeepConsoleFolders" />
     </Feature>
   </Package>
 </Wix>

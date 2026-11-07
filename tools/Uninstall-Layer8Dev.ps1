@@ -4,8 +4,10 @@
 
 .DESCRIPTION
     Reads %ProgramData%\Layer8\install-manifest.txt (written by Install-Layer8Dev.ps1) and
-    deletes exactly the files listed there, then any folders under XmlStorage\Extensions that
-    those files left empty. It refuses to touch anything outside the console's own folder.
+    deletes exactly the files listed there, then any node folders under XmlStorage\Extensions\Actions
+    that those files left empty. It keeps XmlStorage\Extensions\Actions and \Forms themselves: the
+    console ships them empty and stops loading approved console extensions without Actions.
+    It refuses to touch anything outside the console's own folder.
 
     Run it from an elevated PowerShell with the ConfigMgr console closed.
     Use -WhatIf to see what would be removed without removing anything.
@@ -46,10 +48,13 @@ foreach ($file in Get-Content $manifest) {
     if ($file.StartsWith($extensions + '\', [StringComparison]::OrdinalIgnoreCase)) { [void]$folders.Add((Split-Path $file)) }
 }
 
-# Remove extension folders our files left empty, deepest first, never above XmlStorage\Extensions.
+# Remove extension folders our files left empty, deepest first. Never XmlStorage\Extensions itself or the
+# folders directly in it (Actions, Forms): the console ships those, and without Actions it stops loading
+# approved console extensions.
 foreach ($folder in ($folders | Sort-Object Length -Descending)) {
     $current = $folder
-    while ($current.Length -gt $extensions.Length -and (Test-Path $current) -and -not (Get-ChildItem $current -Force)) {
+    while (-not [string]::Equals((Split-Path $current), $extensions, [StringComparison]::OrdinalIgnoreCase) -and
+           $current.Length -gt $extensions.Length -and (Test-Path $current) -and -not (Get-ChildItem $current -Force)) {
         if ($PSCmdlet.ShouldProcess($current, 'Remove empty folder')) { Remove-Item $current } else { break }
         $current = Split-Path $current
     }
