@@ -175,6 +175,26 @@ A newer `Layer8.msi` upgrades an installed one in place. `msiexec /x Layer8.msi 
 
 ---
 
+## The devices you manage
+
+Layer8 goes only where the console is. Nothing is installed on the devices: Layer8 reaches them over the network as the account running the console, which needs to be a local administrator on them. Each device needs the ConfigMgr client, and its firewall has to let in what each tool uses:
+
+| Layer8 tools | Windows Firewall rule group on the device |
+|---|---|
+| Client actions and client tools (Quick Status, Install Application, Find Software, BitLocker and Defender status, and so on) | Windows Management Instrumentation (WMI) |
+| Restart SMS Agent Host Service, Browse C$, Client Logs, Browse ccmcache, Collect Client Logs, Client Log in CMTrace | File and Printer Sharing (port 445 and the admin shares) |
+| Online Status | File and Printer Sharing: the Echo Request rules for ping; otherwise it falls back to port 445 |
+| Computer Management, Event Viewer, Services | Remote Event Log Management, Remote Service Management, COM+ Network Access |
+| Remote Desktop | Remote Desktop, and Remote Desktop turned on |
+| PowerShell Session | Windows Remote Management (WinRM turned on) |
+| Remote Assistance | Remote Assistance, and the **Configure Offer Remote Assistance** policy |
+
+Managed networks usually open WMI and File and Printer Sharing by Group Policy already, because ConfigMgr's own client push and remote tools need them. A device with WMI blocked shows **Online, but WMI is blocked** when it answers a ping or port 135 or 445, and **Offline, or its firewall blocks WMI** when it answers nothing: Windows blocks ping by default, so a fully firewalled device looks the same as one that's switched off.
+
+For a lab client, `tools\Prepare-Layer8LabClient.ps1` opens all of these except the Remote Assistance policy. Run it elevated on the client.
+
+---
+
 ## Troubleshooting
 
 ### Approved Layer8 installed, but no menus

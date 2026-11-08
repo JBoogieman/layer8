@@ -57,6 +57,9 @@ namespace Layer8.Device
         private bool summaryLogged;
         private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(typeof(DeviceProgressDialog));
 
+        // HRESULT for "The RPC server is unavailable", what WMI throws when nothing answers.
+        private const int RpcServerUnavailable = unchecked((int)0x800706BA);
+
         public DeviceProgressDialog()
         {
             InitializeComponent();
@@ -310,10 +313,26 @@ namespace Layer8.Device
                     status = "WMI error: " + root.Message;
                     Interlocked.Increment(ref failed);
                 }
+                else if (root is COMException rpc && rpc.ErrorCode == RpcServerUnavailable)
+                {
+                    // Nothing answered on WMI's ports: the device is off, or its firewall blocks WMI. Windows
+                    // blocks ping by default, so a firewalled device can look just like an off one; one that
+                    // answers anything at all is on.
+                    if (ClientActions.AnswersAtAll(item.Text))
+                    {
+                        status = "Online, but WMI is blocked (RPC server unavailable): check the device's firewall";
+                        Interlocked.Increment(ref failed);
+                    }
+                    else
+                    {
+                        status = "Offline, or its firewall blocks WMI (RPC server unavailable)";
+                        Interlocked.Increment(ref offline);
+                    }
+                }
                 else if (root is COMException)
                 {
-                    status = "Offline";
-                    Interlocked.Increment(ref offline);
+                    status = "Error: " + root.Message;
+                    Interlocked.Increment(ref failed);
                 }
                 else
                 {

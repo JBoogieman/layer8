@@ -1,22 +1,23 @@
 # Layer8 status
 
-Updated November 6, 2026. Version 0.1.2, nothing released yet.
+Updated November 8, 2026. Version 0.1.3, nothing released yet.
 
-Layer8 is early. Everything below was tested in one lab: one site server and one client, on ConfigMgr 2509 (console 5.2509.1038.1000). A "remote" run so far means the client reaching itself by name, plus the site server as the "no ConfigMgr client" case. Treat anything that changes clients as something to try on a few devices first.
+Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (console 5.2509.1038.1000): a site server, the client the console runs on, and a second Windows 11 client reached over the network. The site server stands in for "no ConfigMgr client". Treat anything that changes clients as something to try on a few devices first.
 
 ## What's been tested
 
 | Area | Tested against | Notes |
 |---|---|---|
-| Client actions (policy and evaluation cycles) | Lab client | Machine Policy and App Deployment Evaluation fired |
-| Client tools (quick status, find software, missing updates, pending restart, policy and GP refresh, client health, cache, repair, provisioning mode, BitLocker status, Defender quick scan) | Lab client; site server for "No ConfigMgr client found" | Install Missing Updates has only ever seen "No missing updates" |
-| Runs on a whole collection | All Systems | The four built-in placeholder records (Unknown Computer, Provisioning Device) are skipped by name |
-| Online Status | Lab client; site server ("ping blocked, port 445 answers") | |
-| Remote tools | Ping, Remote Desktop, browse C$ and the client cache, client logs (folder and zip), Client Log in CMTrace, Computer Management, Event Viewer, Services | Remote Assistance and the PowerShell session start, but the UAC prompt and the session itself haven't been confirmed |
+| Client actions (policy and evaluation cycles) | Both clients | Machine Policy and App Deployment Evaluation fired |
+| Client tools (quick status, find software, missing updates, pending restart, policy and GP refresh, client health, clear cache, repair, client info, BitLocker and Defender status, Defender quick scan) | Both clients; site server for "No ConfigMgr client found" | Repair: ccmrepair.log on the second client ends "Repair complete". Install Missing Updates has only ever seen "No missing updates" |
+| Restart, Cancel Restart, Restart SMS Agent Host Service | Second client | Restart then Cancel Restart: no reboot, uptime kept counting |
+| Runs on a whole collection | All Systems; a two-client collection | The four built-in placeholder records (Unknown Computer, Provisioning Device) are skipped by name |
+| Online Status | Both clients; site server ("ping blocked, port 445 answers") | |
+| Remote tools | Ping, browse C$ and the client cache, client logs (folder and zip), Client Log in CMTrace: both clients. Remote Desktop, Computer Management, Event Viewer, Services: the console's own client | Against the second client, Computer Management's Event Viewer part needs the firewall groups in [INSTALL.md](INSTALL.md#the-devices-you-manage). Remote Assistance and the PowerShell session start, but the UAC prompt and the session itself haven't been confirmed |
 | Copy Names, Copy Member Names, Copy Device Info, Copy Results, Export | Lab client, All Systems | |
 | BitLocker Recovery Key | No keys; a fake key from the lab script | Key ID filter works |
-| Clear Client Cache | Lab client | |
-| Install Application | Lab client | Installs an app and reaches Installed; shows a failing app's 1603 (0x643) |
+| Clear Client Cache | Both clients | On the second client it freed the installed test app's content (110 MB) |
+| Install Application | Both clients | Installs an app and reaches Installed; shows a failing app's 1603 (0x643) |
 | Retry Failed Devices, Copy Failed Devices | Required and Available app deployments with the client in Error | Copy groups by error code. Update deployments not tested (the lab has no updates yet) |
 | Monitoring > Deployments > Delete | A throwaway app deployment | |
 | Redistribute Failed Content (Distribution Status) | A package whose source share doesn't exist | |
@@ -30,10 +31,11 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 
 ## Not tested yet
 
-- Anything against a second client that isn't the console's own computer, and the offline check with a device that's really switched off
+- The offline check with a device that's really switched off, and the new "Online, but WMI is blocked" answer (0.1.3)
+- Event Viewer, Services and Remote Desktop against a client other than the console's own
 - Update deployments: Retry and Copy Failed Devices, Install Missing Updates with an update actually missing, Quick Deployment
 - Task Sequence Export to XML and phased deployments
-- Restart and Cancel Restart, application uninstall and repair from Install Application, setting the cache size on many devices at once
+- Application uninstall and repair from Install Application (the lab's apps don't offer them), setting the cache size on many devices at once
 - Configuration baselines: re-evaluating non-compliant devices and Retry Failed Devices (see rough edges)
 - Remote Assistance's offer and the PowerShell session itself
 - Dell and HP driver pack imports

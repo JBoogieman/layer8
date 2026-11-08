@@ -340,7 +340,8 @@ namespace Layer8.Device
                         }
                         catch (Exception ex)
                         {
-                            // The first failure that means the device can't be reached ends the row as offline.
+                            // The first failure that means the device can't be reached ends the row; the dialog
+                            // says whether it's offline or blocked.
                             Exception root = SafeAction.Unwrap(ex);
                             if (root is DeviceOfflineException || root is System.Runtime.InteropServices.COMException) throw;
                             results.Add(failed.Software + ": " + root.Message);

@@ -59,7 +59,8 @@ namespace Layer8.Device
 
         private static void RunClientActionRestartServiceCore(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
         {
-            ProcessAction(scopeNode, action, selectedResultObjects, nameof(RestartServiceAsync), device => RestartServiceAsync(device));
+            // Always in the progress dialog: a restart takes up to half a minute, and without it nothing on screen says it worked.
+            ProcessAction(scopeNode, action, selectedResultObjects, nameof(RestartServiceAsync), device => RestartServiceAsync(device), alwaysShowDialog: true);
         }
 
         /// <summary>
@@ -371,6 +372,33 @@ namespace Layer8.Device
         }
 
         /// <summary>
+        /// Whether the device answers anything: a ping, or port 135 or 445. Tells "off" from "on, but its firewall
+        /// blocks WMI" after WMI reports the RPC server unavailable. Takes up to about two seconds.
+        /// </summary>
+        internal static bool AnswersAtAll(string host)
+        {
+            IPAddress address;
+            try
+            {
+                address = Resolve(host);
+            }
+            catch (DeviceOfflineException)
+            {
+                return false;
+            }
+
+            using (Ping ping = new Ping())
+            {
+                try
+                {
+                    if (ping.Send(address, 1000).Status == IPStatus.Success) return true;
+                }
+                catch (PingException) { }
+            }
+            return AnyPortAnswers(address, new[] { 135, 445 }, 1000);
+        }
+
+        /// <summary>
         /// Tries the ports together and returns as soon as one connects; false when all refuse or the time runs
         /// out. Waits on the connections themselves, so it doesn't tie up a thread per port.
         /// </summary>
@@ -572,9 +600,8 @@ namespace Layer8.Device
             List<string> users = SignedInUsers(cimv2);
             parts.Add(users.Count == 0 ? "Nobody signed in" : "Signed in: " + string.Join(", ", users));
 
-            ManagementObject os = Utility.GetFirstWMIInstance(cimv2, "SELECT LastBootUpTime FROM Win32_OperatingSystem");
-            DateTime? lastBoot = ToDateTime(os?["LastBootUpTime"]);
-            if (lastBoot.HasValue) parts.Add("up " + FormatUptime(DateTime.Now - lastBoot.Value));
+            TimeSpan? uptime = Uptime(cimv2);
+            if (uptime.HasValue) parts.Add("up " + FormatUptime(uptime.Value));
 
             // A full system drive is a common reason updates and installs fail.
             ManagementObject systemDrive = Utility.GetFirstWMIInstance(cimv2, "SELECT FreeSpace, Size FROM Win32_LogicalDisk WHERE DeviceID = 'C:'");
@@ -637,6 +664,31 @@ namespace Layer8.Device
                 }
             }
             return users;
+        }
+
+        /// <summary>
+        /// How long the device has been up, measured on the device: its boot time against its own clock, so the
+        /// console's clock doesn't come into it. Windows records the boot time once, so a clock set back after boot
+        /// (a VM that starts with the wrong time, then syncs) leaves it in the future; then the uptime counter
+        /// answers instead. Null if neither does.
+        /// </summary>
+        private static TimeSpan? Uptime(ManagementScope cimv2)
+        {
+            ManagementObject os = Utility.GetFirstWMIInstance(cimv2, "SELECT LastBootUpTime, LocalDateTime FROM Win32_OperatingSystem");
+            DateTime? lastBoot = ToDateTime(os?["LastBootUpTime"]);
+            DateTime? now = ToDateTime(os?["LocalDateTime"]);
+            if (lastBoot.HasValue && now.HasValue && now.Value >= lastBoot.Value) return now.Value - lastBoot.Value;
+
+            try
+            {
+                ManagementObject counter = Utility.GetFirstWMIInstance(cimv2, "SELECT SystemUpTime FROM Win32_PerfFormattedData_PerfOS_System");
+                if (counter?["SystemUpTime"] != null) return TimeSpan.FromSeconds(Convert.ToDouble(counter["SystemUpTime"]));
+            }
+            catch (ManagementException ex)
+            {
+                log.Debug("No uptime counter: " + ex.Message);
+            }
+            return null;
         }
 
         private static string FormatUptime(TimeSpan uptime)
@@ -1183,7 +1235,7 @@ namespace Layer8.Device
             }
         }
 
-        public static async Task RestartServiceAsync(IResultObject resultObject)
+        public static async Task<string> RestartServiceAsync(IResultObject resultObject)
         {
             using (ServiceController service = new ServiceController("SMS Agent Host", resultObject["Name"].StringValue))
             {
@@ -1194,11 +1246,14 @@ namespace Layer8.Device
                     await service.WaitForStatusAsync(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(20), CancelToken);
 
                     service.Start();
+                    return "SMS Agent Host restarted";
                 }
-                else if (service.Status == ServiceControllerStatus.Stopped)
+                if (service.Status == ServiceControllerStatus.Stopped)
                 {
                     service.Start();
+                    return "SMS Agent Host was stopped; started it";
                 }
+                return "SMS Agent Host is " + service.Status + "; left it alone";
             }
         }
     }
