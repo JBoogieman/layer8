@@ -667,27 +667,29 @@ namespace Layer8.Device
         }
 
         /// <summary>
-        /// How long the device has been up, measured on the device: its boot time against its own clock, so the
-        /// console's clock doesn't come into it. Windows records the boot time once, so a clock set back after boot
-        /// (a VM that starts with the wrong time, then syncs) leaves it in the future; then the uptime counter
-        /// answers instead. Null if neither does.
+        /// How long the device has been up. Windows' uptime counter comes first: it survives the clock being set
+        /// after boot. LastBootUpTime doesn't, because Windows records it once: a VM that booted with its clock two
+        /// hours fast and then synced with the domain reported a boot time two hours late. It's the fallback for a
+        /// device whose performance counters don't answer, measured against the device's own clock so the
+        /// console's clock doesn't come into it. Null if neither answers.
         /// </summary>
         private static TimeSpan? Uptime(ManagementScope cimv2)
         {
+            try
+            {
+                ManagementObject counter = Utility.GetFirstWMIInstance(cimv2, "SELECT SystemUpTime FROM Win32_PerfFormattedData_PerfOS_System");
+                double seconds = Convert.ToDouble(counter?["SystemUpTime"] ?? 0);
+                if (seconds > 0) return TimeSpan.FromSeconds(seconds);
+            }
+            catch (ManagementException ex)
+            {
+                log.Debug("No uptime counter, using LastBootUpTime: " + ex.Message);
+            }
+
             ManagementObject os = Utility.GetFirstWMIInstance(cimv2, "SELECT LastBootUpTime, LocalDateTime FROM Win32_OperatingSystem");
             DateTime? lastBoot = ToDateTime(os?["LastBootUpTime"]);
             DateTime? now = ToDateTime(os?["LocalDateTime"]);
             if (lastBoot.HasValue && now.HasValue && now.Value >= lastBoot.Value) return now.Value - lastBoot.Value;
-
-            try
-            {
-                ManagementObject counter = Utility.GetFirstWMIInstance(cimv2, "SELECT SystemUpTime FROM Win32_PerfFormattedData_PerfOS_System");
-                if (counter?["SystemUpTime"] != null) return TimeSpan.FromSeconds(Convert.ToDouble(counter["SystemUpTime"]));
-            }
-            catch (ManagementException ex)
-            {
-                log.Debug("No uptime counter: " + ex.Message);
-            }
             return null;
         }
 

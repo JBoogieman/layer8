@@ -178,7 +178,9 @@ namespace Layer8.Device
                 case "ComputerManagement":
                     return Program(Path.Combine(system, "mmc.exe"), "compmgmt.msc /computer=" + name);
                 case "EventViewer":
-                    return Program(Path.Combine(system, "mmc.exe"), "eventvwr.msc /computer=" + name);
+                    // Not "mmc eventvwr.msc /computer=": Event Viewer ignores it and opens this computer's logs.
+                    // eventvwr.exe takes the computer name as its argument.
+                    return Program(Path.Combine(system, "eventvwr.exe"), name);
                 case "Services":
                     return Program(Path.Combine(system, "mmc.exe"), "services.msc /computer=" + name);
                 default:

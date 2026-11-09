@@ -1,6 +1,6 @@
 # Layer8 status
 
-Updated November 8, 2026. Version 0.1.3, nothing released yet.
+Updated November 8, 2026. Version 0.1.4, nothing released yet.
 
 Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (console 5.2509.1038.1000): a site server, the client the console runs on, and a second Windows 11 client reached over the network. The site server stands in for "no ConfigMgr client". Treat anything that changes clients as something to try on a few devices first.
 
@@ -13,7 +13,7 @@ Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (conso
 | Restart, Cancel Restart, Restart SMS Agent Host Service | Second client | Restart then Cancel Restart: no reboot, uptime kept counting |
 | Runs on a whole collection | All Systems; a two-client collection | The four built-in placeholder records (Unknown Computer, Provisioning Device) are skipped by name |
 | Online Status | Both clients; site server ("ping blocked, port 445 answers") | |
-| Remote tools | Ping, browse C$ and the client cache, client logs (folder and zip), Client Log in CMTrace: both clients. Remote Desktop, Computer Management, Event Viewer, Services: the console's own client | Against the second client, Computer Management's Event Viewer part needs the firewall groups in [INSTALL.md](INSTALL.md#the-devices-you-manage). Remote Assistance and the PowerShell session start, but the UAC prompt and the session itself haven't been confirmed |
+| Remote tools | Ping, browse C$ and the client cache, client logs (folder and zip), Client Log in CMTrace, Computer Management, Services: both clients. Remote Desktop: the console's own client | The second client needed the firewall groups in [INSTALL.md](INSTALL.md#the-devices-you-manage) for Computer Management and Services. Event Viewer opened the console's own logs until 0.1.4. Remote Assistance and the PowerShell session start, but the UAC prompt and the session itself haven't been confirmed |
 | Copy Names, Copy Member Names, Copy Device Info, Copy Results, Export | Lab client, All Systems | |
 | BitLocker Recovery Key | No keys; a fake key from the lab script | Key ID filter works |
 | Clear Client Cache | Both clients | On the second client it freed the installed test app's content (110 MB) |
@@ -31,8 +31,8 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 
 ## Not tested yet
 
-- The offline check with a device that's really switched off, and the new "Online, but WMI is blocked" answer (0.1.3)
-- Event Viewer, Services and Remote Desktop against a client other than the console's own
+- The offline check with a device that's really switched off, and the "Online, but WMI is blocked" answer (0.1.3)
+- Event Viewer against another computer since the 0.1.4 fix, and Remote Desktop against a client other than the console's own
 - Update deployments: Retry and Copy Failed Devices, Install Missing Updates with an update actually missing, Quick Deployment
 - Task Sequence Export to XML and phased deployments
 - Application uninstall and repair from Install Application (the lab's apps don't offer them), setting the cache size on many devices at once
