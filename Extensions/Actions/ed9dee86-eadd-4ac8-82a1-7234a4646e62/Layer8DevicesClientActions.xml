@@ -167,7 +167,7 @@
         <string>ContextMenu</string>
       </ShowOn>
     </ActionDescription>
-    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Quick Status" MnemonicDisplayName="Quick Status" Description="Show who is signed in, time since the last restart and the ConfigMgr client version">
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Quick Status" MnemonicDisplayName="Quick Status" Description="Who is signed in, time since the last restart, free space on C:, IP address and ConfigMgr client version, in columns you can sort and export">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>

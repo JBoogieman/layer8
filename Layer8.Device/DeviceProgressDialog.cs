@@ -60,6 +60,11 @@ namespace Layer8.Device
         // HRESULT for "The RPC server is unavailable", what WMI throws when nothing answers.
         private const int RpcServerUnavailable = unchecked((int)0x800706BA);
 
+        // Tools that answer in columns (Quick Status): the dialog sorts those itself, by each cell's real value.
+        private bool hasDeviceColumns;
+        private int sortColumn = -1;
+        private SortOrder sortOrder = SortOrder.None;
+
         public DeviceProgressDialog()
         {
             InitializeComponent();
@@ -181,10 +186,10 @@ namespace Layer8.Device
             {
                 if (save.ShowDialog(this) != DialogResult.OK) return;
 
-                StringBuilder csv = new StringBuilder("Device,Status").AppendLine();
-                foreach (ListViewItem host in listViewHosts.Items)
+                StringBuilder csv = new StringBuilder();
+                foreach (string[] row in Rows())
                 {
-                    csv.Append(CsvField(host.Text)).Append(',').Append(CsvField(host.SubItems[1].Text)).AppendLine();
+                    csv.AppendLine(string.Join(",", row.Select(CsvField)));
                 }
                 // With a byte order mark, Excel reads the file as UTF-8 instead of guessing.
                 System.IO.File.WriteAllText(save.FileName, csv.ToString(), new UTF8Encoding(true));
@@ -199,12 +204,34 @@ namespace Layer8.Device
             return value.IndexOfAny(new[] { ',', '"', '\r', '\n' }) < 0 ? value : "\"" + value.Replace("\"", "\"\"") + "\"";
         }
 
+        /// <summary>
+        /// The header row, then one row per device with every column, in the order the list is sorted. Every
+        /// device is included even while the search box filters the list.
+        /// </summary>
+        private IEnumerable<string[]> Rows()
+        {
+            int count = listViewHosts.Columns.Count;
+            string[] header = new string[count];
+            header[0] = "Device";
+            for (int i = 1; i < count; i++) header[i] = listViewHosts.Columns[i].Text;
+            yield return header;
+
+            List<ListViewItem> hosts = listViewHosts.Items.Cast<ListViewItem>().ToList();
+            if (listViewHosts.ListViewItemSorter is ResultSorter sorter) hosts.Sort((a, b) => sorter.Compare(a, b));
+            foreach (ListViewItem host in hosts)
+            {
+                string[] row = new string[count];
+                for (int i = 0; i < count; i++) row[i] = i < host.SubItems.Count ? host.SubItems[i].Text : string.Empty;
+                yield return row;
+            }
+        }
+
         private void CopyResults()
         {
-            StringBuilder text = new StringBuilder("Device\tStatus").AppendLine();
-            foreach (ListViewItem host in listViewHosts.Items)
+            StringBuilder text = new StringBuilder();
+            foreach (string[] row in Rows())
             {
-                text.Append(host.Text).Append('\t').Append(host.SubItems[1].Text).AppendLine();
+                text.AppendLine(string.Join("\t", row));
             }
             Clipboard.SetDataObject(text.ToString(), true, 10, 100);
             log.InfoFormat("{0}: copied {1} result row(s)", Title, listViewHosts.Items.Count);
@@ -287,11 +314,13 @@ namespace Layer8.Device
                 object result = run(resultObject);
                 // Waits for async actions (their errors land in the catch below), and picks up the short
                 // status some actions return, like "No missing updates".
-                string outcome = ClientActions.WaitForResult(result);
+                DeviceColumns columns = result as DeviceColumns;
+                string outcome = columns != null ? columns.Status : ClientActions.WaitForResult(result);
 
                 Interlocked.Increment(ref completed);
                 status = string.IsNullOrEmpty(outcome) ? "Completed" : outcome;
-                log.InfoFormat("{0} on {1}: {2}", actionName, item.Text, status);
+                log.InfoFormat("{0} on {1}: {2}", actionName, item.Text, columns?.Summary ?? status);
+                if (columns != null) OnUiThread(() => ShowColumns(item, columns));
             }
             catch (Exception ex)
             {
@@ -366,6 +395,100 @@ namespace Layer8.Device
             catch (InvalidOperationException) { }
         }
 
+        /// <summary>
+        /// Puts a device's columns in its row, adding a column the first time a device reports it. From then on
+        /// the dialog sorts the list itself (the console's own sort compares text, so 9 GB would land after 10 GB).
+        /// </summary>
+        private void ShowColumns(ListViewItem item, DeviceColumns columns)
+        {
+            if (!hasDeviceColumns)
+            {
+                hasDeviceColumns = true;
+                listViewHosts.AutoSort = false;
+                listViewHosts.ColumnClick += (s, e) => SortBy(e.Column);
+                // Room for the columns, as far as the screen allows, still centred where it was.
+                int wanted = Math.Min(LogicalToDeviceUnits(940), Screen.FromControl(this).WorkingArea.Width - LogicalToDeviceUnits(40));
+                if (ClientSize.Width < wanted)
+                {
+                    int grow = wanted - ClientSize.Width;
+                    ClientSize = new System.Drawing.Size(wanted, ClientSize.Height);
+                    Left = Math.Max(0, Left - grow / 2);
+                }
+            }
+
+            foreach (DeviceColumns.Cell cell in columns.Cells)
+            {
+                int index = ColumnIndex(cell.Column);
+                while (item.SubItems.Count <= index) item.SubItems.Add(string.Empty);
+                item.SubItems[index].Text = cell.Text;
+                item.SubItems[index].Tag = cell.SortKey;
+            }
+        }
+
+        private int ColumnIndex(string name)
+        {
+            for (int i = 2; i < listViewHosts.Columns.Count; i++)
+            {
+                if (listViewHosts.Columns[i].Text == name) return i;
+            }
+            listViewHosts.Columns.Add(name, TextRenderer.MeasureText(name, listViewHosts.Font).Width + LogicalToDeviceUnits(24));
+            return listViewHosts.Columns.Count - 1;
+        }
+
+        private void SortBy(int column)
+        {
+            sortOrder = column == sortColumn && sortOrder == SortOrder.Ascending ? SortOrder.Descending : SortOrder.Ascending;
+            // The arrow is drawn per column, so the last sorted column's has to be taken off.
+            if (sortColumn >= 0 && sortColumn != column) listViewHosts.ShowArrow(sortColumn, SortOrder.None);
+            sortColumn = column;
+            listViewHosts.ListViewItemSorter = new ResultSorter(column, sortOrder == SortOrder.Descending);
+            listViewHosts.Sort();
+            listViewHosts.ShowArrow(column, sortOrder);
+        }
+
+        /// <summary>
+        /// Sorts rows by one column: by each cell's real value where the tool gave one (uptime, bytes, IP address,
+        /// version), otherwise by its text the way Explorer sorts names (DEV2 before DEV10). Blank cells go last
+        /// in both directions; ties go by device name.
+        /// </summary>
+        private sealed class ResultSorter : System.Collections.IComparer
+        {
+            private readonly int column;
+            private readonly bool descending;
+
+            public ResultSorter(int column, bool descending)
+            {
+                this.column = column;
+                this.descending = descending;
+            }
+
+            public int Compare(object x, object y)
+            {
+                ListViewItem a = (ListViewItem)x;
+                ListViewItem b = (ListViewItem)y;
+                ListViewItem.ListViewSubItem cellA = column < a.SubItems.Count ? a.SubItems[column] : null;
+                ListViewItem.ListViewSubItem cellB = column < b.SubItems.Count ? b.SubItems[column] : null;
+                bool blankA = string.IsNullOrEmpty(cellA?.Text);
+                bool blankB = string.IsNullOrEmpty(cellB?.Text);
+                if (blankA || blankB)
+                {
+                    if (blankA != blankB) return blankA ? 1 : -1;
+                    return NaturalCompare(a.Text, b.Text);
+                }
+
+                int result = cellA.Tag is IComparable keyA && cellB.Tag is IComparable keyB && keyA.GetType() == keyB.GetType()
+                    ? keyA.CompareTo(keyB)
+                    : NaturalCompare(cellA.Text, cellB.Text);
+                if (descending) result = -result;
+                return result != 0 || column == 0 ? result : NaturalCompare(a.Text, b.Text);
+            }
+
+            private static int NaturalCompare(string a, string b) => StrCmpLogicalW(a ?? string.Empty, b ?? string.Empty);
+
+            [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
+            private static extern int StrCmpLogicalW(string a, string b);
+        }
+
         internal void UpdateProgress()
         {
             // The bar has to reach its total, so skipped records ride with offline there; the labels keep them apart.
@@ -385,6 +508,12 @@ namespace Layer8.Device
                 EnableRunAgain();
                 LogSummary();
 
+                if (hasDeviceColumns)
+                {
+                    FitDeviceColumns();
+                    return;
+                }
+
                 // Fit the Status column to the longest answer, never narrower than the space it has. The console's
                 // list wraps a real ListView, so a header's Width doesn't reach it; its own AutoResizeColumn does.
                 // Header size on the last column fills the rest of the list.
@@ -396,6 +525,27 @@ namespace Layer8.Device
                 int available = listViewHosts.ClientSize.Width - columnHeaderName.Width - SystemInformation.VerticalScrollBarWidth;
                 listViewHosts.AutoResizeColumn(columnHeaderStatus.Index,
                     longest + LogicalToDeviceUnits(16) > available ? ColumnHeaderAutoResizeStyle.ColumnContent : ColumnHeaderAutoResizeStyle.HeaderSize);
+            }
+        }
+
+        /// <summary>
+        /// Every column fits its longest text and its header. Status stops at a width that keeps the other columns
+        /// in view: an offline device's reason can be long, and Copy Results and Export carry it in full.
+        /// </summary>
+        private void FitDeviceColumns()
+        {
+            int statusLimit = LogicalToDeviceUnits(240);
+            for (int i = 1; i < listViewHosts.Columns.Count; i++)
+            {
+                int header = TextRenderer.MeasureText(listViewHosts.Columns[i].Text, listViewHosts.Font).Width;
+                int widest = 0;
+                foreach (ListViewItem host in listViewHosts.Items)
+                {
+                    if (i < host.SubItems.Count) widest = Math.Max(widest, TextRenderer.MeasureText(host.SubItems[i].Text, listViewHosts.Font).Width);
+                }
+                // The list's own AutoResizeColumn is what reaches the real list (see the Status column below).
+                listViewHosts.AutoResizeColumn(i, widest > header ? ColumnHeaderAutoResizeStyle.ColumnContent : ColumnHeaderAutoResizeStyle.HeaderSize);
+                if (i == columnHeaderStatus.Index && listViewHosts.Columns[i].Width > statusLimit) listViewHosts.Columns[i].Width = statusLimit;
             }
         }
 

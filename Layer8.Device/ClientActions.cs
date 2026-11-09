@@ -236,6 +236,7 @@ namespace Layer8.Device
         /// </summary>
         internal static string WaitForResult(object result)
         {
+            if (result is DeviceColumns columns) return columns.Summary ?? columns.Status;
             if (result is Task<string> textTask) return textTask.GetAwaiter().GetResult();
             if (result is Task task)
             {
@@ -587,27 +588,39 @@ namespace Layer8.Device
         }
 
         /// <summary>
-        /// One line per device: who's signed in, time since the last restart, and the ConfigMgr client version.
-        /// Signed-in users are the owners of explorer.exe, which covers console and Remote Desktop sessions alike
-        /// (Win32_ComputerSystem.UserName only knows the console).
+        /// Who's signed in, time since the last restart, free space on C:, IP address and the ConfigMgr client
+        /// version, each in its own column of the progress dialog so a collection's answers sort and export like a
+        /// spreadsheet. Signed-in users are the owners of explorer.exe, which covers console and Remote Desktop
+        /// sessions alike (Win32_ComputerSystem.UserName only knows the console).
         /// </summary>
-        public static string QuickStatus(IResultObject resultObject)
+        public static DeviceColumns QuickStatus(IResultObject resultObject)
         {
             string host = resultObject["Name"].StringValue;
+            DeviceColumns columns = new DeviceColumns { Status = "Online" };
             List<string> parts = new List<string>();
 
             ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
             List<string> users = SignedInUsers(cimv2);
+            columns.Add("Signed in", users.Count == 0 ? "Nobody" : string.Join(", ", users));
             parts.Add(users.Count == 0 ? "Nobody signed in" : "Signed in: " + string.Join(", ", users));
 
             TimeSpan? uptime = Uptime(cimv2);
+            columns.Add("Up", uptime.HasValue ? FormatUptime(uptime.Value) : null, uptime.HasValue ? (IComparable)uptime.Value : null);
             if (uptime.HasValue) parts.Add("up " + FormatUptime(uptime.Value));
 
             // A full system drive is a common reason updates and installs fail.
             ManagementObject systemDrive = Utility.GetFirstWMIInstance(cimv2, "SELECT FreeSpace, Size FROM Win32_LogicalDisk WHERE DeviceID = 'C:'");
             if (systemDrive?["FreeSpace"] != null && systemDrive["Size"] != null)
             {
-                parts.Add(string.Format("C: {0} free of {1}", Utility.FormatBytes(Convert.ToDouble(systemDrive["FreeSpace"]), "0.#"), Utility.FormatBytes(Convert.ToDouble(systemDrive["Size"]), "0")));
+                double free = Convert.ToDouble(systemDrive["FreeSpace"]);
+                double size = Convert.ToDouble(systemDrive["Size"]);
+                columns.Add("C: free", Utility.FormatBytes(free, "0.#"), free);
+                columns.Add("C: size", Utility.FormatBytes(size, "0"), size);
+                parts.Add(string.Format("C: {0} free of {1}", Utility.FormatBytes(free, "0.#"), Utility.FormatBytes(size, "0")));
+            }
+            else
+            {
+                columns.Add("C: free", null).Add("C: size", null);
             }
 
             // The IPv4 addresses the device itself reports, which can differ from DNS on VPN or with stale records.
@@ -622,6 +635,8 @@ namespace Layer8.Device
                     }
                 }
             }
+            // Sorts by the first address as a number, so 10.0.0.9 comes before 10.0.0.10.
+            columns.Add("IP address", string.Join(", ", addresses), addresses.Count > 0 ? (IComparable)AddressKey(addresses[0]) : null);
             if (addresses.Count > 0) parts.Add(string.Join(", ", addresses));
 
             try
@@ -629,14 +644,26 @@ namespace Layer8.Device
                 ManagementScope ccm = Utility.GetWMIScope(host, "ccm");
                 ManagementObject client = Utility.GetFirstWMIInstance(ccm, "SELECT ClientVersion FROM SMS_Client");
                 string version = client?["ClientVersion"] as string;
+                columns.Add("Client", string.IsNullOrEmpty(version) ? "Unknown" : version, Version.TryParse(version, out Version parsed) ? parsed : null);
                 parts.Add(string.IsNullOrEmpty(version) ? "client version unknown" : "client " + version);
             }
             catch (ManagementException ex) when (IsNoClient(ex))
             {
+                columns.Add("Client", "None");
                 parts.Add("no ConfigMgr client");
             }
 
-            return string.Join("; ", parts);
+            columns.Summary = string.Join("; ", parts);
+            return columns;
+        }
+
+        /// <summary>An IPv4 address as one number, in network order, for sorting.</summary>
+        private static long AddressKey(string address)
+        {
+            byte[] bytes = IPAddress.Parse(address).GetAddressBytes();
+            long key = 0;
+            foreach (byte part in bytes) key = (key << 8) | part;
+            return key;
         }
 
         /// <summary>

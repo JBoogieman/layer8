@@ -9,7 +9,7 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 Organized by where you right-click in the console.
 
 **A device, or a device collection** (a collection runs on every member):
-- **Client Actions:** the eleven standard client cycles, plus Quick Status (who's signed in, uptime, free space on C:, IP address, client version), Find Software (by name, or older than a version: `Chrome < 131`), Check Pending Restart, List and Install Missing Updates, Full Machine Policy Refresh, Group Policy Update, Client Health Check, Client Info, Reset Policy, Clear Client Cache, Repair Client, Turn Off Provisioning Mode, Restart SMS Agent Host Service, Restart Computer and Cancel Restart, Defender Status and Quick Scan, BitLocker Status
+- **Client Actions:** the eleven standard client cycles, plus Quick Status (who's signed in, uptime, free space on C:, IP address, client version, each in a column you can sort), Find Software (by name, or older than a version: `Chrome < 131`), Check Pending Restart, List and Install Missing Updates, Full Machine Policy Refresh, Group Policy Update, Client Health Check, Client Info, Reset Policy, Clear Client Cache, Repair Client, Turn Off Provisioning Mode, Restart SMS Agent Host Service, Restart Computer and Cancel Restart, Defender Status and Quick Scan, BitLocker Status
 - **On a collection, also:** Online Status, Collect Client Logs, and Retry All Failed Deployments (every app, update and baseline deployment to the collection, on the devices in error)
 - Every run shows one answer per device: done, offline, blocked, or why it failed. It works through 32 devices at a time (change it in Layer8 Settings), and Run Again on Failed, Copy Results (for Excel) and Export are on every result window
 
