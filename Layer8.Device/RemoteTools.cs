@@ -110,9 +110,9 @@ namespace Layer8.Device
                     missing.Add(name);
                     continue;
                 }
-                string cmtrace = FindCMTrace(name);
-                log.InfoFormat("Client Log in CMTrace on {0}: {1} {2}", name, cmtrace, path);
-                Process.Start(Program(cmtrace, "\"" + path + "\""))?.Dispose();
+                string viewer = LogViewer();
+                log.InfoFormat("Client Log in CMTrace on {0}: {1} {2}", name, viewer, path);
+                Process.Start(Program(viewer, "\"" + path + "\""))?.Dispose();
             }
             if (missing.Count > 0)
             {
@@ -129,14 +129,15 @@ namespace Layer8.Device
                 : string.Format(@"\\{0}\C$\Windows\CCM\Logs\{1}.log", name, log);
         }
 
-        /// <summary>CMTrace from this computer's ConfigMgr client, or else from the device's.</summary>
-        private static string FindCMTrace(string name)
+        /// <summary>
+        /// CMTrace from this computer's ConfigMgr client, or Notepad if there isn't one. Never a program from the
+        /// device: whoever controls the device could replace its CMTrace.exe, and it would run here as the admin.
+        /// </summary>
+        private static string LogViewer()
         {
-            string local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), @"CCM\CMTrace.exe");
-            if (File.Exists(local)) return local;
-            string remote = string.Format(@"\\{0}\admin$\CCM\CMTrace.exe", name);
-            if (File.Exists(remote)) return remote;
-            throw new FileNotFoundException("CMTrace.exe isn't on this computer (C:\\Windows\\CCM) or on " + name + ".", local);
+            string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            string cmtrace = Path.Combine(windows, @"CCM\CMTrace.exe");
+            return File.Exists(cmtrace) ? cmtrace : Path.Combine(windows, "notepad.exe");
         }
 
         /// <summary>

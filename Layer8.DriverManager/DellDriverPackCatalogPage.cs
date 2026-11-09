@@ -538,6 +538,9 @@ namespace Layer8.DriverManager
                     Process process = new Process();
                     try
                     {
+                        // The link comes from the vendor's catalog: open it only as a web page, never as a
+                        // program or a file path.
+                        if (!Authenticode.IsWebLink(package.ReleaseNotesUrl)) continue;
                         process.StartInfo.FileName = package.ReleaseNotesUrl;
                         process.StartInfo.UseShellExecute = true;
                         process.Start();

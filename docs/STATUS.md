@@ -1,6 +1,6 @@
 # Layer8 status
 
-Updated November 8, 2026. Version 0.2.0, the first release.
+Updated November 8, 2026. Version 0.2.1.
 
 Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (console 5.2509.1038.1000): a site server, the client the console runs on, and a second Windows 11 client reached over the network. The site server stands in for "no ConfigMgr client". Treat anything that changes clients as something to try on a few devices first.
 
@@ -37,7 +37,7 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 - Application uninstall and repair from Install Application (the lab's apps don't offer them), setting the cache size on many devices at once
 - Configuration baselines: re-evaluating non-compliant devices and Retry Failed Devices (see rough edges)
 - Remote Assistance's offer and the PowerShell session itself
-- Dell and HP driver pack imports
+- Dell and HP driver pack imports, including the check (since 0.2.1) that each HP SoftPaq is signed by HP before it runs
 - A collection run on 50 or more devices
 - Layer8.msi: upgrade over an older version, and an MECM deployment running as SYSTEM with a console open (3010)
 - Approved console extension: importing the cab unsigned (needs "Hierarchy approved console extensions can be unsigned"), Require Extension, Revoke Approval and Delete, another console picking it up from a notification

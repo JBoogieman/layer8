@@ -412,7 +412,10 @@ namespace Layer8.DriverManager
                 {
                     try
                     {
-                        // Start a process to print a file and raise an event when done.
+                        // The SoftPaq runs elevated, so only one HP signed: not a file tampered with on the way,
+                        // or one left in the download folder under the same name.
+                        Authenticode.RequireSignedBy(data.Value, Authenticode.HPSigner, "HP");
+
                         extractProcess.StartInfo.FileName = data.Value;
                         extractProcess.StartInfo.Arguments = string.Format("-pdf -f \"{0}\" -s -e", tempFolder);
                         extractProcess.StartInfo.CreateNoWindow = true;
@@ -551,6 +554,9 @@ namespace Layer8.DriverManager
                     Process process = new Process();
                     try
                     {
+                        // The link comes from the vendor's catalog: open it only as a web page, never as a
+                        // program or a file path.
+                        if (!Authenticode.IsWebLink(package.ReleaseNotesUrl)) continue;
                         process.StartInfo.FileName = package.ReleaseNotesUrl;
                         process.StartInfo.UseShellExecute = true;
                         process.Start();
