@@ -75,16 +75,16 @@ Two details we found by testing, which Microsoft doesn't document:
   | | Signed | Unsigned |
   |---|---|---|
   | You need | A code-signing certificate. The site server has to trust it: its root in **Trusted Root Certification Authorities**, and the certificate itself in **Trusted Publishers** (Local Computer stores). In the lab it went into both, and that's what made the import work. | **Hierarchy approved console extensions can be unsigned** turned on (Hierarchy Settings, General tab). |
-  | Build | `.\tools\Build-Layer8Extension.ps1 -CertificateThumbprint <thumbprint>` signs Layer8's four DLLs and the cab. | `.\tools\Build-Layer8Extension.ps1` |
+  | Get the cab | Sign the released cab: `.\Sign-Layer8Cab.ps1 -Path Layer8-<version>.cab -CertificateThumbprint <thumbprint>` makes `Layer8-<version>-signed.cab`. Building from source, `.\tools\Build-Layer8Extension.ps1 -CertificateThumbprint <thumbprint>` signs as it builds. | The released cab as it is, or `.\tools\Build-Layer8Extension.ps1` |
   | Import wizard | Leave **Allow extension to be unsigned** cleared. | Tick **Allow extension to be unsigned**. |
 
-  **Both the cab and the DLLs inside it have to be signed.** A signed cab with unsigned DLLs fails to import with *"Failed to verify the signature of the cab or its content."* The build script signs both.
+  **Both the cab and the DLLs inside it have to be signed.** A signed cab with unsigned DLLs fails to import with *"Failed to verify the signature of the cab or its content."* Both scripts sign both.
 
   Microsoft recommends signed. Unsigned is fine for a lab or a quick trial. It means the site takes the cab's contents on trust from whoever imports it.
 
 ### Steps
 
-**1. Get the cab.** Build it (see [Building the packages](#building-the-packages)), or take `Layer8-<version>.cab` from a release.
+**1. Get the cab.** Download `Layer8-<version>.cab` from [Releases](https://github.com/JBoogieman/layer8/releases), or build it (see [Building the packages](#building-the-packages)). The released cab is unsigned; to sign it with your own certificate, run `Sign-Layer8Cab.ps1` from the same release (see the table above).
 
 **2. Import it.** In the console: **Administration > Updates and Servicing > Console Extensions**, then **Import Console Extension** on the ribbon. Browse to the cab. Tick **Allow extension to be unsigned** only for an unsigned cab. Click **Next** twice.
 

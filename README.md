@@ -31,7 +31,7 @@ To build the packages, run `tools\Build-Layer8Msi.ps1` (everything in Release, t
 
 ## Installing
 
-There are two ways to put Layer8 in a console. They give you the same menus. [docs/INSTALL.md](docs/INSTALL.md) explains how each one works, what it needs, step by step with screenshots, and what to do when the menus don't show up.
+Download `Layer8.msi` or `Layer8-<version>.cab` from [Releases](https://github.com/JBoogieman/layer8/releases). There are two ways to put Layer8 in a console. They give you the same menus. [docs/INSTALL.md](docs/INSTALL.md) explains how each one works, what it needs, step by step with screenshots, and what to do when the menus don't show up.
 
 | | Approved console extension (`Layer8-<version>.cab`) | MSI (`Layer8.msi`) |
 |---|---|---|

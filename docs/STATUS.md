@@ -1,6 +1,6 @@
 # Layer8 status
 
-Updated November 8, 2026. Version 0.1.4, nothing released yet.
+Updated November 8, 2026. Version 0.2.0, the first release.
 
 Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (console 5.2509.1038.1000): a site server, the client the console runs on, and a second Windows 11 client reached over the network. The site server stands in for "no ConfigMgr client". Treat anything that changes clients as something to try on a few devices first.
 
