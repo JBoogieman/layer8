@@ -12,8 +12,8 @@ Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (conso
 | Client tools (quick status, find software, missing updates, pending restart, policy and GP refresh, client health, clear cache, repair, client info, BitLocker and Defender status, Defender quick scan) | Both clients; site server for "No ConfigMgr client found" | Repair: ccmrepair.log on the second client ends "Repair complete". Install Missing Updates has only ever seen "No missing updates" |
 | Restart, Cancel Restart, Restart SMS Agent Host Service | Second client | Restart then Cancel Restart: no reboot, uptime kept counting |
 | Runs on a whole collection | All Systems; a two-client collection | The four built-in placeholder records (Unknown Computer, Provisioning Device) are skipped by name |
-| Online Status | Both clients; site server ("ping blocked, port 445 answers") | |
-| Remote tools | Ping, browse C$ and the client cache, client logs (folder and zip), Client Log in CMTrace, Computer Management, Services: both clients. Remote Desktop: the console's own client | The second client needed the firewall groups in [INSTALL.md](INSTALL.md#the-devices-you-manage) for Computer Management and Services. Event Viewer opened the console's own logs until 0.1.4. Remote Assistance and the PowerShell session start, but the UAC prompt and the session itself haven't been confirmed |
+| Online Status, and the offline check before a run | Both clients; site server ("ping blocked, port 445 answers"); the second client switched off, and on with its WMI firewall rules off | Off: "no ping reply, port 445 closed", and Quick Status says "ports 135 and 445 don't answer". WMI blocked: "Online, but WMI is blocked (RPC server unavailable)" |
+| Remote tools | Ping, browse C$ and the client cache, client logs (folder and zip), Client Log in CMTrace, Computer Management, Event Viewer, Services: both clients. Remote Desktop: the console's own client | The second client needed the firewall groups in [INSTALL.md](INSTALL.md#the-devices-you-manage) for Computer Management, Event Viewer and Services. Before 0.1.4, Event Viewer opened the console's own logs. Remote Assistance and the PowerShell session start, but the UAC prompt and the session itself haven't been confirmed |
 | Copy Names, Copy Member Names, Copy Device Info, Copy Results, Export | Lab client, All Systems | |
 | BitLocker Recovery Key | No keys; a fake key from the lab script | Key ID filter works |
 | Clear Client Cache | Both clients | On the second client it freed the installed test app's content (110 MB) |
@@ -31,8 +31,7 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 
 ## Not tested yet
 
-- The offline check with a device that's really switched off, and the "Online, but WMI is blocked" answer (0.1.3)
-- Event Viewer against another computer since the 0.1.4 fix, and Remote Desktop against a client other than the console's own
+- Remote Desktop against a client other than the console's own
 - Update deployments: Retry and Copy Failed Devices, Install Missing Updates with an update actually missing, Quick Deployment
 - Task Sequence Export to XML and phased deployments
 - Application uninstall and repair from Install Application (the lab's apps don't offer them), setting the cache size on many devices at once

@@ -107,7 +107,9 @@ Click **Refresh**. The row should read **Approved: Yes**, **Enabled: Yes**, and 
 
 ![Console Extensions node with Layer8 approved and enabled](images/install-console-extensions.png)
 
-**5. Install it on this console.** Still on Layer8, click **Install** (Local Extension group on the ribbon), then **OK**. The console closes, and the extension installer runs. When it shows *"Update complete for extension 1 of 1"*, click **Close**, and the console reopens with Layer8 in it.
+**5. Install it on this console.** Close any other console windows first. Still on Layer8, click **Install** (Local Extension group on the ribbon, or right-click Layer8), then **OK**. The console closes, and the extension installer runs. When it shows *"Update complete for extension 1 of 1"*, click **Close**, and the console reopens with Layer8 in it.
+
+If another console window is still open, the installer stops with *"The feature update task requires that you close the Configuration Manager console"*. Close that window and click **Retry**.
 
 ![Extension installer finished](images/install-installer-done.png)
 
