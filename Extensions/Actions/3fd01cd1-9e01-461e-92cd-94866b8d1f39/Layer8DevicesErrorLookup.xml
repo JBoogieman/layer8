@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription NamespaceGuid="D24FAF31-0199-44A9-A2B6-CF44175053D5" Class="AssemblyType" SelectionMode="Both" DisplayName="Error Lookup..." MnemonicDisplayName="Error Lookup" Description="What an error code means: ConfigMgr, Windows Update, Windows and installer codes" InsertBefore="B7009279-2666-45EF-9935-1FB3D3ED2ABF">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <ActionAssembly>
+    <Assembly>Layer8.Device.dll</Assembly>
+    <Type>Layer8.Device.Device</Type>
+    <Method>OpenErrorLookup</Method>
+  </ActionAssembly>
+</ActionDescription>

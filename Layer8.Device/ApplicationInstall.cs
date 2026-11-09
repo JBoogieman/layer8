@@ -44,6 +44,8 @@ namespace Layer8.Device
         internal sealed class DeployedApp
         {
             public string Id, Revision, Name, Version, State;
+            /// <summary>The last error the client reported for the app, with its meaning, or null.</summary>
+            public string Error;
             public bool IsMachineTarget, Installed, CanInstall, CanUninstall, CanRepair;
             public DateTime? Deadline;
         }
@@ -75,6 +77,8 @@ namespace Layer8.Device
                     string[] allowed = app["AllowedActions"] as string[];
                     bool machine = app["IsMachineTarget"] is bool target && target;
                     bool installed = string.Equals(installState, "Installed", StringComparison.OrdinalIgnoreCase);
+                    long errorCode = app["ErrorCode"] == null ? 0 : Convert.ToInt64(app["ErrorCode"]);
+                    string error = errorCode != 0 ? ErrorCodes.FormatAndDescribe(unchecked((uint)errorCode)) : null;
                     log.InfoFormat("Application on {0}: '{1}' InstallState={2} EvaluationState={3} ApplicabilityState={4} IsMachineTarget={5} AllowedActions={6} ErrorCode={7}",
                         host, app["Name"], installState, app["EvaluationState"], app["ApplicabilityState"], machine,
                         allowed == null ? "(not reported)" : string.Join("/", allowed), app["ErrorCode"]);
@@ -87,7 +91,8 @@ namespace Layer8.Device
                         IsMachineTarget = machine,
                         Installed = installed,
                         Deadline = ToDate(app["Deadline"]),
-                        State = StateText(installState, app["EvaluationState"], app["ErrorCode"]),
+                        State = StateText(installState, app["EvaluationState"], error),
+                        Error = error,
                         // When the client doesn't report its allowed actions, let Install try: the client answers either way.
                         CanInstall = machine && !installed && (allowed == null || allowed.Contains("Install", StringComparer.OrdinalIgnoreCase)),
                         CanUninstall = machine && installed && (allowed == null || allowed.Contains("Uninstall", StringComparer.OrdinalIgnoreCase)),
@@ -152,7 +157,7 @@ namespace Layer8.Device
                 using (ManagementBaseObject outParams = applications.InvokeMethod(method, inParams, null))
                 {
                     long code = Convert.ToInt64(outParams?["ReturnValue"] ?? 0);
-                    if (code != 0) throw new InvalidOperationException(string.Format("CCM_Application.{1} returned error {0} (0x{0:X}).", code, method));
+                    if (code != 0) throw new InvalidOperationException(string.Format("CCM_Application.{0} returned error {1}.", method, ErrorCodes.FormatAndDescribe(unchecked((uint)code))));
                 }
             }
             log.InfoFormat("{0} of '{1}' {2} requested on {3}", method, app.Name, app.Version, host);
@@ -172,10 +177,9 @@ namespace Layer8.Device
         };
 
         /// <summary>The install state first (it's what the client decides on), then what the client is doing with the app, if anything.</summary>
-        private static string StateText(string installState, object evaluationState, object errorCode)
+        private static string StateText(string installState, object evaluationState, string error)
         {
             long evaluation = evaluationState == null ? -1 : Convert.ToInt64(evaluationState);
-            long error = errorCode == null ? 0 : Convert.ToInt64(errorCode);
             string state;
             switch ((installState ?? string.Empty).ToLowerInvariant())
             {
@@ -193,7 +197,7 @@ namespace Layer8.Device
             {
                 state += " (state " + evaluation + ")";
             }
-            if (error != 0) state += string.Format(" (error 0x{0:X8})", error);
+            if (error != null) state += "; error " + error;
             return state;
         }
 
@@ -242,7 +246,7 @@ namespace Layer8.Device
                 AutoScaleDimensions = new SizeF(6F, 13F);
                 AutoScaleMode = AutoScaleMode.Font;
                 Text = "Install Application: " + host;
-                ClientSize = new Size(720, 340);
+                ClientSize = new Size(860, 340);
                 MinimumSize = new Size(480, 260);
                 StartPosition = FormStartPosition.CenterParent;
                 ShowInTaskbar = false;
@@ -251,14 +255,14 @@ namespace Layer8.Device
                 Label intro = new Label
                 {
                     Location = new Point(12, 10),
-                    Size = new Size(696, 30),
+                    Size = new Size(836, 30),
                     Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                     Text = "Applications deployed to " + host + ". Install starts the selected one now, like Install in Software Center. Only device-targeted deployments can be installed from here.",
                 };
                 list = new ListView
                 {
                     Location = new Point(12, 44),
-                    Size = new Size(696, 246),
+                    Size = new Size(836, 246),
                     Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                     View = View.Details,
                     FullRowSelect = true,
@@ -276,6 +280,7 @@ namespace Layer8.Device
                     uninstall.Enabled = app?.CanUninstall == true;
                     repair.Enabled = app?.CanRepair == true;
                     if (app != null && !app.CanInstall && !app.CanUninstall) status.Text = WhyNotInstallable(app);
+                    else if (app?.Error != null) status.Text = app.Name + " last failed with error " + app.Error;
                 };
                 list.DoubleClick += (s, e) => InstallSelected();
                 list.Resize += (s, e) => FitColumns();
@@ -283,19 +288,20 @@ namespace Layer8.Device
                 status = new Label
                 {
                     Location = new Point(12, 302),
-                    Size = new Size(290, 26),
+                    Size = new Size(430, 26),
                     Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                    AutoEllipsis = true,
                     Text = "Loading...",
                 };
-                uninstall = new Button { Text = "Uninstall", Location = new Point(309, 302), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, Enabled = false };
+                uninstall = new Button { Text = "Uninstall", Location = new Point(449, 302), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, Enabled = false };
                 uninstall.Click += (s, e) => EnforceSelected("Uninstall");
-                repair = new Button { Text = "Repair", Location = new Point(390, 302), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, Enabled = false };
+                repair = new Button { Text = "Repair", Location = new Point(530, 302), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, Enabled = false };
                 repair.Click += (s, e) => EnforceSelected("Repair");
-                install = new Button { Text = "Install", Location = new Point(471, 302), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, Enabled = false };
+                install = new Button { Text = "Install", Location = new Point(611, 302), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, Enabled = false };
                 install.Click += (s, e) => InstallSelected();
-                refresh = new Button { Text = "Refresh", Location = new Point(552, 302), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+                refresh = new Button { Text = "Refresh", Location = new Point(692, 302), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
                 refresh.Click += (s, e) => Reload();
-                Button close = new Button { Text = "Close", DialogResult = DialogResult.Cancel, Location = new Point(633, 302), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+                Button close = new Button { Text = "Close", DialogResult = DialogResult.Cancel, Location = new Point(773, 302), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
 
                 Controls.AddRange(new Control[] { intro, list, status, uninstall, repair, install, refresh, close });
                 CancelButton = close;
@@ -351,14 +357,18 @@ namespace Layer8.Device
                 status.Text = apps.Count == 0 ? "No applications are deployed to " + host + "." : string.Format("{0} application{1} deployed to {2}.", apps.Count, apps.Count == 1 ? "" : "s", host);
             }
 
-            /// <summary>Deployment and Status fit their text, and Status takes any width left over, so the error code never hides.</summary>
+            /// <summary>
+            /// Every column fits its text (Application up to a limit) and Status takes any width left over, so as much
+            /// of the error as possible shows. Selecting the app shows the whole error in the status line.
+            /// </summary>
             private void FitColumns()
             {
                 if (list.Columns.Count < 4) return;
                 if (list.Items.Count > 0)
                 {
-                    list.AutoResizeColumn(2, ColumnHeaderAutoResizeStyle.ColumnContent);
-                    list.AutoResizeColumn(3, ColumnHeaderAutoResizeStyle.ColumnContent);
+                    for (int i = 0; i < 4; i++) list.AutoResizeColumn(i, ColumnHeaderAutoResizeStyle.ColumnContent);
+                    list.Columns[0].Width = Math.Min(Math.Max(list.Columns[0].Width, LogicalToDeviceUnits(120)), LogicalToDeviceUnits(260));
+                    list.Columns[1].Width = Math.Max(list.Columns[1].Width, LogicalToDeviceUnits(55));
                     list.Columns[2].Width = Math.Max(list.Columns[2].Width, LogicalToDeviceUnits(90));
                 }
                 int spare = list.ClientSize.Width - list.Columns[0].Width - list.Columns[1].Width - list.Columns[2].Width;

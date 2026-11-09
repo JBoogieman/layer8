@@ -27,6 +27,8 @@ Organized by where you right-click in the console.
 
 **Elsewhere:** Quick Deployment (deploy to several collections at once), Task Sequence Export to XML, Clean Software Update Groups, Remove Retired Content, Incremental Collections and Collection Evaluation Statistics, Driver Manager (grabber, importers, Dell and HP driver packs)
 
+**Error Lookup** (on the Layer8 menus): paste any error code (`0x87D00324`, `-2016410844`, `1603`) and see what it means, from ConfigMgr's own error catalog and Windows'. Copy Failed Devices and Install Application show the meaning next to every code too.
+
 **Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, a quick offline check before connecting, and the log level.
 
 Don't want some of it? `Customize-Layer8Cab.ps1 -Exclude LAPS, BitLockerKeys, RemoteControl` takes those menu items out of the released cab entirely, no building needed ([how](docs/INSTALL.md#leaving-features-out)).

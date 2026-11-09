@@ -51,6 +51,12 @@ namespace Layer8.Device
             SafeAction.Run(action?.DisplayName ?? "Layer8 Settings", () => Utility.ShowDialog("Layer8Settings", selectedObject, "Layer8 Settings"));
         }
 
+        /// <summary>Console entry point for Error Lookup... on the Layer8 menus: what an error code means.</summary>
+        public static void OpenErrorLookup(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObject, PropertyDataUpdated dataUpdatedDelegate, Status status)
+        {
+            SafeAction.Run(action?.DisplayName ?? "Error Lookup", () => ErrorLookup.Show(null));
+        }
+
         /// <summary>Console entry point: runs AddMulitDeviceCollectionCore behind Layer8's crash guard.</summary>
         public static void AddMulitDeviceCollection(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObject, PropertyDataUpdated dataUpdatedDelegate, Status Status)
         {

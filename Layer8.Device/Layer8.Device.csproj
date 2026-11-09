@@ -117,6 +117,8 @@
     <Compile Include="InputPrompt.cs" />
     <Compile Include="ApplicationInstall.cs" />
     <Compile Include="DeploymentRetry.cs" />
+    <Compile Include="ErrorCodes.cs" />
+    <Compile Include="ErrorLookup.cs" />
     <Compile Include="ResultClientHealthControl.cs">
       <SubType>UserControl</SubType>
     </Compile>

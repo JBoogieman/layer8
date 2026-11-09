@@ -105,14 +105,14 @@ namespace Layer8.Device
                 Code = failed.ErrorCodes.TryGetValue(id, out uint code) ? code : (uint?)null,
                 Text = failed.Descriptions.TryGetValue(id, out string text) && !string.IsNullOrWhiteSpace(text) ? text : null,
             })
-            .Select(r => new { r.Name, r.Code, Text = r.Text ?? (r.Code.HasValue ? ErrorText(r.Code.Value) : "No error code reported") })
+            .Select(r => new { r.Name, r.Code, Text = r.Text ?? (r.Code.HasValue && r.Code.Value != 0 ? ErrorCodes.Describe(r.Code.Value) : "No error code reported") })
             .OrderBy(r => r.Code ?? uint.MaxValue).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
             StringBuilder table = new StringBuilder("Device\tError code\tError").AppendLine();
             foreach (var row in rows)
             {
-                table.Append(row.Name).Append('\t').Append(row.Code.HasValue ? FormatCode(row.Code.Value) : "").Append('\t').Append(row.Text).AppendLine();
+                table.Append(row.Name).Append('\t').Append(row.Code.HasValue ? ErrorCodes.Format(row.Code.Value) : "").Append('\t').Append(row.Text).AppendLine();
             }
             Clipboard.SetDataObject(table.ToString(), true, 10, 100);
 
@@ -122,7 +122,7 @@ namespace Layer8.Device
             summary.AppendFormat("Copied {0} device{1} in error for {2}, with error codes (pastes into Excel).", rows.Count, rows.Count == 1 ? "" : "s", failed.Software).AppendLine().AppendLine();
             foreach (var group in groups.Take(10))
             {
-                summary.AppendFormat("{0} x {1}: {2}", group.Count(), group.Key.Code.HasValue ? FormatCode(group.Key.Code.Value) : "no code", group.Key.Text).AppendLine();
+                summary.AppendFormat("{0} x {1}: {2}", group.Count(), group.Key.Code.HasValue ? ErrorCodes.Format(group.Key.Code.Value) : "no code", group.Key.Text).AppendLine();
             }
             if (groups.Count > 10) summary.AppendFormat("...and {0} more error codes.", groups.Count - 10).AppendLine();
 
@@ -136,39 +136,6 @@ namespace Layer8.Device
             if (failed.Problem == null) return false;
             MessageBox.Show(failed.Problem, "Layer8", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return true;
-        }
-
-        /// <summary>Small codes are installer and Windows exit codes, so they read best in decimal too: "1603 (0x643)".</summary>
-        internal static string FormatCode(uint code)
-        {
-            return code < 0x10000 ? string.Format("{0} (0x{0:X})", code) : string.Format("0x{0:X8}", code);
-        }
-
-        // ConfigMgr's own codes that Windows has no text for, among the ones admins see most.
-        private static readonly Dictionary<uint, string> KnownErrors = new Dictionary<uint, string>
-        {
-            { 0x87D00213, "Timeout occurred" },
-            { 0x87D00324, "The application was not detected after installation completed" },
-            { 0x87D00325, "The application was still detected after uninstall completed" },
-            { 0x87D00327, "Script is not signed" },
-            { 0x87D00607, "Content not found" },
-            { 0x87D01106, "Failed to verify the executable file is valid or to construct the associated command line" },
-        };
-
-        /// <summary>What an error code means: ConfigMgr's common codes, then Windows' own text for Windows and installer codes.</summary>
-        internal static string ErrorText(uint code)
-        {
-            if (code == 0) return "No error code reported";
-            if (KnownErrors.TryGetValue(code, out string known)) return known;
-
-            // A Windows code as it is (1603), or wrapped in an HRESULT (0x80070643).
-            uint win32 = (code & 0xFFFF0000) == 0x80070000 ? code & 0xFFFF : code;
-            if (win32 < 0x10000)
-            {
-                string text = new System.ComponentModel.Win32Exception((int)win32).Message.TrimEnd('.', ' ');
-                if (!text.StartsWith("Unknown error", StringComparison.OrdinalIgnoreCase)) return text;
-            }
-            return "No description for this code";
         }
 
         /// <summary>
