@@ -54,14 +54,24 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 - **Approved console extension quirks** (none documented by Microsoft; details in [INSTALL.md](INSTALL.md)): the console only loads approved extensions while `XmlStorage\Extensions\Actions` exists, a signed cab also needs signed DLLs, and the console logs a harmless `Error: …\Forms\..\bin\Layer8` line when a Layer8 window opens.
 - **Times from ConfigMgr** can come with a "+000" that isn't UTC. Install Application's deadlines are fixed; Check Pending Restart's restart deadline goes through the same kind of conversion and hasn't been checked against Software Center.
 - **Collection Evaluation Statistics** can take a while to read colleval.log from the site server, and OK doesn't close the window until it finishes (the X does).
-- **Skipped records count as offline** in the progress totals.
+- **Skipped records** share the offline color in the progress bar; the counts under it list them as Skipped.
 - **Large retries** keep every device record in memory until the window closes. Fine at lab scale; not yet tried on a 1,000-device deployment.
+
+## Next up
+
+In order:
+
+1. **System Information** for one device, in one window: installed programs (with uninstall), installed updates, services, drivers, user profiles, local administrators, battery health.
+2. **Send a message** to whoever is signed in, as a Windows notification or a pop-up.
+3. **Windows Security view**: Defender, firewall and BitLocker in one place, with Suspend BitLocker for a number of restarts.
+4. **AD cleanup**: computer accounts in Active Directory that ConfigMgr hasn't heard from, and the reverse.
 
 ## Ideas
 
 | Idea | Why |
 |---|---|
-| Windows LAPS lookup (`msLAPS-Password`, encrypted passwords; Entra-backed needs Graph) | Legacy LAPS is on its way out |
+| Windows LAPS lookup (`msLAPS-Password`, encrypted passwords; Entra-backed needs Graph) | Legacy LAPS is on its way out. On hold for now: useful to many sites, but not tested anywhere that uses it yet |
+| Columns for Online Status, BitLocker Status, Defender Status and Client Info | Quick Status's sortable columns (0.5.0) work for any tool |
 | Recent sign-ins in Quick Status | Who was on it, not just who is on it |
 | Lenovo driver packs | Dell and HP have them |
 | Export and import Layer8 Settings | Same settings on every admin's console |
