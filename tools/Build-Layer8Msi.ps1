@@ -18,7 +18,7 @@
     Release (default) or Debug.
 
 .PARAMETER Exclude
-    Features to leave out, by name (tools\Layer8Features.psd1 lists them and their menu items), for example
+    Features to leave out, by name (tools\Layer8Features.ps1 lists them and their menu items), for example
     -Exclude LAPS, BitLockerKeys. Their menu items aren't in the MSI, so no console it's installed on shows them.
 
 .EXAMPLE
@@ -40,7 +40,8 @@ $repo = Split-Path $PSScriptRoot -Parent
 
 # The console XML to package: the repo's, or a copy without the left-out features. Done first, so a misspelled
 # feature stops the build before anything compiles.
-$Exclude = @($Exclude | Where-Object { $_ } | Sort-Object -Unique)
+$Exclude = @($Exclude | Where-Object { $_ })
+if ($Exclude) { [void](Get-Layer8FeatureItems $Exclude); $Exclude = Get-Layer8FeatureNames $Exclude }
 $extensionsDir = Get-Layer8ExtensionsFolder -Repo $repo -WorkFolder (Join-Path $repo "Build\Extensions-$Configuration") -Exclude $Exclude
 
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'

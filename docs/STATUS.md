@@ -1,6 +1,6 @@
 # Layer8 status
 
-Updated November 8, 2026. Version 0.2.2.
+Updated November 8, 2026. Version 0.3.0.
 
 Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (console 5.2509.1038.1000): a site server, the client the console runs on, and a second Windows 11 client reached over the network. The site server stands in for "no ConfigMgr client". Treat anything that changes clients as something to try on a few devices first.
 
@@ -25,8 +25,9 @@ Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (conso
 | Layer8 Settings | Lab client | A change is picked up by the next run without restarting the console |
 | Driver Manager | Catalog download, Dell catalog (Windows 11 and 10) | Dell and HP driver pack imports not tested |
 | Layer8.msi | Install, closing open consoles, uninstall | Uninstall keeps the console's `XmlStorage\Extensions\Actions` and `Forms` folders. Upgrade and the SYSTEM/3010 path not tested |
+| Customize-Layer8Cab.ps1 on a released cab | The one-file release copy, run from a downloads folder with a space in its name: 0.3.0 without LAPS, BitLockerKeys and RestartComputer, signed in the same step | 4 menu files dropped, 3 changed. Imported signed; on the console no LAPS Password, BitLocker Recovery Key, Restart Computer or Cancel Restart, and everything else there |
 | Leaving features out of a build (`-Exclude`) | A signed 0.2.2 cab built without LAPS, RemoteControl and DriverManager | Its description says so in Console Extensions. On the console: no LAPS Password, Driver Grabber, Remote Desktop, Remote Assistance or PowerShell Session; Remote Tools' separators tidy; the rest works. The MSI build with `-Exclude` built but wasn't installed |
-| Approved console extension | Signed with a lab certificate: 0.1.2 to 0.1.4 by the build script, 0.2.0 by `Sign-Layer8Cab.ps1` from the unsigned release cab | Import, approve, enable notifications, install on the console, upgrade over the previous version. Menus, icons, Layer8 Settings, Client Cache, Driver Grabber, Add Resources and the device properties tabs all work |
+| Approved console extension | Signed with a lab certificate: 0.1.2 to 0.1.4 by the build script, 0.2.0 by `Sign-Layer8Cab.ps1` (now `Customize-Layer8Cab.ps1`) from the unsigned release cab | Import, approve, enable notifications, install on the console, upgrade over the previous version. Menus, icons, Layer8 Settings, Client Cache, Driver Grabber, Add Resources and the device properties tabs all work |
 
 Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, nothing changed): the device properties tabs, Client Cache, Driver Grabber, Incremental Collections, Remove Retired Content, Clean Software Update Groups, the driver package importers, Driver Manager options, and the Dell and HP driver packs.
 

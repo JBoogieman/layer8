@@ -29,7 +29,7 @@ Organized by where you right-click in the console.
 
 **Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, a quick offline check before connecting, and the log level.
 
-Don't want some of it? Build without it: `-Exclude LAPS, BitLockerKeys, RemoteControl` and so on leaves those menu items out of the package entirely ([how](docs/INSTALL.md#leaving-features-out)).
+Don't want some of it? `Customize-Layer8Cab.ps1 -Exclude LAPS, BitLockerKeys, RemoteControl` takes those menu items out of the released cab entirely, no building needed ([how](docs/INSTALL.md#leaving-features-out)).
 
 The devices you manage need nothing installed except the ConfigMgr client, just some firewall rules: see [what the devices need](docs/INSTALL.md#the-devices-you-manage).
 

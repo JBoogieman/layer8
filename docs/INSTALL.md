@@ -75,7 +75,7 @@ Two details we found by testing, which Microsoft doesn't document:
   | | Signed | Unsigned |
   |---|---|---|
   | You need | A code-signing certificate. The site server has to trust it: its root in **Trusted Root Certification Authorities**, and the certificate itself in **Trusted Publishers** (Local Computer stores). In the lab it went into both, and that's what made the import work. | **Hierarchy approved console extensions can be unsigned** turned on (Hierarchy Settings, General tab). |
-  | Get the cab | Sign the released cab: `.\Sign-Layer8Cab.ps1 -Path Layer8-<version>.cab -CertificateThumbprint <thumbprint>` makes `Layer8-<version>-signed.cab`. Building from source, `.\tools\Build-Layer8Extension.ps1 -CertificateThumbprint <thumbprint>` signs as it builds. | The released cab as it is, or `.\tools\Build-Layer8Extension.ps1` |
+  | Get the cab | Sign the released cab: `.\Customize-Layer8Cab.ps1 -Path Layer8-<version>.cab -CertificateThumbprint <thumbprint>` makes `Layer8-<version>-signed.cab`. Building from source, `.\tools\Build-Layer8Extension.ps1 -CertificateThumbprint <thumbprint>` signs as it builds. | The released cab as it is, or `.\tools\Build-Layer8Extension.ps1` |
   | Import wizard | Leave **Allow extension to be unsigned** cleared. | Tick **Allow extension to be unsigned**. |
 
   **Both the cab and the DLLs inside it have to be signed.** A signed cab with unsigned DLLs fails to import with *"Failed to verify the signature of the cab or its content."* Both scripts sign both.
@@ -84,7 +84,7 @@ Two details we found by testing, which Microsoft doesn't document:
 
 ### Steps
 
-**1. Get the cab.** Download `Layer8-<version>.cab` from [Releases](https://github.com/JBoogieman/layer8/releases), or build it (see [Building the packages](#building-the-packages)). The released cab is unsigned; to sign it with your own certificate, run `Sign-Layer8Cab.ps1` from the same release (see the table above).
+**1. Get the cab.** Download `Layer8-<version>.cab` from [Releases](https://github.com/JBoogieman/layer8/releases), or build it (see [Building the packages](#building-the-packages)). The released cab is unsigned and has every feature. To sign it with your own certificate, leave features out, or both, run `Customize-Layer8Cab.ps1` from the same release first (see the table above and [Leaving features out](#leaving-features-out)).
 
 **2. Import it.** In the console: **Administration > Updates and Servicing > Console Extensions**, then **Import Console Extension** on the ribbon. Browse to the cab. Tick **Allow extension to be unsigned** only for an unsigned cab. Click **Next** twice.
 
@@ -177,6 +177,47 @@ A newer `Layer8.msi` upgrades an installed one in place. `msiexec /x Layer8.msi 
 
 ---
 
+## Leaving features out
+
+Some shops don't want every admin to have every tool: LAPS passwords, BitLocker recovery keys, or Restart Computer on a whole collection. You can leave features out of the package, so their menu items aren't there at all.
+
+**From a release, no building:** download `Layer8-<version>.cab` and `Customize-Layer8Cab.ps1` from [Releases](https://github.com/JBoogieman/layer8/releases) into one folder, and from PowerShell in that folder:
+
+```powershell
+.\Customize-Layer8Cab.ps1 -Path .\Layer8-<version>.cab -Exclude LAPS, BitLockerKeys, RemoteControl
+```
+
+That makes `Layer8-<version>-custom.cab` next to the original. Add `-CertificateThumbprint <thumbprint>` to sign it in the same step (`-custom-signed.cab`). Then import it as in [Way 1](#way-1-approved-console-extension-the-cab). Customize it before your site's first import of that version: a site won't import the same version of Layer8 twice. If PowerShell won't run the script, run `Set-ExecutionPolicy -Scope Process Bypass` first; that only lasts until the window closes.
+
+**Building from source:** both build scripts take the same `-Exclude`. It's the only way to leave features out of the MSI:
+
+```powershell
+.\tools\Build-Layer8Msi.ps1 -Exclude LAPS, BitLockerKeys, RemoteControl
+.\tools\Build-Layer8Extension.ps1 -Exclude LAPS, BitLockerKeys, RemoteControl
+```
+
+Either way, the cab's description in the Console Extensions node says what it was built without.
+
+| Feature | Menu items left out |
+|---|---|
+| `LAPS` | LAPS Password |
+| `BitLockerKeys` | BitLocker Recovery Key (BitLocker Status stays: it shows no keys) |
+| `RemoteControl` | Remote Desktop, Remote Assistance, PowerShell Session |
+| `RestartComputer` | Restart Computer, Cancel Restart |
+| `InstallUpdates` | Install Missing Updates |
+| `InstallApplication` | Install Application |
+| `ClientRepair` | Repair Client, Reset Policy, Turn Off Provisioning Mode |
+| `RetryFailed` | Retry Failed Devices, Retry All Failed Deployments, Re-evaluate Non-compliant Devices, Redistribute Failed Content |
+| `DeleteDeployment` | Delete (Monitoring > Deployments) |
+| `CollectionMembership` | Add Resources List, Remove Resources List, Add Selected Items to Existing Device Collections |
+| `QuickDeployment` | Quick Deployment |
+| `Cleanup` | Clean Software Update Groups, Remove Retired Content |
+| `DriverManager` | Driver Grabber, the driver package importers, Dell and HP driver packs |
+
+An item goes from every menu it's on, and a menu left empty goes with it. The code is still in the DLLs, but without a menu item the console has no way to start it. The list lives in `tools\Layer8Features.ps1`, and the released `Customize-Layer8Cab.ps1` has it built in. A build stops if an item named there isn't on any menu, so a renamed menu item can't quietly stay in.
+
+---
+
 ## The devices you manage
 
 Layer8 goes only where the console is. Nothing is installed on the devices: Layer8 reaches them over the network as the account running the console, which needs to be a local administrator on them. Each device needs the ConfigMgr client, and its firewall has to let in what each tool uses:
@@ -258,35 +299,8 @@ On a computer with the ConfigMgr console and Visual Studio (.NET desktop develop
 .\tools\Build-Layer8Extension.ps1 -CertificateThumbprint <thumbprint>   # signed
 ```
 
-`Build-Layer8Extension.ps1` packages the DLLs that `Build-Layer8Msi.ps1` built, so run that first. The certificate has to be a code-signing certificate in your `CurrentUser\My` or `LocalMachine\My` store. Signing uses a timestamp server (`-TimestampServer`, DigiCert's by default), so the computer needs internet access while it signs.
+`Build-Layer8Extension.ps1` packages the DLLs that `Build-Layer8Msi.ps1` built, so run that first. The certificate has to be a code-signing certificate in your `CurrentUser\My` or `LocalMachine\My` store. Signing uses a timestamp server (`-TimestampServer`, DigiCert's by default), so the computer needs internet access while it signs. Both scripts take `-Exclude` (see [Leaving features out](#leaving-features-out)).
 
-### Leaving features out
+`Build-Layer8Extension.ps1` also writes `Build\Extension\Customize-Layer8Cab.ps1`: `tools\Customize-Layer8Cab.ps1` with `tools\Layer8Features.ps1` built in, the one file that goes in a release.
 
-Some shops don't want every admin to have every tool: LAPS passwords, BitLocker recovery keys, or Restart Computer on a whole collection. Both build scripts take `-Exclude`, and the menu items for those features aren't in the package at all:
-
-```powershell
-.\tools\Build-Layer8Msi.ps1 -Exclude LAPS, BitLockerKeys, RemoteControl
-.\tools\Build-Layer8Extension.ps1 -Exclude LAPS, BitLockerKeys, RemoteControl
-```
-
-Use the same list for both if you build both. A cab built this way says what it was built without in its description, in the Console Extensions node.
-
-| Feature | Menu items left out |
-|---|---|
-| `LAPS` | LAPS Password |
-| `BitLockerKeys` | BitLocker Recovery Key (BitLocker Status stays: it shows no keys) |
-| `RemoteControl` | Remote Desktop, Remote Assistance, PowerShell Session |
-| `RestartComputer` | Restart Computer, Cancel Restart |
-| `InstallUpdates` | Install Missing Updates |
-| `InstallApplication` | Install Application |
-| `ClientRepair` | Repair Client, Reset Policy, Turn Off Provisioning Mode |
-| `RetryFailed` | Retry Failed Devices, Retry All Failed Deployments, Re-evaluate Non-compliant Devices, Redistribute Failed Content |
-| `DeleteDeployment` | Delete (Monitoring > Deployments) |
-| `CollectionMembership` | Add Resources List, Remove Resources List, Add Selected Items to Existing Device Collections |
-| `QuickDeployment` | Quick Deployment |
-| `Cleanup` | Clean Software Update Groups, Remove Retired Content |
-| `DriverManager` | Driver Grabber, the driver package importers, Dell and HP driver packs |
-
-An item goes from every menu it's on, and a menu left empty goes with it. The code is still in the DLLs, but without a menu item the console has no way to start it. The list lives in `tools\Layer8Features.psd1`. A build stops if an item named there isn't on any menu, so a renamed menu item can't quietly stay in.
-
-The version comes from `SharedAssemblyInfo.cs`. Bump it for each cab you import into a site, so the site sees it as a newer version of Layer8 (re-importing the same version hasn't been tried).
+The version comes from `SharedAssemblyInfo.cs`. Bump it for each cab you import into a site: a site won't import the same version of Layer8 again.

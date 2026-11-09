@@ -63,7 +63,7 @@
     The timestamp server used when signing, so the signature stays valid after the certificate expires.
 
 .PARAMETER Exclude
-    Features to leave out, by name (tools\Layer8Features.psd1 lists them and their menu items), for example
+    Features to leave out, by name (tools\Layer8Features.ps1 lists them and their menu items), for example
     -Exclude LAPS, BitLockerKeys. Their menu items aren't in the cab, so no console that installs it shows them.
     The extension's description in the console says what was left out.
 
@@ -97,7 +97,8 @@ $extensionId = '3b900076-0ea8-46a7-b3b3-57bc7336c50f'
 $name = 'Layer8'
 $author = 'JBoogieman'
 $description = 'Right-click tools for the Configuration Manager console: client actions, remote tools, deployment retries and collection tools. Open source (MIT).'
-$Exclude = @($Exclude | Where-Object { $_ } | Sort-Object -Unique)
+$Exclude = @($Exclude | Where-Object { $_ })
+if ($Exclude) { [void](Get-Layer8FeatureItems $Exclude); $Exclude = Get-Layer8FeatureNames $Exclude }
 if ($Exclude) { $description += " Built without: $($Exclude -join ', ')." }
 
 # The same DLLs Layer8.msi installs (Layer8.Setup\Package.wxs).
@@ -311,6 +312,19 @@ if ($certificate) {
     $signedBy = $certificate.Subject
 }
 
+# 7. The release copy of Customize-Layer8Cab.ps1, with Layer8Features.ps1 built in at its marker line, so it's one
+#    download that leaves out exactly the menu items these builds do.
+$customizeSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Customize-Layer8Cab.ps1') -Raw
+$featuresSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Layer8Features.ps1') -Raw
+$marker = [regex]::Escape(". (Join-Path `$PSScriptRoot 'Layer8Features.ps1') # LAYER8-FEATURES")
+if ($customizeSource -notmatch $marker) { throw "Customize-Layer8Cab.ps1 has lost its LAYER8-FEATURES line." }
+foreach ($feature in $Layer8Features.Keys) {
+    if ($customizeSource -notmatch "\b$feature\b") { throw "Customize-Layer8Cab.ps1's help doesn't list the feature $feature." }
+}
+$customize = Join-Path $outDir 'Customize-Layer8Cab.ps1'
+$bundled = [regex]::Replace($customizeSource, $marker, { param($match) $featuresSource.TrimEnd() })
+[IO.File]::WriteAllText($customize, $bundled, (New-Object Text.UTF8Encoding($true)))
+
 Write-Host ''
 Write-Host "Built Layer8 $version as a console extension"
 Write-Host "  $cab"
@@ -320,3 +334,4 @@ if ($Exclude) { Write-Host "  Left out: $($Exclude -join ', ')" }
 if ($signedBy) { Write-Host "  Cab and DLLs signed by $signedBy" }
 else { Write-Host "  Unsigned: import it with 'Allow extension to be unsigned' ticked (needs 'Hierarchy approved console extensions can be unsigned')." }
 Write-Host "  What went in: $contents"
+Write-Host "  Customize-Layer8Cab.ps1 for the release (Layer8Features.ps1 built in): $customize"
