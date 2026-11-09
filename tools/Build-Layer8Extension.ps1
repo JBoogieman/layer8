@@ -312,18 +312,38 @@ if ($certificate) {
     $signedBy = $certificate.Subject
 }
 
-# 7. The release copy of Customize-Layer8Cab.ps1, with Layer8Features.ps1 built in at its marker line, so it's one
-#    download that leaves out exactly the menu items these builds do.
+# 7. The release copy of Customize-Layer8Cab.ps1, with Layer8Features.ps1 built in between its LAYER8-FEATURES
+#    markers, so it's one download that leaves out exactly the menu items these builds do.
 $customizeSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Customize-Layer8Cab.ps1') -Raw
 $featuresSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Layer8Features.ps1') -Raw
-$marker = [regex]::Escape(". (Join-Path `$PSScriptRoot 'Layer8Features.ps1') # LAYER8-FEATURES")
-if ($customizeSource -notmatch $marker) { throw "Customize-Layer8Cab.ps1 has lost its LAYER8-FEATURES line." }
+$marker = '(?s)# LAYER8-FEATURES-BEGIN.*?# LAYER8-FEATURES-END'
+if ($customizeSource -notmatch $marker) { throw "Customize-Layer8Cab.ps1 has lost its LAYER8-FEATURES-BEGIN and -END lines." }
 foreach ($feature in $Layer8Features.Keys) {
     if ($customizeSource -notmatch "\b$feature\b") { throw "Customize-Layer8Cab.ps1's help doesn't list the feature $feature." }
 }
 $customize = Join-Path $outDir 'Customize-Layer8Cab.ps1'
 $bundled = [regex]::Replace($customizeSource, $marker, { param($match) $featuresSource.TrimEnd() })
+if ($bundled -match 'LAYER8-FEATURES') { throw "The release copy of Customize-Layer8Cab.ps1 still has a LAYER8-FEATURES marker." }
 [IO.File]::WriteAllText($customize, $bundled, (New-Object Text.UTF8Encoding($true)))
+
+# 8. The files a GitHub release takes, in one folder: Layer8.msi (when Build-Layer8Msi.ps1 built this same
+#    version), the cab, and the release copy of Customize-Layer8Cab.ps1. Only ever unsigned: a release cab signed
+#    with your certificate is no use to anyone else's site.
+$releaseDir = $null
+if (-not $certificate) {
+    $releaseDir = Join-Path $repo "Build\Release\$($version.ToString(3))"
+    if (Test-Path $releaseDir) { Remove-Item $releaseDir -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+    Copy-Item -LiteralPath $cab, $customize -Destination $releaseDir
+    $msi = Join-Path $repo "Build\Installer\$Configuration\Layer8.msi"
+    if ((Test-Path $msi) -and (Get-Item $msi).LastWriteTime -ge (Get-Item (Join-Path $buildDir 'Layer8.dll')).LastWriteTime) {
+        Copy-Item -LiteralPath $msi -Destination $releaseDir
+    }
+    else {
+        Write-Warning "No Layer8.msi from this build, so the release folder has none. Run .\tools\Build-Layer8Msi.ps1, then this script again."
+    }
+    if ($Exclude) { Write-Warning "Built without $($Exclude -join ', '): not a full release." }
+}
 
 Write-Host ''
 Write-Host "Built Layer8 $version as a console extension"
@@ -334,4 +354,4 @@ if ($Exclude) { Write-Host "  Left out: $($Exclude -join ', ')" }
 if ($signedBy) { Write-Host "  Cab and DLLs signed by $signedBy" }
 else { Write-Host "  Unsigned: import it with 'Allow extension to be unsigned' ticked (needs 'Hierarchy approved console extensions can be unsigned')." }
 Write-Host "  What went in: $contents"
-Write-Host "  Customize-Layer8Cab.ps1 for the release (Layer8Features.ps1 built in): $customize"
+if ($releaseDir) { Write-Host "  For a GitHub release, upload everything in: $releaseDir" }

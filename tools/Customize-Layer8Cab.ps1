@@ -69,9 +69,15 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Layer8's features and how menu items are left out. The released copy of this script has Layer8Features.ps1
-# built in at this line (Build-Layer8Extension.ps1 does it), so it's one download.
-. (Join-Path $PSScriptRoot 'Layer8Features.ps1') # LAYER8-FEATURES
+# Layer8's features and how menu items are left out. In the released copy of this script, Build-Layer8Extension.ps1
+# has replaced everything from BEGIN to END with Layer8Features.ps1 itself, so it's one download.
+# LAYER8-FEATURES-BEGIN
+$featuresScript = Join-Path $PSScriptRoot 'Layer8Features.ps1'
+if (-not (Test-Path -LiteralPath $featuresScript)) {
+    throw "Layer8Features.ps1 isn't next to this script. Download Customize-Layer8Cab.ps1 from a Layer8 release (that copy has the feature list built in), or run this one from the repo's tools folder."
+}
+. $featuresScript
+# LAYER8-FEATURES-END
 
 # Layer8's permanent console extension ID (the same in every Layer8 cab).
 $extensionId = '3b900076-0ea8-46a7-b3b3-57bc7336c50f'
