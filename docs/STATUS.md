@@ -25,7 +25,7 @@ Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (conso
 | Layer8 Settings | Lab client | A change is picked up by the next run without restarting the console |
 | Driver Manager | Catalog download, Dell catalog (Windows 11 and 10) | Dell and HP driver pack imports not tested |
 | Layer8.msi | Install, closing open consoles, uninstall | Uninstall keeps the console's `XmlStorage\Extensions\Actions` and `Forms` folders. Upgrade and the SYSTEM/3010 path not tested |
-| Approved console extension | 0.1.2, signed with a lab certificate | Import, approve, enable notifications, install on the console. Menus, icons, Layer8 Settings, Client Cache, Driver Grabber, Add Resources and the device properties tabs all work |
+| Approved console extension | Signed with a lab certificate: 0.1.2 to 0.1.4 by the build script, 0.2.0 by `Sign-Layer8Cab.ps1` from the unsigned release cab | Import, approve, enable notifications, install on the console, upgrade over the previous version. Menus, icons, Layer8 Settings, Client Cache, Driver Grabber, Add Resources and the device properties tabs all work |
 
 Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, nothing changed): the device properties tabs, Client Cache, Driver Grabber, Incremental Collections, Remove Retired Content, Clean Software Update Groups, the driver package importers, Driver Manager options, and the Dell and HP driver packs.
 
@@ -40,7 +40,7 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 - Dell and HP driver pack imports
 - A collection run on 50 or more devices
 - Layer8.msi: upgrade over an older version, and an MECM deployment running as SYSTEM with a console open (3010)
-- Approved console extension: Require Extension, Revoke Approval and Delete; another console picking it up from a notification
+- Approved console extension: importing the cab unsigned (needs "Hierarchy approved console extensions can be unsigned"), Require Extension, Revoke Approval and Delete, another console picking it up from a notification
 
 ## Known rough edges
 
