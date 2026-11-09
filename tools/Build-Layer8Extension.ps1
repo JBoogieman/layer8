@@ -62,23 +62,33 @@
 .PARAMETER TimestampServer
     The timestamp server used when signing, so the signature stays valid after the certificate expires.
 
+.PARAMETER Exclude
+    Features to leave out, by name (tools\Layer8Features.psd1 lists them and their menu items), for example
+    -Exclude LAPS, BitLockerKeys. Their menu items aren't in the cab, so no console that installs it shows them.
+    The extension's description in the console says what was left out.
+
 .EXAMPLE
     .\tools\Build-Layer8Msi.ps1
     .\tools\Build-Layer8Extension.ps1
 
 .EXAMPLE
     .\tools\Build-Layer8Extension.ps1 -CertificateThumbprint 0123456789ABCDEF0123456789ABCDEF01234567
+
+.EXAMPLE
+    .\tools\Build-Layer8Extension.ps1 -Exclude LAPS, BitLockerKeys, RemoteControl
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',
     [string]$CertificateThumbprint,
-    [string]$TimestampServer = 'http://timestamp.digicert.com'
+    [string]$TimestampServer = 'http://timestamp.digicert.com',
+    [string[]]$Exclude
 )
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'Layer8Features.ps1')
 
 # Layer8's permanent identity as a console extension: the site recognises a newer cab as the same extension by
 # this ID. Every Layer8 cab ever built must keep it. Never change it.
@@ -87,6 +97,8 @@ $extensionId = '3b900076-0ea8-46a7-b3b3-57bc7336c50f'
 $name = 'Layer8'
 $author = 'JBoogieman'
 $description = 'Right-click tools for the Configuration Manager console: client actions, remote tools, deployment retries and collection tools. Open source (MIT).'
+$Exclude = @($Exclude | Where-Object { $_ } | Sort-Object -Unique)
+if ($Exclude) { $description += " Built without: $($Exclude -join ', ')." }
 
 # The same DLLs Layer8.msi installs (Layer8.Setup\Package.wxs).
 $dlls = 'Layer8.dll', 'Layer8.Device.dll', 'Layer8.DriverManager.dll', 'Layer8.IniFileParser.dll'
@@ -115,6 +127,9 @@ foreach ($dll in $dlls) {
     if (-not (Test-Path (Join-Path $buildDir $dll))) { throw "$dll isn't in $buildDir. Run .\tools\Build-Layer8Msi.ps1 first." }
 }
 $version = [Version](Get-Item (Join-Path $buildDir 'Layer8.dll')).VersionInfo.FileVersion
+
+# The menu and dialog XML to package: the repo's, or a copy without the left-out features.
+$extensionsDir = Get-Layer8ExtensionsFolder -Repo $repo -WorkFolder (Join-Path $repo "Build\Extensions-$Configuration") -Exclude $Exclude
 
 $outDir = Join-Path $repo 'Build\Extension'
 $contents = Join-Path $outDir "Layer8-$($version.ToString(3))"
@@ -177,7 +192,7 @@ function Write-CabCopy([string]$source, [string]$target, [scriptblock]$convert, 
 
 # 1. The menu XML, node by node.
 $guidPattern = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-$actions = @(foreach ($nodeDir in Get-ChildItem (Join-Path $repo 'Extensions\Actions') -Directory | Sort-Object Name) {
+$actions = @(foreach ($nodeDir in Get-ChildItem (Join-Path $extensionsDir 'Actions') -Directory | Sort-Object Name) {
     if ($nodeDir.Name -notmatch $guidPattern) { throw "Extensions\Actions\$($nodeDir.Name) isn't named after a console node GUID." }
     foreach ($file in Get-ChildItem $nodeDir.FullName -Filter *.xml -File | Sort-Object Name) {
         [pscustomobject]@{ Node = $nodeDir.Name.ToLowerInvariant(); Source = $file.FullName; Name = $file.Name; Hash = Get-Sha256 $file.FullName; CabName = $null }
@@ -197,7 +212,7 @@ foreach ($action in $actions) {
 }
 
 # 2. The dialog XML and the DLLs.
-$forms = @(Get-ChildItem (Join-Path $repo 'Extensions\Forms') -Filter *.xml -File | Sort-Object Name)
+$forms = @(Get-ChildItem (Join-Path $extensionsDir 'Forms') -Filter *.xml -File | Sort-Object Name)
 foreach ($form in $forms) { Write-CabCopy $form.FullName (Join-Path $contents $form.Name) ${function:Convert-DialogXml} $null }
 foreach ($dll in $dlls) { Copy-Item -LiteralPath (Join-Path $buildDir $dll) -Destination (Join-Path $contents $dll) }
 # Signed before their hashes go into the manifest (signing changes the file). Only the cab's copies are signed.
@@ -301,6 +316,7 @@ Write-Host "Built Layer8 $version as a console extension"
 Write-Host "  $cab"
 Write-Host "  SHA-256 $(Get-Sha256 $cab)"
 Write-Host "  $($actions.Count) menu files on $(@($actions | Group-Object Node).Count) console nodes, $($forms.Count) dialog files, $($dlls.Count) DLLs"
+if ($Exclude) { Write-Host "  Left out: $($Exclude -join ', ')" }
 if ($signedBy) { Write-Host "  Cab and DLLs signed by $signedBy" }
 else { Write-Host "  Unsigned: import it with 'Allow extension to be unsigned' ticked (needs 'Hierarchy approved console extensions can be unsigned')." }
 Write-Host "  What went in: $contents"

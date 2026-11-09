@@ -17,17 +17,31 @@
 .PARAMETER Configuration
     Release (default) or Debug.
 
+.PARAMETER Exclude
+    Features to leave out, by name (tools\Layer8Features.psd1 lists them and their menu items), for example
+    -Exclude LAPS, BitLockerKeys. Their menu items aren't in the MSI, so no console it's installed on shows them.
+
 .EXAMPLE
     .\tools\Build-Layer8Msi.ps1
+
+.EXAMPLE
+    .\tools\Build-Layer8Msi.ps1 -Exclude LAPS, BitLockerKeys, RemoteControl
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('Debug', 'Release')]
-    [string]$Configuration = 'Release'
+    [string]$Configuration = 'Release',
+    [string[]]$Exclude
 )
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'Layer8Features.ps1')
+
+# The console XML to package: the repo's, or a copy without the left-out features. Done first, so a misspelled
+# feature stops the build before anything compiles.
+$Exclude = @($Exclude | Where-Object { $_ } | Sort-Object -Unique)
+$extensionsDir = Get-Layer8ExtensionsFolder -Repo $repo -WorkFolder (Join-Path $repo "Build\Extensions-$Configuration") -Exclude $Exclude
 
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 $msbuild = if (Test-Path $vswhere) { & $vswhere -latest -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1 }
@@ -40,7 +54,13 @@ $projects = 'IniFileParser\INIFileParser.csproj',
             'Layer8.Setup\Layer8.Setup.wixproj'
 foreach ($p in $projects) {
     Write-Host "Building $p ($Configuration)"
-    & $msbuild (Join-Path $repo $p) -restore -t:Build -p:RestorePackagesConfig=true -p:Configuration=$Configuration "-p:SolutionDir=$repo/" -nologo -v:minimal
+    $arguments = @((Join-Path $repo $p), '-restore', '-t:Build', '-p:RestorePackagesConfig=true', "-p:Configuration=$Configuration", "-p:SolutionDir=$repo/", '-nologo', '-v:minimal')
+    if ($p -like '*.wixproj') {
+        # Always a full rebuild: an MSI built with features left out mustn't be reused when they're back in.
+        $arguments[2] = '-t:Rebuild'
+        $arguments += "-p:Layer8ExtensionsDir=$extensionsDir"
+    }
+    & $msbuild @arguments
     if ($LASTEXITCODE) { throw "Build failed: $p" }
 }
 
@@ -50,3 +70,4 @@ $version = (Get-Item (Join-Path $repo "Build\$Configuration\Layer8.dll")).Versio
 Write-Host ''
 Write-Host "Built Layer8 $version"
 Write-Host "  $msi"
+if ($Exclude) { Write-Host "  Left out: $($Exclude -join ', ')" }

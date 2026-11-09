@@ -260,4 +260,33 @@ On a computer with the ConfigMgr console and Visual Studio (.NET desktop develop
 
 `Build-Layer8Extension.ps1` packages the DLLs that `Build-Layer8Msi.ps1` built, so run that first. The certificate has to be a code-signing certificate in your `CurrentUser\My` or `LocalMachine\My` store. Signing uses a timestamp server (`-TimestampServer`, DigiCert's by default), so the computer needs internet access while it signs.
 
+### Leaving features out
+
+Some shops don't want every admin to have every tool: LAPS passwords, BitLocker recovery keys, or Restart Computer on a whole collection. Both build scripts take `-Exclude`, and the menu items for those features aren't in the package at all:
+
+```powershell
+.\tools\Build-Layer8Msi.ps1 -Exclude LAPS, BitLockerKeys, RemoteControl
+.\tools\Build-Layer8Extension.ps1 -Exclude LAPS, BitLockerKeys, RemoteControl
+```
+
+Use the same list for both if you build both. A cab built this way says what it was built without in its description, in the Console Extensions node.
+
+| Feature | Menu items left out |
+|---|---|
+| `LAPS` | LAPS Password |
+| `BitLockerKeys` | BitLocker Recovery Key (BitLocker Status stays: it shows no keys) |
+| `RemoteControl` | Remote Desktop, Remote Assistance, PowerShell Session |
+| `RestartComputer` | Restart Computer, Cancel Restart |
+| `InstallUpdates` | Install Missing Updates |
+| `InstallApplication` | Install Application |
+| `ClientRepair` | Repair Client, Reset Policy, Turn Off Provisioning Mode |
+| `RetryFailed` | Retry Failed Devices, Retry All Failed Deployments, Re-evaluate Non-compliant Devices, Redistribute Failed Content |
+| `DeleteDeployment` | Delete (Monitoring > Deployments) |
+| `CollectionMembership` | Add Resources List, Remove Resources List, Add Selected Items to Existing Device Collections |
+| `QuickDeployment` | Quick Deployment |
+| `Cleanup` | Clean Software Update Groups, Remove Retired Content |
+| `DriverManager` | Driver Grabber, the driver package importers, Dell and HP driver packs |
+
+An item goes from every menu it's on, and a menu left empty goes with it. The code is still in the DLLs, but without a menu item the console has no way to start it. The list lives in `tools\Layer8Features.psd1`. A build stops if an item named there isn't on any menu, so a renamed menu item can't quietly stay in.
+
 The version comes from `SharedAssemblyInfo.cs`. Bump it for each cab you import into a site, so the site sees it as a newer version of Layer8 (re-importing the same version hasn't been tried).

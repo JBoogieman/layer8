@@ -16,8 +16,14 @@
     <OutputName>Layer8</OutputName>
     <OutputPath>$(MSBuildThisFileDirectory)..\Build\Installer\$(Configuration)\</OutputPath>
 
+    <!--
+      The console XML to package. The repo's Extensions folder, unless tools\Build-Layer8Msi.ps1 -Exclude passes
+      a copy with some features left out.
+    -->
+    <Layer8ExtensionsDir Condition="'$(Layer8ExtensionsDir)' == ''">$(MSBuildThisFileDirectory)..\Extensions</Layer8ExtensionsDir>
+
     <!-- Folders Package.wxs reads from, as $(var.RepoDir), $(var.BuildDir) and $(var.ExtensionsDir). -->
-    <DefineConstants>RepoDir=$(MSBuildThisFileDirectory)..\;BuildDir=$(MSBuildThisFileDirectory)..\Build\$(Configuration)\;ExtensionsDir=$(MSBuildThisFileDirectory)..\Extensions\</DefineConstants>
+    <DefineConstants>RepoDir=$(MSBuildThisFileDirectory)..\;BuildDir=$(MSBuildThisFileDirectory)..\Build\$(Configuration)\;ExtensionsDir=$([MSBuild]::EnsureTrailingSlash('$(Layer8ExtensionsDir)'))</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

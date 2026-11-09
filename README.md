@@ -6,19 +6,32 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 
 ## What's in it
 
-- Client actions on devices and collections
-- Client tools on devices and collections: quick status (signed-in users, uptime, free space on C:, client version), find installed software by name, list and install missing updates, check for a pending restart, full machine policy refresh, group policy update, client health check, clear the client cache, repair the client, turn off provisioning mode. Every run shows one answer per device, works through at most 32 devices at a time, and Copy Results puts the rows on the clipboard for Excel
-- Online status for devices and whole collections: ping, or port 445 when ping is blocked
-- Retry Failed Devices on Monitoring > Deployments: for an application or software update deployment, finds every device in error and re-runs that deployment's evaluation on all of them (for an Available app, it installs the app on each instead). Copy Failed Devices puts their names and error codes on the clipboard
-- Remote tools on devices: ping, Remote Desktop, Remote Assistance, PowerShell session, browse C$, client logs, open a client log in CMTrace, Computer Management, Event Viewer, Services
-- Copy device names, or every member of a collection, to the clipboard
-- Extended device properties: update compliance, client health, collection membership
-- Collection management: add resources from a list
-- Driver Manager: grabber, importer, Dell and HP driver packs
-- Install Application: list the apps deployed to a device and install one now, like Software Center
-- LAPS password and BitLocker recovery key lookup (from Active Directory; type the Key ID from the recovery screen to find the right key)
-- Software update clean-up and phased deployments
-- Layer8 Settings (on the Layer8 menu): how many devices to contact at once, a quick offline check before connecting, and the log level
+Organized by where you right-click in the console.
+
+**A device, or a device collection** (a collection runs on every member):
+- **Client Actions:** the eleven standard client cycles, plus Quick Status (who's signed in, uptime, free space on C:, IP address, client version), Find Software (by name, or older than a version: `Chrome < 131`), Check Pending Restart, List and Install Missing Updates, Full Machine Policy Refresh, Group Policy Update, Client Health Check, Client Info, Reset Policy, Clear Client Cache, Repair Client, Turn Off Provisioning Mode, Restart SMS Agent Host Service, Restart Computer and Cancel Restart, Defender Status and Quick Scan, BitLocker Status
+- **On a collection, also:** Online Status, Collect Client Logs, and Retry All Failed Deployments (every app, update and baseline deployment to the collection, on the devices in error)
+- Every run shows one answer per device: done, offline, blocked, or why it failed. It works through 32 devices at a time (change it in Layer8 Settings), and Run Again on Failed, Copy Results (for Excel) and Export are on every result window
+
+**A device:**
+- **Remote Tools:** Online Status (ping, or port 445 when ping is blocked), Ping, Remote Desktop, Remote Assistance, PowerShell Session, Browse C$, Client Logs, Browse ccmcache, Client Log in CMTrace, Collect Client Logs (zipped to your desktop), Computer Management, Event Viewer, Services
+- **Install Application:** the apps deployed to the device; install one now, like Software Center
+- **LAPS Password** and **BitLocker Recovery Key** (from Active Directory; type the Key ID from the recovery screen to find the right key)
+- Copy Names, Copy Device Info, Add to existing collections, Show Messages, Client Cache, Driver Grabber, and extra device properties tabs (update compliance, client health, collection membership)
+
+**A collection:** Add Resources List and Remove Resources List (paste names), Copy Member Names
+
+**Monitoring:**
+- **Deployments:** Retry Failed Devices (re-runs the deployment on every device in error; for an Available app, installs it), Copy Failed Devices (with error codes), Delete
+- **Distribution Status:** Redistribute Failed Content, Copy Failed Distribution Points
+
+**Elsewhere:** Quick Deployment (deploy to several collections at once), Task Sequence Export to XML, Clean Software Update Groups, Remove Retired Content, Incremental Collections and Collection Evaluation Statistics, Driver Manager (grabber, importers, Dell and HP driver packs)
+
+**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, a quick offline check before connecting, and the log level.
+
+Don't want some of it? Build without it: `-Exclude LAPS, BitLockerKeys, RemoteControl` and so on leaves those menu items out of the package entirely ([how](docs/INSTALL.md#leaving-features-out)).
+
+The devices you manage need nothing installed except the ConfigMgr client, just some firewall rules: see [what the devices need](docs/INSTALL.md#the-devices-you-manage).
 
 ## Building
 
