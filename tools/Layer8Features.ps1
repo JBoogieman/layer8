@@ -31,7 +31,7 @@ $Layer8Features = [ordered]@{
     CollectionMembership = 'Add Resources List', 'Remove Resources List', 'Add Selected Items to Existing Device Collections'
     QuickDeployment      = 'Quick Deployment'
     Cleanup              = 'Clean Software Update Groups', 'Remove Retired Content'
-    DriverManager        = 'Driver Grabber', 'Driver Package Importer', 'Driver Legacy Package Importer', 'Dell Driver Pack', 'HP Driver Pack'
+    DriverManager        = 'Driver Grabber', 'Driver Package Importer', 'Driver Legacy Package Importer', 'Dell Driver Pack', 'HP Driver Pack', 'Lenovo Driver Pack'
 }
 
 # The menu items of the named features. Throws on a name that isn't a feature, listing the ones that are.

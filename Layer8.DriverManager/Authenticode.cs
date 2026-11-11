@@ -15,6 +15,9 @@ namespace Layer8.DriverManager
         /// <summary>HP signs its SoftPaqs as "HP Inc." (older ones "Hewlett-Packard Company").</summary>
         public static readonly Regex HPSigner = new Regex(@"^(HP Inc\.?|HP Development Company.*|Hewlett[- ]Packard.*)$", RegexOptions.IgnoreCase);
 
+        /// <summary>Lenovo signs its driver packs as "Lenovo" (or a Lenovo company such as "Lenovo (United States) Inc.").</summary>
+        public static readonly Regex LenovoSigner = new Regex(@"^Lenovo\b.*$", RegexOptions.IgnoreCase);
+
         /// <summary>
         /// Throws unless Windows trusts the file's signature and its signer's name matches <paramref name="signer"/>.
         /// </summary>

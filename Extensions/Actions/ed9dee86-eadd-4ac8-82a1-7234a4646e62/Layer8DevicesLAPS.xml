@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ActionDescription NamespaceGuid="00AA55FA-F9B8-4293-9761-83C50822BF35" Class="AssemblyType" DisplayName="LAPS Password" MnemonicDisplayName="LAPS Password" Description="Retrive LAPS password from active directory" InsertBefore="B7009279-2666-45EF-9935-1FB3D3ED2ABF">
+<ActionDescription NamespaceGuid="00AA55FA-F9B8-4293-9761-83C50822BF35" Class="AssemblyType" DisplayName="LAPS Password" MnemonicDisplayName="LAPS Password" Description="The local administrator password from Active Directory: Windows LAPS (encrypted or not) or legacy LAPS, with Expire Now" InsertBefore="B7009279-2666-45EF-9935-1FB3D3ED2ABF">
   <ShowOn>
     <string>DefaultHomeTab</string>
     <string>ContextMenu</string>

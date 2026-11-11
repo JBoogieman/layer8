@@ -17,6 +17,7 @@ namespace Layer8.DriverManager
         public const string DefaultDellCatalogUri = "https://downloads.dell.com/catalog/DriverPackCatalog.cab";
         public const string OldDellCatalogUri = "http://downloads.dell.com/catalog/DriverPackCatalog.cab";
         public const string DefaultHPCatalogUri = "https://ftp.hp.com/pub/caps-softpaq/cmit/HPClientDriverPackCatalog.cab";
+        public const string DefaultLenovoCatalogUri = "https://download.lenovo.com/cdrt/td/catalogv2.xml";
 
         /// <summary>Replaces the old plain-http Dell catalog default with https. Any other address is left alone.</summary>
         public static void UpgradeDellCatalogUri(ModifyRegistry registry)
@@ -52,6 +53,11 @@ namespace Layer8.DriverManager
                 registry.Write("HPCatalogURI", DefaultHPCatalogUri);
             }
 
+            if (string.IsNullOrEmpty(registry.ReadString("LenovoCatalogURI")))
+            {
+                registry.Write("LenovoCatalogURI", DefaultLenovoCatalogUri);
+            }
+
             if (string.IsNullOrEmpty(registry.ReadString("TempDownloadPath")))
             {
                 registry.Write("TempDownloadPath", Path.GetTempPath());
@@ -67,6 +73,11 @@ namespace Layer8.DriverManager
                 registry.Write("HPFolderPrefix", "HP");
             }
 
+            if (string.IsNullOrEmpty(registry.ReadString("LenovoFolderPrefix")))
+            {
+                registry.Write("LenovoFolderPrefix", "Lenovo");
+            }
+
             checkBoxWipeSource.Checked = registry.ReadString("WipeSource") == "" ? true : registry.ReadBool("WipeSource");
 
             textBoxDellCatalogUri.Text = registry.ReadString("DellCatalogURI");
@@ -74,6 +85,9 @@ namespace Layer8.DriverManager
 
             textBoxHPCatalogUri.Text = registry.ReadString("HPCatalogURI");
             textBoxHPPrefix.Text = registry.ReadString("HPFolderPrefix");
+
+            textBoxLenovoCatalogUri.Text = registry.ReadString("LenovoCatalogURI");
+            textBoxLenovoPrefix.Text = registry.ReadString("LenovoFolderPrefix");
 
             browseFolderControlDownload.Controls.OfType<SmsOsdTextBox>().First().Text = registry.ReadString("TempDownloadPath");
 
@@ -102,6 +116,9 @@ namespace Layer8.DriverManager
 
             registry.Write("HPCatalogURI", textBoxHPCatalogUri.Text);
             registry.Write("HPFolderPrefix", textBoxHPPrefix.Text);
+
+            registry.Write("LenovoCatalogURI", textBoxLenovoCatalogUri.Text);
+            registry.Write("LenovoFolderPrefix", textBoxLenovoPrefix.Text);
 
             Dirty = false;
 

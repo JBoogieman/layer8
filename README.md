@@ -16,7 +16,7 @@ Organized by where you right-click in the console.
 **A device:**
 - **Remote Tools:** Online Status (ping, or port 445 when ping is blocked), Ping, Remote Desktop, Remote Assistance, PowerShell Session, Browse C$, Client Logs, Browse ccmcache, Client Log in CMTrace, Collect Client Logs (zipped to your desktop), Computer Management, Event Viewer, Services
 - **Install Application:** the apps deployed to the device; install one now, like Software Center
-- **LAPS Password** and **BitLocker Recovery Key** (from Active Directory; type the Key ID from the recovery screen to find the right key)
+- **LAPS Password** (Windows LAPS, encrypted or not, and legacy LAPS, with Expire Now) and **BitLocker Recovery Key** (type the Key ID from the recovery screen to find the right key), both from Active Directory
 - Copy Names, Copy Device Info, Add to existing collections, Show Messages, Client Cache, Driver Grabber, and extra device properties tabs (update compliance, client health, collection membership)
 
 **A collection:** Add Resources List and Remove Resources List (paste names), Copy Member Names
@@ -25,7 +25,7 @@ Organized by where you right-click in the console.
 - **Deployments:** Retry Failed Devices (re-runs the deployment on every device in error; for an Available app, installs it), Copy Failed Devices (with error codes), Delete
 - **Distribution Status:** Redistribute Failed Content, Copy Failed Distribution Points
 
-**Elsewhere:** Quick Deployment (deploy to several collections at once), Task Sequence Export to XML, Clean Software Update Groups, Remove Retired Content, Incremental Collections and Collection Evaluation Statistics, Driver Manager (grabber, importers, Dell and HP driver packs)
+**Elsewhere:** Quick Deployment (deploy to several collections at once), Task Sequence Export to XML, Clean Software Update Groups, Remove Retired Content, Incremental Collections and Collection Evaluation Statistics, Driver Manager (grabber, importers, Dell, HP and Lenovo driver packs; Lenovo's ticks the models your site has and checks each download against Lenovo's signed catalog)
 
 **System Information** (a device's Layer8 menu): one window instead of remoting in. Tabs for an overview (model, serial, Windows version and build, uptime, memory, disks, battery health), installed programs, installed updates, services, drivers, user profiles and local administrators. Every tab sorts, filters as you type, and copies or exports what's shown. It only reads; nothing on the device changes.
 

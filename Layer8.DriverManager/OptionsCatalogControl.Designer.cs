@@ -40,6 +40,10 @@
             this.label5 = new System.Windows.Forms.Label();
             this.checkBoxWipeSource = new System.Windows.Forms.CheckBox();
             this.label6 = new System.Windows.Forms.Label();
+            this.textBoxLenovoCatalogUri = new System.Windows.Forms.TextBox();
+            this.label7 = new System.Windows.Forms.Label();
+            this.textBoxLenovoPrefix = new System.Windows.Forms.TextBox();
+            this.label8 = new System.Windows.Forms.Label();
             this.SuspendLayout();
             // 
             // textBoxDellCatalogUri
@@ -64,7 +68,7 @@
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(7, 300);
+            this.label1.Location = new System.Drawing.Point(7, 390);
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(221, 13);
             this.label1.TabIndex = 18;
@@ -80,7 +84,7 @@
             this.browseFolderControlDownload.FolderTextReadOnly = false;
             this.browseFolderControlDownload.IsLocalFolder = false;
             this.browseFolderControlDownload.LableDescriptionWidth = 0;
-            this.browseFolderControlDownload.Location = new System.Drawing.Point(10, 316);
+            this.browseFolderControlDownload.Location = new System.Drawing.Point(10, 406);
             this.browseFolderControlDownload.MinimumSize = new System.Drawing.Size(150, 25);
             this.browseFolderControlDownload.Name = "browseFolderControlDownload";
             this.browseFolderControlDownload.Size = new System.Drawing.Size(360, 25);
@@ -144,10 +148,48 @@
             this.label5.TabIndex = 24;
             this.label5.Text = "HP folder prefix:";
             // 
+            // label7
+            // 
+            this.label7.AutoSize = true;
+            this.label7.Location = new System.Drawing.Point(7, 214);
+            this.label7.Name = "label7";
+            this.label7.Size = new System.Drawing.Size(150, 13);
+            this.label7.TabIndex = 28;
+            this.label7.Text = "Lenovo catalogv2.xml url:";
+            // 
+            // textBoxLenovoCatalogUri
+            // 
+            this.textBoxLenovoCatalogUri.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.textBoxLenovoCatalogUri.Location = new System.Drawing.Point(10, 230);
+            this.textBoxLenovoCatalogUri.Name = "textBoxLenovoCatalogUri";
+            this.textBoxLenovoCatalogUri.Size = new System.Drawing.Size(360, 20);
+            this.textBoxLenovoCatalogUri.TabIndex = 29;
+            this.textBoxLenovoCatalogUri.TextChanged += new System.EventHandler(this.Control_TextChanged);
+            // 
+            // label8
+            // 
+            this.label8.AutoSize = true;
+            this.label8.Location = new System.Drawing.Point(7, 256);
+            this.label8.Name = "label8";
+            this.label8.Size = new System.Drawing.Size(103, 13);
+            this.label8.TabIndex = 30;
+            this.label8.Text = "Lenovo folder prefix:";
+            // 
+            // textBoxLenovoPrefix
+            // 
+            this.textBoxLenovoPrefix.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.textBoxLenovoPrefix.Location = new System.Drawing.Point(10, 272);
+            this.textBoxLenovoPrefix.Name = "textBoxLenovoPrefix";
+            this.textBoxLenovoPrefix.Size = new System.Drawing.Size(152, 20);
+            this.textBoxLenovoPrefix.TabIndex = 31;
+            this.textBoxLenovoPrefix.TextChanged += new System.EventHandler(this.Control_TextChanged);
+            // 
             // checkBoxWipeSource
             // 
             this.checkBoxWipeSource.AutoSize = true;
-            this.checkBoxWipeSource.Location = new System.Drawing.Point(10, 224);
+            this.checkBoxWipeSource.Location = new System.Drawing.Point(10, 314);
             this.checkBoxWipeSource.Name = "checkBoxWipeSource";
             this.checkBoxWipeSource.Size = new System.Drawing.Size(246, 17);
             this.checkBoxWipeSource.TabIndex = 26;
@@ -157,7 +199,7 @@
             // label6
             // 
             this.label6.Cursor = System.Windows.Forms.Cursors.Default;
-            this.label6.Location = new System.Drawing.Point(14, 244);
+            this.label6.Location = new System.Drawing.Point(14, 334);
             this.label6.Name = "label6";
             this.label6.Size = new System.Drawing.Size(356, 36);
             this.label6.TabIndex = 27;
@@ -168,6 +210,11 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.AutoScroll = true;
+            this.Controls.Add(this.textBoxLenovoPrefix);
+            this.Controls.Add(this.label8);
+            this.Controls.Add(this.textBoxLenovoCatalogUri);
+            this.Controls.Add(this.label7);
             this.Controls.Add(this.label6);
             this.Controls.Add(this.checkBoxWipeSource);
             this.Controls.Add(this.textBoxHPPrefix);
@@ -200,5 +247,9 @@
         private System.Windows.Forms.Label label5;
         private System.Windows.Forms.CheckBox checkBoxWipeSource;
         private System.Windows.Forms.Label label6;
+        private System.Windows.Forms.TextBox textBoxLenovoCatalogUri;
+        private System.Windows.Forms.Label label7;
+        private System.Windows.Forms.TextBox textBoxLenovoPrefix;
+        private System.Windows.Forms.Label label8;
     }
 }

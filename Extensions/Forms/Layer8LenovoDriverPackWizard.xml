@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<SmsFormData FormatVersion="1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework" xsi:schemaLocation="https://schemas.microsoft.com/SystemsManagementServer/2005/03/ConsoleFramework">
+  <Form Id="{B5EAAB02-6538-4BB1-BFDE-576F86984C4F}" FormType="Wizard" DisableSkippable="true">
+    <Assembly Name="Layer8.DriverManager" Namespace="Layer8.DriverManager" />
+    <Pages>
+      <Page VendorId="Layer8" Id="{661B8FBB-61F6-453B-AE68-2044207082A5}" Type="LenovoDriverPackGeneralPage" />
+      <Page VendorId="Layer8" Id="{DE338F5F-DD0B-430B-B2D7-5B7C08D0BB0A}" Type="LenovoDriverPackCatalogPage" />
+    </Pages>
+  </Form>
+</SmsFormData>

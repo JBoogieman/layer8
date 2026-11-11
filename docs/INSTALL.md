@@ -212,7 +212,7 @@ Either way, the cab's description in the Console Extensions node says what it wa
 | `CollectionMembership` | Add Resources List, Remove Resources List, Add Selected Items to Existing Device Collections |
 | `QuickDeployment` | Quick Deployment |
 | `Cleanup` | Clean Software Update Groups, Remove Retired Content |
-| `DriverManager` | Driver Grabber, the driver package importers, Dell and HP driver packs |
+| `DriverManager` | Driver Grabber, the driver package importers, Dell, HP and Lenovo driver packs |
 
 An item goes from every menu it's on, and a menu left empty goes with it. The code is still in the DLLs, but without a menu item the console has no way to start it. The list lives in `tools\Layer8Features.ps1`, and the released `Customize-Layer8Cab.ps1` has it built in. A build stops if an item named there isn't on any menu, so a renamed menu item can't quietly stay in.
 
@@ -233,6 +233,8 @@ Layer8 goes only where the console is. Nothing is installed on the devices: Laye
 | Remote Assistance | Remote Assistance, and the **Configure Offer Remote Assistance** policy |
 
 Managed networks usually open WMI and File and Printer Sharing by Group Policy already, because ConfigMgr's own client push and remote tools need them. A device with WMI blocked shows **Online, but WMI is blocked** when it answers a ping or port 135 or 445, and **Offline, or its firewall blocks WMI** when it answers nothing: Windows blocks ping by default, so a fully firewalled device looks the same as one that's switched off.
+
+**LAPS Password** reads Active Directory, not the device, as the account running the console. For Windows LAPS, that account needs read access on the computers' OU (`Set-LapsADReadPasswordPermission`), and for an encrypted password it has to be in the group the LAPS policy names as authorized decryptors (Domain Admins unless the policy says otherwise). **Expire Now** also needs `Set-LapsADResetPasswordPermission`. Legacy LAPS uses its own (`Set-AdmPwdReadPasswordPermission`, `Set-AdmPwdResetPasswordPermission`).
 
 For a lab client, `tools\Prepare-Layer8LabClient.ps1` opens all of these except the Remote Assistance policy. Run it elevated on the client.
 

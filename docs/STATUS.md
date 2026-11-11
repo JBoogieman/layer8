@@ -1,6 +1,6 @@
 # Layer8 status
 
-Updated November 10, 2026. Version 0.6.0.
+Updated November 11, 2026. Version 0.7.0.
 
 Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (console 5.2509.1038.1000): a site server, the client the console runs on, and a second Windows 11 client reached over the network. The site server stands in for "no ConfigMgr client". Treat anything that changes clients as something to try on a few devices first.
 
@@ -24,6 +24,8 @@ Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (conso
 | Collections: add and remove resources from a pasted list | Pasted names with blanks, duplicates, padding and made-up names | |
 | Layer8 Settings | Lab client | A change is picked up by the next run without restarting the console |
 | Driver Manager | Catalog download, Dell catalog (Windows 11 and 10) | Dell and HP driver pack imports not tested |
+| Lenovo driver packs (0.7.0) | Lenovo's catalog (`catalogv2.xml`): 509 models; ThinkCentre M70A Gen 6 for Windows 11 25H2 | Releases listed newest first, Windows 11 IoT after Windows 11; IoT 25H2 lists its 8 packs. The M70A Gen 6 pack (2 GB) downloaded, matched the catalog's SHA-256 and Lenovo's signature, extracted (about 5 GB) and landed in the source folder; reopened, it shows Downloaded. The catalog's own signature is checked (Lenovo's code signing certificate, chained to a root Windows trusts): Lenovo's catalog passes, freshly downloaded and reused within the hour. A copy with one download link changed is refused, both swapped into the temp folder and downloaded from a link set in Options, and is deleted so the next click downloads a good one. Checked outside the console with the same code: a changed hash, extra white space, no signature, a forged "Lenovo" certificate and another company's signature are refused. Options shows the Lenovo catalog link and folder prefix. The lab has no Lenovo devices, so ticking the site's models hasn't been seen |
+| LAPS Password (0.7.0) | The second client, with Windows LAPS backing up to AD | Encrypted: decrypts and shows the account, password, when it changed and when it expires. Expire Now set the expiry in AD, the dialog said so, and Layer8's Group Policy Update on the client had it set a new password straight away. With the policy switched to unencrypted, the client wrote a new plain password and Layer8 showed "Windows LAPS, not encrypted"; switched back, "encrypted" with the newer password |
 | Layer8.msi | Install, closing open consoles, uninstall | Uninstall keeps the console's `XmlStorage\Extensions\Actions` and `Forms` folders. Upgrade and the SYSTEM/3010 path not tested |
 | System Information (0.6.0) | Both clients (Windows 11 26H2 and the console machine) | All seven tabs loaded: Overview (model, BIOS, 26H2 build 26300.9974, uptime, memory, C:, IP, "None" for battery on a VM, client version), 7 programs, 6 updates, 252 services, 87 drivers (about 10 seconds), 1 profile, 3 administrators (two local accounts, LAB\Domain Admins). Filter, sorting both ways with an arrow, and Export (filtered rows, sorted order) work. The 64-bit and 32-bit program classes each returned the full list, so programs are listed once without a 64-bit/32-bit label. Not tried: a device with a battery, an offline device, a query that times out (60 seconds) |
 | Quick Status in columns (0.5.0) | All Systems: both clients, the site server (no client) and the four placeholder records | Signed in, Up, C: free, C: size, IP address and Client columns. Sorted by C: free (26.8 GB, 61 GB, 100 GB, not as text) and by Up both ways, blanks last; ties go by name; one sort arrow at a time. Export writes every column in the sorted order |
@@ -32,7 +34,7 @@ Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (conso
 | Leaving features out of a build (`-Exclude`) | A signed 0.2.2 cab built without LAPS, RemoteControl and DriverManager | Its description says so in Console Extensions. On the console: no LAPS Password, Driver Grabber, Remote Desktop, Remote Assistance or PowerShell Session; Remote Tools' separators tidy; the rest works. The MSI build with `-Exclude` built but wasn't installed |
 | Approved console extension | Signed with a lab certificate: 0.1.2 to 0.1.4 by the build script, 0.2.0 by `Sign-Layer8Cab.ps1` (now `Customize-Layer8Cab.ps1`) from the unsigned release cab | Import, approve, enable notifications, install on the console, upgrade over the previous version. Menus, icons, Layer8 Settings, Client Cache, Driver Grabber, Add Resources and the device properties tabs all work |
 
-Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, nothing changed): the device properties tabs, Client Cache, Driver Grabber, Incremental Collections, Remove Retired Content, Clean Software Update Groups, the driver package importers, Driver Manager options, and the Dell and HP driver packs.
+Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, nothing changed): the device properties tabs, Client Cache, Driver Grabber, Incremental Collections, Remove Retired Content, Clean Software Update Groups, the driver package importers, and the Dell and HP driver packs. Driver Manager options was opened again for 0.7.0's Lenovo fields.
 
 ## Not tested yet
 
@@ -43,6 +45,8 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 - Configuration baselines: re-evaluating non-compliant devices and Retry Failed Devices (see rough edges)
 - Remote Assistance's offer and the PowerShell session itself
 - Dell and HP driver pack imports, including the check (since 0.2.1) that each HP SoftPaq is signed by HP before it runs
+- Lenovo: ticking the site's models (the lab has no Lenovo devices), and importing an extracted Lenovo pack with the Driver Package Importer
+- LAPS: legacy Microsoft LAPS (the lab forest doesn't have its schema), and passwords Windows LAPS backs up to Microsoft Entra ID (Layer8 reads Active Directory only)
 - A collection run on 50 or more devices
 - Layer8.msi: upgrade over an older version, and an MECM deployment running as SYSTEM with a console open (3010)
 - Approved console extension: importing the cab unsigned (needs "Hierarchy approved console extensions can be unsigned"), Require Extension, Revoke Approval and Delete, another console picking it up from a notification
@@ -71,8 +75,7 @@ In order:
 
 | Idea | Why |
 |---|---|
-| Windows LAPS lookup (`msLAPS-Password`, encrypted passwords; Entra-backed needs Graph) | Legacy LAPS is on its way out. On hold for now: useful to many sites, but not tested anywhere that uses it yet |
+| Entra-backed LAPS passwords (Microsoft Graph) | Windows LAPS can back up to Entra ID instead of AD |
 | Columns for Online Status, BitLocker Status, Defender Status and Client Info | Quick Status's sortable columns (0.5.0) work for any tool |
 | Recent sign-ins in Quick Status | Who was on it, not just who is on it |
-| Lenovo driver packs | Dell and HP have them |
 | Export and import Layer8 Settings | Same settings on every admin's console |

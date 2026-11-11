@@ -86,6 +86,7 @@
     <Reference Include="System.Drawing" />
     <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Management" />
+    <Reference Include="System.Security" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xaml" />
     <Reference Include="System.Xml.Linq" />
@@ -138,6 +139,19 @@
       <DependentUpon>DriverPackageImportPage.cs</DependentUpon>
     </Compile>
     <Compile Include="HPDriverPackage.cs" />
+    <Compile Include="LenovoDriverPackage.cs" />
+    <Compile Include="LenovoDriverPackCatalogPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="LenovoDriverPackCatalogPage.Designer.cs">
+      <DependentUpon>LenovoDriverPackCatalogPage.cs</DependentUpon>
+    </Compile>
+    <Compile Include="LenovoDriverPackGeneralPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="LenovoDriverPackGeneralPage.Designer.cs">
+      <DependentUpon>LenovoDriverPackGeneralPage.cs</DependentUpon>
+    </Compile>
     <Compile Include="HPDriverPackCatalogPage.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -234,6 +248,12 @@
     </EmbeddedResource>
     <EmbeddedResource Include="HPDriverPackGeneralPage.resx">
       <DependentUpon>HPDriverPackGeneralPage.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="LenovoDriverPackCatalogPage.resx">
+      <DependentUpon>LenovoDriverPackCatalogPage.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="LenovoDriverPackGeneralPage.resx">
+      <DependentUpon>LenovoDriverPackGeneralPage.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="LegacyPackageGeneralPage.resx">
       <DependentUpon>LegacyPackageGeneralPage.cs</DependentUpon>

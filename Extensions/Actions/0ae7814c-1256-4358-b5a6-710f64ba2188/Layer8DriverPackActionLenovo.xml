@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription NamespaceGuid="0FCB629D-563D-4DA2-89B5-D7E6677FB759" Class="ShowDialog" DisplayName="Lenovo Driver Pack" MnemonicDisplayName="Lenovo Driver Pack" Description="Download Lenovo driver packs (ThinkPad, ThinkCentre, ThinkStation) for the models in this site" InsertBefore="F37BA7FB-8AE3-47A5-9A57-C2A20A270FD4">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <DialogId>Layer8LenovoDriverPackWizard</DialogId>
+</ActionDescription>
