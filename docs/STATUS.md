@@ -1,6 +1,6 @@
 # Layer8 status
 
-Updated November 9, 2026. Version 0.5.0.
+Updated November 10, 2026. Version 0.6.0.
 
 Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (console 5.2509.1038.1000): a site server, the client the console runs on, and a second Windows 11 client reached over the network. The site server stands in for "no ConfigMgr client". Treat anything that changes clients as something to try on a few devices first.
 
@@ -25,6 +25,7 @@ Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (conso
 | Layer8 Settings | Lab client | A change is picked up by the next run without restarting the console |
 | Driver Manager | Catalog download, Dell catalog (Windows 11 and 10) | Dell and HP driver pack imports not tested |
 | Layer8.msi | Install, closing open consoles, uninstall | Uninstall keeps the console's `XmlStorage\Extensions\Actions` and `Forms` folders. Upgrade and the SYSTEM/3010 path not tested |
+| System Information (0.6.0) | Both clients (Windows 11 26H2 and the console machine) | All seven tabs loaded: Overview (model, BIOS, 26H2 build 26300.9974, uptime, memory, C:, IP, "None" for battery on a VM, client version), 7 programs, 6 updates, 252 services, 87 drivers (about 10 seconds), 1 profile, 3 administrators (two local accounts, LAB\Domain Admins). Filter, sorting both ways with an arrow, and Export (filtered rows, sorted order) work. The 64-bit and 32-bit program classes each returned the full list, so programs are listed once without a 64-bit/32-bit label. Not tried: a device with a battery, an offline device, a query that times out (60 seconds) |
 | Quick Status in columns (0.5.0) | All Systems: both clients, the site server (no client) and the four placeholder records | Signed in, Up, C: free, C: size, IP address and Client columns. Sorted by C: free (26.8 GB, 61 GB, 100 GB, not as text) and by Up both ways, blanks last; ties go by name; one sort arrow at a time. Export writes every column in the sorted order |
 | Error Lookup, and error meanings in Copy Failed Devices and Install Application (0.4.0) | ConfigMgr, Windows Update, Windows and installer codes, as hex, decimal, signed and bare hex, and junk text; the lab's failing app on the second client | Text comes from the console's own catalog (`AdminConsole\bin\resources`), e.g. 0x80240022 "Operation failed for all the updates", 0x87D00668 "Software update still detected as actionable after apply". Copy Failed Devices: "2 x 1603 (0x643): Fatal error during installation". Install Application shows the error in the list and under it when the app is selected. Copy (to the clipboard) not checked |
 | Customize-Layer8Cab.ps1 on a released cab | The one-file release copy, run from a downloads folder with a space in its name: 0.3.0 without LAPS, BitLockerKeys and RestartComputer, signed in the same step | 4 menu files dropped, 3 changed. Imported signed; on the console no LAPS Password, BitLocker Recovery Key, Restart Computer or Cancel Restart, and everything else there |
@@ -61,10 +62,10 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 
 In order:
 
-1. **System Information** for one device, in one window: installed programs (with uninstall), installed updates, services, drivers, user profiles, local administrators, battery health.
-2. **Send a message** to whoever is signed in, as a Windows notification or a pop-up.
-3. **Windows Security view**: Defender, firewall and BitLocker in one place, with Suspend BitLocker for a number of restarts.
-4. **AD cleanup**: computer accounts in Active Directory that ConfigMgr hasn't heard from, and the reverse.
+1. **Send a message** to whoever is signed in, as a Windows notification or a pop-up.
+2. **Windows Security view**: Defender, firewall and BitLocker in one place, with Suspend BitLocker for a number of restarts.
+3. **AD cleanup**: computer accounts in Active Directory that ConfigMgr hasn't heard from, and the reverse.
+4. **Uninstall from System Information**: remove an MSI-installed program from the Programs tab (System Information only reads for now).
 
 ## Ideas
 

@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription NamespaceGuid="D13816C5-4C70-483D-B92E-C10933AEF1F6" Class="AssemblyType" SelectionMode="Single" DisplayName="System Information..." MnemonicDisplayName="System Information" Description="Model, serial, Windows build, disks and battery, installed programs and updates, services, drivers, user profiles and local administrators of this device" InsertBefore="B7009279-2666-45EF-9935-1FB3D3ED2ABF">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <ActionAssembly>
+    <Assembly>Layer8.Device.dll</Assembly>
+    <Type>Layer8.Device.SystemInfo</Type>
+    <Method>Show</Method>
+  </ActionAssembly>
+</ActionDescription>

@@ -623,18 +623,7 @@ namespace Layer8.Device
                 columns.Add("C: free", null).Add("C: size", null);
             }
 
-            // The IPv4 addresses the device itself reports, which can differ from DNS on VPN or with stale records.
-            List<string> addresses = new List<string>();
-            foreach (ManagementObject adapter in Utility.SearchWMIToList(cimv2, "SELECT IPAddress FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled = TRUE"))
-            {
-                using (adapter)
-                {
-                    foreach (string address in adapter["IPAddress"] as string[] ?? new string[0])
-                    {
-                        if (IPAddress.TryParse(address, out IPAddress parsed) && parsed.AddressFamily == AddressFamily.InterNetwork && !addresses.Contains(address)) addresses.Add(address);
-                    }
-                }
-            }
+            List<string> addresses = IPv4Addresses(cimv2);
             // Sorts by the first address as a number, so 10.0.0.9 comes before 10.0.0.10.
             columns.Add("IP address", string.Join(", ", addresses), addresses.Count > 0 ? (IComparable)AddressKey(addresses[0]) : null);
             if (addresses.Count > 0) parts.Add(string.Join(", ", addresses));
@@ -657,8 +646,25 @@ namespace Layer8.Device
             return columns;
         }
 
+        /// <summary>The IPv4 addresses the device itself reports, which can differ from DNS on VPN or with stale records.</summary>
+        internal static List<string> IPv4Addresses(ManagementScope cimv2)
+        {
+            List<string> addresses = new List<string>();
+            foreach (ManagementObject adapter in Utility.SearchWMIToList(cimv2, "SELECT IPAddress FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled = TRUE"))
+            {
+                using (adapter)
+                {
+                    foreach (string address in adapter["IPAddress"] as string[] ?? new string[0])
+                    {
+                        if (IPAddress.TryParse(address, out IPAddress parsed) && parsed.AddressFamily == AddressFamily.InterNetwork && !addresses.Contains(address)) addresses.Add(address);
+                    }
+                }
+            }
+            return addresses;
+        }
+
         /// <summary>An IPv4 address as one number, in network order, for sorting.</summary>
-        private static long AddressKey(string address)
+        internal static long AddressKey(string address)
         {
             byte[] bytes = IPAddress.Parse(address).GetAddressBytes();
             long key = 0;
@@ -675,7 +681,7 @@ namespace Layer8.Device
             return ex.ErrorCode == ManagementStatus.InvalidNamespace || ex.ErrorCode == ManagementStatus.InvalidClass;
         }
 
-        private static List<string> SignedInUsers(ManagementScope cimv2)
+        internal static List<string> SignedInUsers(ManagementScope cimv2)
         {
             List<string> users = new List<string>();
             foreach (ManagementObject explorer in Utility.SearchWMIToList(cimv2, "SELECT Handle FROM Win32_Process WHERE Name = 'explorer.exe'"))
@@ -700,7 +706,7 @@ namespace Layer8.Device
         /// device whose performance counters don't answer, measured against the device's own clock so the
         /// console's clock doesn't come into it. Null if neither answers.
         /// </summary>
-        private static TimeSpan? Uptime(ManagementScope cimv2)
+        internal static TimeSpan? Uptime(ManagementScope cimv2)
         {
             try
             {
@@ -720,7 +726,7 @@ namespace Layer8.Device
             return null;
         }
 
-        private static string FormatUptime(TimeSpan uptime)
+        internal static string FormatUptime(TimeSpan uptime)
         {
             if (uptime.TotalDays >= 1) return string.Format("{0}d {1}h", (int)uptime.TotalDays, uptime.Hours);
             if (uptime.TotalHours >= 1) return string.Format("{0}h {1}m", (int)uptime.TotalHours, uptime.Minutes);
@@ -996,7 +1002,7 @@ namespace Layer8.Device
             return value is bool flag && flag;
         }
 
-        private static DateTime? ToDateTime(object dmtfValue)
+        internal static DateTime? ToDateTime(object dmtfValue)
         {
             string text = dmtfValue as string;
             if (string.IsNullOrEmpty(text)) return null;

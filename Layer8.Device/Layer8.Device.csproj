@@ -101,6 +101,8 @@
       <DependentUpon>ResultCacheControl.cs</DependentUpon>
     </Compile>
     <Compile Include="DeviceColumns.cs" />
+    <Compile Include="ListViewSorter.cs" />
+    <Compile Include="SystemInfo.cs" />
     <Compile Include="Device.cs" />
     <Compile Include="ClientActions.cs" />
     <Compile Include="LAPSDialog.cs">

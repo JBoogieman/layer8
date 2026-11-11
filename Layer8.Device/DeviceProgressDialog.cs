@@ -217,7 +217,7 @@ namespace Layer8.Device
             yield return header;
 
             List<ListViewItem> hosts = listViewHosts.Items.Cast<ListViewItem>().ToList();
-            if (listViewHosts.ListViewItemSorter is ResultSorter sorter) hosts.Sort((a, b) => sorter.Compare(a, b));
+            if (listViewHosts.ListViewItemSorter is ListViewSorter sorter) hosts.Sort((a, b) => sorter.Compare(a, b));
             foreach (ListViewItem host in hosts)
             {
                 string[] row = new string[count];
@@ -441,52 +441,9 @@ namespace Layer8.Device
             // The arrow is drawn per column, so the last sorted column's has to be taken off.
             if (sortColumn >= 0 && sortColumn != column) listViewHosts.ShowArrow(sortColumn, SortOrder.None);
             sortColumn = column;
-            listViewHosts.ListViewItemSorter = new ResultSorter(column, sortOrder == SortOrder.Descending);
+            listViewHosts.ListViewItemSorter = new ListViewSorter(column, sortOrder == SortOrder.Descending);
             listViewHosts.Sort();
             listViewHosts.ShowArrow(column, sortOrder);
-        }
-
-        /// <summary>
-        /// Sorts rows by one column: by each cell's real value where the tool gave one (uptime, bytes, IP address,
-        /// version), otherwise by its text the way Explorer sorts names (DEV2 before DEV10). Blank cells go last
-        /// in both directions; ties go by device name.
-        /// </summary>
-        private sealed class ResultSorter : System.Collections.IComparer
-        {
-            private readonly int column;
-            private readonly bool descending;
-
-            public ResultSorter(int column, bool descending)
-            {
-                this.column = column;
-                this.descending = descending;
-            }
-
-            public int Compare(object x, object y)
-            {
-                ListViewItem a = (ListViewItem)x;
-                ListViewItem b = (ListViewItem)y;
-                ListViewItem.ListViewSubItem cellA = column < a.SubItems.Count ? a.SubItems[column] : null;
-                ListViewItem.ListViewSubItem cellB = column < b.SubItems.Count ? b.SubItems[column] : null;
-                bool blankA = string.IsNullOrEmpty(cellA?.Text);
-                bool blankB = string.IsNullOrEmpty(cellB?.Text);
-                if (blankA || blankB)
-                {
-                    if (blankA != blankB) return blankA ? 1 : -1;
-                    return NaturalCompare(a.Text, b.Text);
-                }
-
-                int result = cellA.Tag is IComparable keyA && cellB.Tag is IComparable keyB && keyA.GetType() == keyB.GetType()
-                    ? keyA.CompareTo(keyB)
-                    : NaturalCompare(cellA.Text, cellB.Text);
-                if (descending) result = -result;
-                return result != 0 || column == 0 ? result : NaturalCompare(a.Text, b.Text);
-            }
-
-            private static int NaturalCompare(string a, string b) => StrCmpLogicalW(a ?? string.Empty, b ?? string.Empty);
-
-            [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
-            private static extern int StrCmpLogicalW(string a, string b);
         }
 
         internal void UpdateProgress()
