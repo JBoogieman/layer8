@@ -27,6 +27,9 @@ namespace Layer8.DriverManager
         private int totalDriverPackages;
         private bool refreshDP;
         private bool refreshPackage;
+        // Drivers ConfigMgr refused in the current package (import, category or adding to the package). Kept apart
+        // from INF files that can't be read, which a second run won't fix either.
+        private int failedImports;
         #endregion
 
         public DriverPackageImportPage(SmsPageData pageData)
@@ -77,6 +80,7 @@ namespace Layer8.DriverManager
                     {
                         string objectPath = null;
                         refreshPackage = false;
+                        failedImports = 0;
                         refreshDP = false;
                         progressTotal = 0;
                         progressCount = 0;
@@ -97,7 +101,7 @@ namespace Layer8.DriverManager
                                 progresPercent = (num2 / totalInfs * 100) / progressStepCount / totalDriverPackages;
                                 worker.ReportProgress(
                                     progressStart + (progresPercent), 
-                                    string.Format("Importing Driver Package: {0}\n - processing inf '{1}'", driverPackage.Name, Path.GetFileName(inf))
+                                    string.Format("Reading {1} ({0})", driverPackage.Name, Path.GetFileName(inf))
                                     );
 
                                 log.Debug("ProcessingINF: " + inf);
@@ -161,6 +165,7 @@ namespace Layer8.DriverManager
                                 {
                                     log.Error("Importing driver " + driverToImport.InfLocation + " failed", ex);
                                     driverPackage.ImportError[driverToImport.InfLocation] = ex.Message;
+                                    failedImports++;
                                 }
                             }
 
@@ -169,9 +174,10 @@ namespace Layer8.DriverManager
                                 log.Debug("RefreshPackage ---- ");
                                 // I still hate calculating progress bars
                                 progresPercent = 100 / progressStepCount / totalDriverPackages * 4;
-                                worker.ReportProgress(progressStart + (progresPercent), string.Format("Importing Driver Package: {0}\n - adding drivers to package", driverPackage.Name));
+                                worker.ReportProgress(progressStart + (progresPercent), string.Format("Adding the drivers to {0}", driverPackage.Name));
                                 // add all drivers in the drivers list to the driver package
-                                driverPackage.AddDriversToDriverPack();
+                                if (!driverPackage.AddDriversToDriverPack())
+                                    failedImports++;
                             }
 
                             if (refreshDP)
@@ -179,14 +185,23 @@ namespace Layer8.DriverManager
                                 log.Debug("RefreshDP ---- ");
                                 // I still hate calculating progress bars
                                 progresPercent = 100 / progressStepCount / totalDriverPackages * 5;
-                                worker.ReportProgress(progressStart + (progresPercent), string.Format("Importing Driver Package: {0}\n - updating distribution point", driverPackage.Name));
+                                worker.ReportProgress(progressStart + (progresPercent), string.Format("Updating {0} on its distribution points", driverPackage.Name));
                                 driverPackage.Package.ExecuteMethod("RefreshPkgSource", null);
                             }
 
-                            log.Debug("CreateHashFile ---- ");
-                            driverPackage.CreateHashFile();
-                            log.Debug("UpdatePackageVersion ---- ");
-                            driverPackage.UpdatePackageVersion();
+                            // Mark the package as imported only when every driver made it. Otherwise the next run would
+                            // call it "No change" and skip it, leaving the failed drivers out for good.
+                            if (failedImports > 0)
+                            {
+                                log.Warn(string.Format("{0}: ConfigMgr refused {1} driver(s), so the package isn't marked as imported; the next import offers it again", driverPackage.Name, failedImports));
+                            }
+                            else
+                            {
+                                log.Debug("CreateHashFile ---- ");
+                                driverPackage.CreateHashFile();
+                                log.Debug("UpdatePackageVersion ---- ");
+                                driverPackage.UpdatePackageVersion();
+                            }
                         }
                         finally
                         {
@@ -215,7 +230,7 @@ namespace Layer8.DriverManager
 
             worker.ReportProgress(
                progressStart + (progresPercent),
-               string.Format("Importing Driver Package: {0}\n - importing driver ({1}/{2}) '{3} ({4})'",
+               string.Format("Driver {1} of {2}: {3} {4} ({0})",
                    driverPackage.Name,
                    progressCount,
                    progressTotal,
@@ -229,13 +244,23 @@ namespace Layer8.DriverManager
             if (registry.ReadBool("DriverPackageQuickMerge") && driver.CheckIfExists(ConnectionManager))
             {
                 log.Debug("QuickMergeCheckIfExists: " + driver.Model);
-                driverPackage.AddDriverToCategory(driver);
+                if (!driverPackage.AddDriverToCategory(driver))
+                    failedImports++;
             }
             else if (driver.CreateObjectFromInfFile(ConnectionManager))
             {
                 log.Debug("CreateObjectFromInfFile: " + driver.Model);
                 // add category to driver object
-                driverPackage.AddDriverToCategory(driver);
+                if (!driverPackage.AddDriverToCategory(driver))
+                    failedImports++;
+            }
+            else
+            {
+                // List it with the package's import errors; this used to be dropped without a word.
+                driverPackage.ImportError[driver.InfLocation] = driver.HasException
+                    ? driver.Exception.Message
+                    : "ConfigMgr didn't import this driver.";
+                failedImports++;
             }
             log.Debug("Done importing driver: " + driver.Model);
 
@@ -249,7 +274,7 @@ namespace Layer8.DriverManager
         {
             worker.ReportProgress(
                 progressStart + (progresPercent),
-                string.Format("Importing Driver Package: {0}\n - retriving driver '{1} ({2})'",
+                string.Format("Checking {1} {2} ({0})",
                     driverPackage.Name, driverObject["LocalizedDisplayName"].StringValue,
                     driverObject["DriverVersion"].StringValue
                     )
@@ -272,7 +297,7 @@ namespace Layer8.DriverManager
             {
                 worker.ReportProgress(
                     progressStart + (progresPercent),
-                    string.Format("Importing Driver Package: {0}\n - removing driver: {1} ({2})",
+                    string.Format("Removing {1} {2} from {0}",
                         driverPackage.Name, driverObject["LocalizedDisplayName"].StringValue,
                         driverObject["DriverVersion"].StringValue)
                     );

@@ -88,16 +88,17 @@ namespace Layer8.DriverManager
                     log.Debug("UpdateContentSourcePath: " + driverObject["LocalizedDisplayName"].StringValue);
                     try
                     {
+                        // A query leaves out the driver's definition and names; load them so saving keeps them.
+                        driverObject.Get();
                         driverObject["ContentSourcePath"].StringValue = Path.GetDirectoryName(InfLocation);
 
-                        driverObject.Put();
+                        Utility.PutOnce(connectionManager, driverObject);
                         driverObject.Get();
                     }
-                    catch (SmsQueryException ex)
+                    catch (Exception ex) when (ex is SmsQueryException || ex is ManagementException)
                     {
-                        ManagementException mgmtException = ex.InnerException as ManagementException;
-                        Exception = new SystemException(mgmtException.ErrorInformation["Description"].ToString());
-                        log.Error(string.Format("PutDriverObject: {0}, {1}, {2}", InfLocation, ex.GetType().Name, Exception.Message));
+                        Exception = new SystemException(DescribeSaveError(ex));
+                        log.Error(string.Format("PutDriverObject: {0}, {1}, {2}", InfLocation, Utility.ProviderError(ex), Utility.ProviderSqlMessage(ex)), ex);
 
                         return false;
                     }
@@ -128,6 +129,7 @@ namespace Layer8.DriverManager
                     log.Debug("CreateInstance: " + InfLocation);
                     driverObject = connectionManager.CreateInstance(resultObject["Driver"].ObjectValue);
                 }
+                FixPlatformNames(driverObject);
             }
             catch (SmsQueryException ex)
             {
@@ -136,13 +138,27 @@ namespace Layer8.DriverManager
                 {
                     if (ex.InnerException is ManagementException managementException)
                     {
+                        // ObjectInfo names the driver that's already there.
+                        string uniqueId = null;
+                        try { uniqueId = managementException.ErrorInformation?["ObjectInfo"]?.ToString(); }
+                        catch (ManagementException) { }
+                        if (string.IsNullOrEmpty(uniqueId))
+                        {
+                            Exception = new SystemException("ConfigMgr says this driver is already imported but didn't say which one it is.");
+                            log.Error(string.Format("DriverExists: {0}, no ObjectInfo", InfLocation));
+
+                            return false;
+                        }
+
                         try
                         {
                             // update content source path if it dose not exist
-                            string query = string.Format("SELECT * FROM SMS_Driver WHERE CI_UniqueID='{0}'", managementException.ErrorInformation["ObjectInfo"].ToString());
+                            string query = string.Format("SELECT * FROM SMS_Driver WHERE CI_UniqueID='{0}'", uniqueId.Replace("'", "''"));
                             driverObject = Utility.GetFirstWMIInstance(connectionManager, query);
+                            // A query leaves out the driver's definition and names; load them so saving it below keeps them.
+                            driverObject?.Get();
 
-                            if (!Directory.Exists(driverObject["ContentSourcePath"].StringValue))
+                            if (driverObject != null && !Directory.Exists(driverObject["ContentSourcePath"].StringValue))
                             {
                                 log.Debug("UpdateContentSourcePath: " + driverObject["LocalizedDisplayName"].StringValue);
                                 driverObject["ContentSourcePath"].StringValue = Path.GetDirectoryName(InfLocation);
@@ -150,8 +166,7 @@ namespace Layer8.DriverManager
                         }
                         catch (SmsQueryException ex1)
                         {
-                            ManagementException mgmtException = ex.InnerException as ManagementException;
-                            Exception = new SystemException(mgmtException.ErrorInformation["Description"].ToString());
+                            Exception = new SystemException(Utility.ProviderError(ex1));
                             log.Error(string.Format("ContentSourcePath: {0}, {1}, {2}", InfLocation, ex1.GetType().Name, Exception.Message));
 
                             return false;
@@ -171,9 +186,8 @@ namespace Layer8.DriverManager
                 }
                 else
                 {
-                    ManagementException mgmtException = ex.InnerException as ManagementException;
-                    Exception = new SystemException(mgmtException.ErrorInformation["Description"].ToString());
-                    log.Error(string.Format("Error: {0}", Exception.Message));
+                    Exception = new SystemException(Utility.ProviderError(ex));
+                    log.Error(string.Format("CreateFromINF: {0}, {1}", InfLocation, Exception.Message));
 
                     return false;
                 }
@@ -189,14 +203,13 @@ namespace Layer8.DriverManager
             driverObject["IsEnabled"].BooleanValue = true;
             try
             {
-                driverObject.Put();
+                Utility.PutOnce(connectionManager, driverObject);
                 driverObject.Get();
             }
-            catch (SmsQueryException ex)
+            catch (Exception ex) when (ex is SmsQueryException || ex is ManagementException)
             {
-                ManagementException mgmtException = ex.InnerException as ManagementException;
-                Exception = new SystemException(mgmtException.ErrorInformation["Description"].ToString());
-                log.Error(string.Format("PutDriverObject: {0}, {1}, {2}", InfLocation, ex.GetType().Name, Exception.Message));
+                Exception = new SystemException(DescribeSaveError(ex));
+                log.Error(string.Format("PutDriverObject: {0}, {1}, {2}", InfLocation, Utility.ProviderError(ex), Utility.ProviderSqlMessage(ex)), ex);
 
                 return false;
             }
@@ -204,6 +217,38 @@ namespace Layer8.DriverManager
             Object = driverObject;
 
             return true;
+        }
+
+        /// <summary>
+        /// CreateFromINF writes ARM64 platforms as Platform="arm64", but the site database only accepts "ARM64" and refuses
+        /// the whole driver ("The digest is not valid"). The console's own import gets this right, so match it.
+        /// </summary>
+        private static void FixPlatformNames(IResultObject driverObject)
+        {
+            string digest = driverObject?["SDMPackageXML"].StringValue;
+            if (string.IsNullOrEmpty(digest))
+                return;
+
+            string fixedDigest = Regex.Replace(digest, "(<PlatformApplicabilityCondition\\b[^>]*\\bPlatform=\")arm64(\")", "$1ARM64$2");
+            if (fixedDigest != digest)
+            {
+                log.Debug("FixPlatformNames: arm64 -> ARM64");
+                driverObject["SDMPackageXML"].StringValue = fixedDigest;
+            }
+        }
+
+        /// <summary>Why ConfigMgr wouldn't save a driver, with a pointer when the cause is a known one.</summary>
+        private static string DescribeSaveError(Exception ex)
+        {
+            string reason = Utility.ProviderError(ex);
+            if (reason.IndexOf("digest is not valid", StringComparison.OrdinalIgnoreCase) >= 0 && !string.IsNullOrEmpty(Utility.ProviderSqlMessage(ex)))
+            {
+                reason = reason.TrimEnd('.') + ": ConfigMgr's database refused the driver. SMSProv.log on the site server " +
+                    "has the database's reason. A known cause is a site database on SQL Server 2022 at compatibility level " +
+                    "160, which ConfigMgr supports only from version 2603; Microsoft recommends level 150.";
+            }
+
+            return reason;
         }
 
         private string GetVersion()

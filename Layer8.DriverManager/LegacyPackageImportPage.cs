@@ -85,7 +85,7 @@ namespace Layer8.DriverManager
 
                         // I still hate calculating progress bars
                         importProgresPercent = 100 / stepCount / totalPackages * 2;
-                        worker.ReportProgress(startProgress + (importProgresPercent), string.Format("Importing Package: {0}\n - updating distribution point", package.Name));
+                        worker.ReportProgress(startProgress + (importProgresPercent), string.Format("Updating {0} on its distribution points", package.Name));
                         package.Package.ExecuteMethod("RefreshPkgSource", null);
 
                         package.CreateHashFile();

@@ -75,6 +75,19 @@ namespace Layer8.DriverManager
 
             if (packageObject == null)
             {
+                // ConfigMgr won't create a driver package in a folder that doesn't exist yet, and calls that a
+                // permission problem; so the (empty) folder is made first.
+                string folderProblem = null;
+                try { Directory.CreateDirectory(Target); }
+                catch (IOException ex) { folderProblem = ex.Message; }
+                catch (UnauthorizedAccessException ex) { folderProblem = ex.Message; }
+                if (folderProblem != null)
+                {
+                    log.Error(string.Format("Creating driver package folder {0} failed: {1}", Target, folderProblem));
+                    Exception.Add(new SystemException(string.Format("Couldn't create the driver package folder {0}: {1}", Target, folderProblem)));
+                    return false;
+                }
+
                 IResultObject instance = connectionManager.CreateInstance("SMS_DriverPackage");
                 instance["Name"].StringValue = Name;
                 instance["Description"].StringValue = "";
@@ -92,19 +105,30 @@ namespace Layer8.DriverManager
                 }
                 catch (SmsQueryException ex)
                 {
+                    // The SMS provider says what went wrong; that beats a general message.
+                    string description = (ex.InnerException as ManagementException)?.ErrorInformation?["Description"]?.ToString();
                     string str;
                     switch (ex.ExtendStatusErrorCode)
                     {
                         case 4:
-                            str = "The driver package storage path is not empty.";
-                            break;
-                        case 1078462229:
-                            str = "The system does not have read or write permissions to the driver package's source path.";
+                            str = string.Format("The driver package folder ({0}) isn't empty.", Target);
                             break;
                         default:
-                            str = "An error occurred while importing the selected driver package.";
+                            str = string.IsNullOrEmpty(description)
+                                ? "An error occurred while importing the selected driver package."
+                                : description.TrimEnd('.') + ".";
                             break;
                     }
+                    if (ex.ExtendStatusErrorCode == 1078462229 || (description ?? string.Empty).IndexOf("permission", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        str = string.Format(
+                            "ConfigMgr can't write to the driver package folder ({0}). It works there as the SMS provider's computer " +
+                            "account (usually the site server's), not as you, so that account needs Full Control on it, on both the " +
+                            "share and the folder (Modify isn't enough).", Target);
+                        if (DriverPackageGeneralPage.IsAdminShare(Target))
+                            str += " An admin share such as C$ only works if that account is an administrator on the computer.";
+                    }
+                    log.Error(string.Format("Creating driver package {0} in {1} failed: {2}", Name, Target, description ?? ex.Message), ex);
                     Exception.Add(new SystemException(str));
 
                     return false;
@@ -234,9 +258,9 @@ namespace Layer8.DriverManager
             catch (SmsQueryException ex)
             {
                 string str = string.Format("{0} ({1})", driver.Object["LocalizedDisplayName"].StringValue, driver.Object["DriverINFFile"].StringValue);
-                ManagementException managementException = ex.InnerException as ManagementException;
-                ImportError.Add(str, "Could not be added to package: " + managementException.ErrorInformation["Description"].ToString());
-                log.Error("AddDriverToDriverPack: " + managementException.ErrorInformation["Description"].ToString());
+                string reason = Utility.ProviderError(ex);
+                ImportError[str] = "Could not be added to package: " + reason;
+                log.Error("AddDriverToDriverPack: " + reason);
 
                 return false;
             }
@@ -277,8 +301,7 @@ namespace Layer8.DriverManager
             {
                 if (ex is SmsQueryException)
                 {
-                    ManagementException mgmtExcept = ex.InnerException as ManagementException;
-                    Exception.Add(new SystemException(mgmtExcept.ErrorInformation["Description"].ToString()));
+                    Exception.Add(new SystemException(Utility.ProviderError(ex)));
                 }
                 else
                 {
@@ -315,9 +338,9 @@ namespace Layer8.DriverManager
             catch (SmsQueryException ex)
             {
                 string str = string.Format("{0} ({1})", driverObject["LocalizedDisplayName"].StringValue, driverObject["DriverINFFile"].StringValue);
-                ManagementException managementException = ex.InnerException as ManagementException;
-                ImportWarning.Add(str, managementException.ErrorInformation["Description"].ToString());
-                log.Warn("RemoveDriverFromDriverPack: " + managementException.ErrorInformation["Description"].ToString());
+                string reason = Utility.ProviderError(ex);
+                ImportWarning[str] = reason;
+                log.Warn("RemoveDriverFromDriverPack: " + reason);
 
                 return false;
             }
@@ -364,8 +387,7 @@ namespace Layer8.DriverManager
                 }
                 catch (SmsQueryException ex)
                 {
-                    ManagementException mgmtException = ex.InnerException as ManagementException;
-                    Exception.Add(new SystemException(mgmtException.ErrorInformation["Description"].ToString()));
+                    Exception.Add(new SystemException(Utility.ProviderError(ex)));
                     return false;
                 }
 
@@ -400,15 +422,15 @@ namespace Layer8.DriverManager
             driver.Object["CategoryInstance_UniqueIDs"].StringArrayValue = (string[])categories.ToArray(typeof(string));
             try
             {
-                driver.Object.Put();
+                Utility.PutOnce(connectionManager, driver.Object);
                 driver.Object.Get();
             }
-            catch (SmsQueryException ex)
+            catch (Exception ex) when (ex is SmsQueryException || ex is ManagementException)
             {
                 string str = string.Format("{0} ({1})", driver.Object["LocalizedDisplayName"].StringValue, driver.Object["DriverINFFile"].StringValue);
-                ManagementException managementException = ex.InnerException as ManagementException;
-                ImportError.Add(str, "Cannot be added to category: " + managementException.ErrorInformation["Description"].ToString());
-                log.Error("AddDriverToCategory: " + managementException.ErrorInformation["Description"].ToString());
+                string reason = Utility.ProviderError(ex);
+                ImportError[str] = "Cannot be added to category: " + reason;
+                log.Error("AddDriverToCategory: " + reason);
 
                 return false;
             }
@@ -441,15 +463,15 @@ namespace Layer8.DriverManager
             driverObject["CategoryInstance_UniqueIDs"].StringArrayValue = (string[])removeCategory.ToArray(typeof(string));
             try
             {
-                driverObject.Put();
+                Utility.PutOnce(connectionManager, driverObject);
                 driverObject.Get();
             }
-            catch (SmsQueryException ex)
+            catch (Exception ex) when (ex is SmsQueryException || ex is ManagementException)
             {
                 string str = string.Format("{0} ({1})", driverObject["LocalizedDisplayName"].StringValue, driverObject["DriverINFFile"].StringValue);
-                ManagementException managementException = ex.InnerException as ManagementException;
-                ImportError.Add(str, "Cannot be removed from category: " + managementException.ErrorInformation["Description"].ToString());
-                log.Error("RemoveDriverFromCategory: " + managementException.ErrorInformation["Description"].ToString());
+                string reason = Utility.ProviderError(ex);
+                ImportError[str] = "Cannot be removed from category: " + reason;
+                log.Error("RemoveDriverFromCategory: " + reason);
 
                 return false;
             }
