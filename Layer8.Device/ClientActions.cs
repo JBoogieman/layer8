@@ -26,6 +26,8 @@ namespace Layer8.Device
 
         // Find Software's last search, offered again by the next prompt. Runs get their own copy of the search.
         private static string softwareSearch;
+        // Send Message's last message, offered again by the next prompt.
+        private static string lastMessage;
         private static SynchronizationContext uiContext;
 
         // A single-device action has no progress dialog, so nothing can cancel it.
@@ -88,6 +90,13 @@ namespace Layer8.Device
                     title = "Find Software: " + search;
                     run = device => FindSoftware(device, search);
                 }
+                else if (tool == nameof(SendMessage))
+                {
+                    string message = AskForMessage();
+                    if (message == null) return;
+                    title = "Send Message: " + message;
+                    run = device => SendMessage(device, message);
+                }
                 else
                 {
                     MethodInfo toolMethod = typeof(ClientActions).GetMethod(tool, new[] { typeof(IResultObject) });
@@ -114,6 +123,7 @@ namespace Layer8.Device
             { nameof(ClearClientCache), "Clear the ConfigMgr client cache on {0}?\n\nCached content is deleted, except content marked to stay in the cache and content a device is using right now. Devices download content again when they next need it." },
             { nameof(RepairClient), "Repair the ConfigMgr client on {0}?\n\nEach client runs ccmrepair, which restarts the SMS Agent Host service and can take several minutes. Watch ccmrepair.log on the device." },
             { nameof(ClientInfo), null },
+            { nameof(SendMessage), null },
             { nameof(RestartComputer), "Restart {0} in 5 minutes?\n\nWhoever is signed in gets a 5-minute warning, then Windows restarts even if programs have unsaved work. Cancel Restart stops it during those 5 minutes." },
             { nameof(CancelRestart), null },
             { nameof(ResetPolicy), "Reset all ConfigMgr policy on {0}?\n\nEach client drops its machine policy and downloads it again, which takes a few minutes and re-runs the evaluation of required deployments." },
@@ -1072,6 +1082,46 @@ namespace Layer8.Device
             return "Asked Windows to cancel its scheduled restart";
         }
 
+        /// <summary>The longest message msg.exe passes on whole.</summary>
+        internal const int MaxMessageLength = 255;
+
+        /// <summary>Asks for Send Message's text, again while it's too long. Null when the user cancels.</summary>
+        private static string AskForMessage()
+        {
+            string message = lastMessage;
+            while (true)
+            {
+                message = InputPrompt.Ask("Send Message", "Message for whoever is signed in. It pops up on their screen and stays for an hour or until they close it.", message);
+                if (message == null) return null;
+                if (message.Length <= MaxMessageLength)
+                {
+                    lastMessage = message;
+                    return message;
+                }
+                MessageBox.Show(string.Format("A message can be up to {0} characters; this one is {1}.", MaxMessageLength, message.Length),
+                                "Send Message", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        /// <summary>
+        /// Pops a message up for everyone signed in to the device, with Windows' own msg.exe run on the device
+        /// (msg * reaches every session there, including Remote Desktop ones). Windows heads it with who sent it.
+        /// Nothing is sent when nobody is signed in, and the result names who got it.
+        /// </summary>
+        public static string SendMessage(IResultObject resultObject, string message)
+        {
+            string host = resultObject["Name"].StringValue;
+            List<string> users = SignedInUsers(Utility.GetWMIScope(host, "cimv2"));
+            if (users.Count == 0) return "Nobody signed in; not sent";
+
+            // msg.exe reads the rest of its command line as the message: one line, and a double quote would end it.
+            string text = message.Replace('"', '\'').Replace("\r", " ").Replace("\n", " ").Trim();
+            StartRemoteProcess(host, "msg.exe * /TIME:3600 " + text, "msg.exe");
+            // The text isn't logged: it can be about the user.
+            log.InfoFormat("Message ({0} characters) sent to {1}: {2}", text.Length, host, string.Join(", ", users));
+            return "Sent to " + string.Join(", ", users);
+        }
+
         /// <summary>Purges the client's machine policy and asks for it again (SMS_Client.ResetPolicy, then Machine Policy).</summary>
         public static string ResetPolicy(IResultObject resultObject)
         {
@@ -1120,11 +1170,15 @@ namespace Layer8.Device
         /// <summary>Starts a Defender quick scan and returns at once (MpCmdRun runs on the device; a WMI scan call would wait for it).</summary>
         public static string DefenderQuickScan(IResultObject resultObject)
         {
-            string host = resultObject["Name"].StringValue;
+            StartDefenderQuickScan(resultObject["Name"].StringValue);
+            return "Quick scan started (Defender Status shows it once it's done)";
+        }
+
+        internal static void StartDefenderQuickScan(string host)
+        {
             // cmd expands %ProgramFiles% on the device; MpCmdRun.exe is always there, whatever Defender platform version runs.
             StartRemoteProcess(host, "cmd.exe /c \"\"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -Scan -ScanType 1\"", "MpCmdRun.exe");
             log.InfoFormat("Defender quick scan started on {0}", host);
-            return "Quick scan started (Defender Status shows it once it's done)";
         }
 
         // Win32_EncryptableVolume.GetConversionStatus: ConversionStatus.

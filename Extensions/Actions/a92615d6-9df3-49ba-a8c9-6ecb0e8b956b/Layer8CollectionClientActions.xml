@@ -323,6 +323,18 @@
       </ActionAssembly>
       <DialogId>ClientInfo</DialogId>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Send Message..." MnemonicDisplayName="Send Message..." Description="Pop up a message for whoever is signed in, and see who got it">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ClientActions</Type>
+        <Method>RunClientTool</Method>
+      </ActionAssembly>
+      <DialogId>SendMessage</DialogId>
+    </ActionDescription>
     <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Restart Computer" MnemonicDisplayName="Restart Computer" Description="Restart the device after a 5-minute warning to whoever is signed in">
       <ShowOn>
         <string>DefaultHomeTab</string>
