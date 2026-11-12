@@ -131,8 +131,7 @@ namespace Layer8
                         }
                         catch (SmsQueryException ex)
                         {
-                            ManagementException managementException = ex.InnerException as ManagementException;
-                            error.Add("Could not remove content: " + managementException.ErrorInformation["Description"].ToString(), value[0]["LocalizedDisplayName"].StringValue);
+                            error.Add("Could not remove content: " + Utility.ProviderError(ex), value[0]["LocalizedDisplayName"].StringValue);
                             er = true;
                         }
 

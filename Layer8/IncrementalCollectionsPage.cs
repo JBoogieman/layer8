@@ -116,8 +116,7 @@ namespace Layer8.CollectionManagement
                     }
                     catch (SmsQueryException ex)
                     {
-                        ManagementException managementException = ex.InnerException as ManagementException;
-                        error.Add("Could not disabled incremental updates: " + managementException.ErrorInformation["Description"].ToString(), collection);
+                        error.Add("Could not disabled incremental updates: " + Utility.ProviderError(ex), collection);
                         er = true;
                     }
 

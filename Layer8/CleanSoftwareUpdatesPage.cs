@@ -128,8 +128,7 @@ namespace Layer8.SoftwareUpdates
                         }
                         catch (SmsQueryException ex)
                         {
-                            ManagementException managementException = ex.InnerException as ManagementException;
-                            error.Add("Could not remove updates: " + managementException.ErrorInformation["Description"].ToString(), groupObject["LocalizedDisplayName"].StringValue);
+                            error.Add("Could not remove updates: " + Utility.ProviderError(ex), groupObject["LocalizedDisplayName"].StringValue);
                             er = true;
                         }
 
@@ -180,8 +179,7 @@ namespace Layer8.SoftwareUpdates
                         }
                         catch (SmsQueryException ex)
                         {
-                            ManagementException managementException = ex.InnerException as ManagementException;
-                            error.Add("Could not remove content: " + managementException.ErrorInformation["Description"].ToString(), package["Name"].StringValue);
+                            error.Add("Could not remove content: " + Utility.ProviderError(ex), package["Name"].StringValue);
                             er = true;
                         }
 

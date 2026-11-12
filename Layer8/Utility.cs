@@ -101,6 +101,10 @@ namespace Layer8
 
         public static bool AddObjectToFolder(ConnectionManagerBase connectionManager, string folderName, string objectId, int objectType)
         {
+            // No folder set in Options means leave the object at the top level. Creating a folder with no name fails.
+            if (string.IsNullOrWhiteSpace(folderName))
+                return false;
+
             try
             {
                 IResultObject resultObject1;
@@ -185,6 +189,72 @@ namespace Layer8
             if (instance == null)
                 return new int?();
             return new int?(instance["ContainerNodeID"].IntegerValue);
+        }
+
+        /// <summary>
+        /// The SMS provider's own explanation of a failed call, or the error message when it gave none. The provider's
+        /// Description is often blank (WMI's own errors, such as "Invalid operation", have none), so read it only through here.
+        /// </summary>
+        public static string ProviderError(Exception exception)
+        {
+            for (Exception e = exception; e != null; e = e.InnerException)
+            {
+                if (e is ManagementException managementException)
+                {
+                    string description = null, operation = null;
+                    try
+                    {
+                        description = managementException.ErrorInformation?["Description"]?.ToString();
+                        operation = managementException.ErrorInformation?["Operation"]?.ToString();
+                    }
+                    catch (ManagementException) { }
+                    if (!string.IsNullOrWhiteSpace(description))
+                        return description.Trim();
+                    // When a save fails, the console's connection reconnects and tries again, and the retry fails with
+                    // WMI's own "Invalid operation" (a PutClass), so ConfigMgr's reason never reaches us.
+                    if (operation == "PutClass" && managementException.ErrorCode == ManagementStatus.InvalidOperation)
+                        return "ConfigMgr refused the change, and the console didn't pass on why. SMSProv.log on the site server has the reason.";
+                    return managementException.Message.Trim();
+                }
+            }
+
+            return exception?.Message?.Trim();
+        }
+
+        /// <summary>
+        /// Saves an object once, so a refusal comes back with ConfigMgr's reason. The console's own Put reconnects and
+        /// retries a failed save, and that retry fails with WMI's "Invalid operation", hiding the reason. This makes the
+        /// console's first attempt (the same WMI save, with the connection's context) and stops there. Throws
+        /// ManagementException.
+        /// </summary>
+        public static void PutOnce(ConnectionManagerBase connectionManager, IResultObject resultObject)
+        {
+            if (resultObject is Microsoft.ConfigurationManagement.ManagementProvider.WqlQueryEngine.WqlResultObject wqlObject && wqlObject.ManagedObject != null)
+            {
+                ManagementNamedValueCollection context = new ManagementNamedValueCollection();
+                foreach (KeyValuePair<string, object> item in connectionManager.Context)
+                    context.Add(item.Key, item.Value);
+                wqlObject.ManagedObject.Put(new PutOptions(context));
+            }
+            else
+            {
+                resultObject.Put();
+            }
+        }
+
+        /// <summary>The SQL Server message behind a failed provider call, if ConfigMgr passed one on.</summary>
+        public static string ProviderSqlMessage(Exception exception)
+        {
+            for (Exception e = exception; e != null; e = e.InnerException)
+            {
+                if (e is ManagementException managementException)
+                {
+                    try { return managementException.ErrorInformation?["SQLMessage"]?.ToString(); }
+                    catch (ManagementException) { return null; }
+                }
+            }
+
+            return null;
         }
 
         public static string WqlEscapeString(string text)
