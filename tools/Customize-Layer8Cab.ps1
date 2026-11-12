@@ -37,9 +37,9 @@
 
 .PARAMETER Exclude
     Features to leave out. Run the script with -Exclude and a name that isn't a feature to see the list, or see
-    docs\INSTALL.md (Leaving features out): LAPS, BitLockerKeys, RemoteControl, RestartComputer, InstallUpdates,
-    InstallApplication, ClientRepair, RetryFailed, DeleteDeployment, CollectionMembership, QuickDeployment,
-    Cleanup, DriverManager.
+    docs\INSTALL.md (Leaving features out): LAPS, BitLockerKeys, RemoteControl, RestartComputer, SendMessage,
+    WindowsSecurity, InstallUpdates, InstallApplication, ClientRepair, RetryFailed, DeleteDeployment,
+    CollectionMembership, QuickDeployment, Cleanup, DriverManager.
 
 .PARAMETER CertificateThumbprint
     A code-signing certificate in your CurrentUser\My or LocalMachine\My store, with its private key. Signing is
