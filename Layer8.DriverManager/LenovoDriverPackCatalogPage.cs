@@ -264,8 +264,18 @@ namespace Layer8.DriverManager
 
                 if (Directory.Exists(path))
                 {
+                    // A pack downloaded by 0.7.0 has its version file named after the pack's file: same release, so
+                    // rename it to today's name (the release date) rather than download it again.
+                    string legacyVersionFile = Path.Combine(path, package.LegacyVersionFile);
+                    if (File.Exists(legacyVersionFile) && !File.Exists(Path.Combine(path, package.VersionFile)))
+                    {
+                        try { File.Move(legacyVersionFile, Path.Combine(path, package.VersionFile)); }
+                        catch (IOException ex) { log.Warn("Couldn't rename " + legacyVersionFile + ": " + ex.Message); }
+                        catch (UnauthorizedAccessException ex) { log.Warn("Couldn't rename " + legacyVersionFile + ": " + ex.Message); }
+                    }
+
                     string[] fileList = Directory.GetFiles(path, "*.version");
-                    if (File.Exists(Path.Combine(path, package.VersionFile)))
+                    if (File.Exists(Path.Combine(path, package.VersionFile)) || File.Exists(legacyVersionFile))
                     {
                         dataGridViewRow.Cells[0].Value = false;
                         dataGridViewRow.Cells[4].Value = "Downloaded";

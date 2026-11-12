@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
 namespace Layer8.DriverManager
@@ -35,12 +36,26 @@ namespace Layer8.DriverManager
             Url = pack.Value.Trim();
             Crc = (string)pack.Attribute("crc");
             WindowsVersion = (string)pack.Attribute("version");
-            // The release date when the catalog has it, otherwise the file name, which ends in the release (…_202312).
+            // The release date when the catalog has it (every pack had one in Nov 2026), otherwise the release the file
+            // name ends in (…_202312). It's also the driver package's Version once imported, so it stays short.
             string fileName = Path.GetFileNameWithoutExtension(new Uri(Url).LocalPath);
             string date = (string)pack.Attribute("date");
-            Version = !string.IsNullOrWhiteSpace(date) ? date.Trim() : fileName;
-            // One file per release of the pack, so a newer release shows as "New version".
-            VersionFile = fileName + ".version";
+            Version = !string.IsNullOrWhiteSpace(date) ? date.Trim() : ReleaseIn(fileName);
+            // One file per release of the pack, so a newer release shows as "New version". The importer reads the
+            // version from this file's name up to the first dot, so the name has none.
+            VersionFile = Version.Replace('.', '-') + ".version";
+            LegacyVersionFile = fileName + ".version";
+        }
+
+        /// <summary>What Layer8 0.7.0 named the version file: the pack's file name, too long for a package's Version.</summary>
+        public string LegacyVersionFile { get; private set; }
+
+        private static string ReleaseIn(string fileName)
+        {
+            Match release = Regex.Match(fileName, @"_(\d{6})$");
+            if (release.Success) return release.Groups[1].Value;
+            string name = fileName.Replace('.', '-');
+            return name.Length > 32 ? name.Substring(name.Length - 32) : name;
         }
 
         /// <summary>The model with its machine types, the way Lenovo's support site lists it.</summary>
