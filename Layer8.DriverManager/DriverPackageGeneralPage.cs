@@ -6,8 +6,10 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Security.AccessControl;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace Layer8.DriverManager
@@ -35,7 +37,7 @@ namespace Layer8.DriverManager
         {
             base.InitializePageControl();
 
-            labelInformation.Text = string.Format("Welcome to the Driver Package Manager Import tool.\r\n\r\nThis tool gives you a quick way to work with your driver packages as no ConfigMgr skill are required. Just create your driver structure and manage all drivers and packages on a storage level.\r\n\r\nThe tool will import your driver packages from {0}.", registry.ReadString("DriverSourceFolder"));
+            ShowSourceFolder();
 
             Initialized = true;
 
@@ -115,9 +117,36 @@ namespace Layer8.DriverManager
                 sb.AppendLine("Access denied to driver package folder");
             }
 
+            // ConfigMgr reads the drivers and writes the packages as the SMS provider's computer account, not as you, so
+            // an admin share (\\server\C$) only works if that account is an administrator on that computer. A warning,
+            // not a stop: some sites do make it one.
+            string adminShare = new[] { registry.ReadString("DriverSourceFolder"), registry.ReadString("DriverPackageFolder") }
+                .FirstOrDefault(IsAdminShare);
+            if (adminShare != null)
+            {
+                sb.AppendLine(string.Format(
+                    "{0} is an admin share. ConfigMgr uses these folders as the site server's computer account, not as you, " +
+                    "so the import fails unless that account is an administrator there. A normal share where it has Full Control works everywhere.",
+                    adminShare));
+            }
+
             ((SmsWizardPage)Parent).WizardForm.EnableButton(ButtonType.Next, flag);
 
+            // Options may have just changed the folder.
+            ShowSourceFolder();
+            labelOptions.MaximumSize = new Size(Math.Max(150, ClientSize.Width - labelOptions.Left - 18), 0);
             labelOptions.Text = sb.ToString();
+        }
+
+        private void ShowSourceFolder()
+        {
+            labelInformation.Text = string.Format("Welcome to the Driver Package Manager Import tool.\r\n\r\nThis tool gives you a quick way to work with your driver packages as no ConfigMgr skill are required. Just create your driver structure and manage all drivers and packages on a storage level.\r\n\r\nThe tool will import your driver packages from {0}.", registry.ReadString("DriverSourceFolder"));
+        }
+
+        /// <summary>True for a path on an admin share, such as \\server\C$\Drivers.</summary>
+        internal static bool IsAdminShare(string path)
+        {
+            return !string.IsNullOrEmpty(path) && Regex.IsMatch(path, @"^\\\\[^\\]+\\[A-Za-z]\$(\\|$)");
         }
 
         private void ProgressWorker_DoWork(object sender, DoWorkEventArgs e)
