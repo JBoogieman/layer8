@@ -1,6 +1,6 @@
 # Layer8 status
 
-Updated November 11, 2026. Version 0.7.0.
+Updated November 11, 2026. Version 0.8.0.
 
 Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (console 5.2509.1038.1000): a site server, the client the console runs on, and a second Windows 11 client reached over the network. The site server stands in for "no ConfigMgr client". Treat anything that changes clients as something to try on a few devices first.
 
@@ -26,6 +26,9 @@ Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (conso
 | Driver Manager | Catalog download, Dell catalog (Windows 11 and 10) | Dell and HP driver pack imports not tested |
 | Lenovo driver packs (0.7.0) | Lenovo's catalog (`catalogv2.xml`): 509 models; ThinkCentre M70A Gen 6 for Windows 11 25H2 | Releases listed newest first, Windows 11 IoT after Windows 11; IoT 25H2 lists its 8 packs. The M70A Gen 6 pack (2 GB) downloaded, matched the catalog's SHA-256 and Lenovo's signature, extracted (about 5 GB) and landed in the source folder; reopened, it shows Downloaded. The catalog's own signature is checked (Lenovo's code signing certificate, chained to a root Windows trusts): Lenovo's catalog passes, freshly downloaded and reused within the hour. A copy with one download link changed is refused, both swapped into the temp folder and downloaded from a link set in Options, and is deleted so the next click downloads a good one. Checked outside the console with the same code: a changed hash, extra white space, no signature, a forged "Lenovo" certificate and another company's signature are refused. Options shows the Lenovo catalog link and folder prefix. The lab has no Lenovo devices, so ticking the site's models hasn't been seen |
 | LAPS Password (0.7.0) | The second client, with Windows LAPS backing up to AD | Encrypted: decrypts and shows the account, password, when it changed and when it expires. Expire Now set the expiry in AD, the dialog said so, and Layer8's Group Policy Update on the client had it set a new password straight away. With the policy switched to unencrypted, the client wrote a new plain password and Layer8 showed "Windows LAPS, not encrypted"; switched back, "encrypted" with the newer password |
+| Driver Package Importer with a Lenovo pack (0.8.0) | The extracted ThinkCentre M70A Gen 6 pack (224 INF files, 215 drivers), from a normal share where the site server's account has Full Control | All 215 drivers imported, enabled, in a new driver package and category, with their content in the package folder. It took about 30 minutes, most of it the Intel graphics drivers. On the way: a site database at SQL Server 2022 compatibility level 160 refused every driver ("The digest is not valid"; ConfigMgr 2509 supports 150, see [INSTALL.md](INSTALL.md#the-driver-package-importer-says-the-digest-is-not-valid)); and ConfigMgr's own CreateFromINF writes ARM64 platforms as `arm64`, which the database refuses, so Layer8 writes `ARM64` as the console's import does (the pack's one ARM64 driver, deleted and imported again by Layer8). A run with refused drivers leaves the package offered for the next run; a complete one shows No change |
+| Send Message (0.8.0) | The second client with nobody signed in; the console machine | "Nobody signed in; not sent", and "Sent to LAB\Administrator" with the pop-up on screen. A 258-character message is refused with the 255 limit and the prompt keeps the text |
+| Windows Security (0.8.0) | The second client | Defender: 14 items, including signatures, last scans, threats in the last 30 days and Defender for Endpoint (not onboarded); Quick Scan started a scan that the tab then showed. Firewall: the three profiles from the effective policy, the domain profile in use. BitLocker: an unencrypted C:, where Suspend and Resume now say there's nothing to do. A test build had called both a success, and Windows recorded a suspend and added a recovery password protector to the unencrypted drive |
 | Layer8.msi | Install, closing open consoles, uninstall | Uninstall keeps the console's `XmlStorage\Extensions\Actions` and `Forms` folders. Upgrade and the SYSTEM/3010 path not tested |
 | System Information (0.6.0) | Both clients (Windows 11 26H2 and the console machine) | All seven tabs loaded: Overview (model, BIOS, 26H2 build 26300.9974, uptime, memory, C:, IP, "None" for battery on a VM, client version), 7 programs, 6 updates, 252 services, 87 drivers (about 10 seconds), 1 profile, 3 administrators (two local accounts, LAB\Domain Admins). Filter, sorting both ways with an arrow, and Export (filtered rows, sorted order) work. The 64-bit and 32-bit program classes each returned the full list, so programs are listed once without a 64-bit/32-bit label. Not tried: a device with a battery, an offline device, a query that times out (60 seconds) |
 | Quick Status in columns (0.5.0) | All Systems: both clients, the site server (no client) and the four placeholder records | Signed in, Up, C: free, C: size, IP address and Client columns. Sorted by C: free (26.8 GB, 61 GB, 100 GB, not as text) and by Up both ways, blanks last; ties go by name; one sort arrow at a time. Export writes every column in the sorted order |
@@ -45,7 +48,9 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 - Configuration baselines: re-evaluating non-compliant devices and Retry Failed Devices (see rough edges)
 - Remote Assistance's offer and the PowerShell session itself
 - Dell and HP driver pack imports, including the check (since 0.2.1) that each HP SoftPaq is signed by HP before it runs
-- Lenovo: ticking the site's models (the lab has no Lenovo devices), and importing an extracted Lenovo pack with the Driver Package Importer
+- Lenovo: ticking the site's models (the lab has no Lenovo devices)
+- Windows Security: Suspend and Resume on an encrypted drive (the lab's clients aren't encrypted)
+- Send Message to a collection, and to a device with several people signed in
 - LAPS: legacy Microsoft LAPS (the lab forest doesn't have its schema), and passwords Windows LAPS backs up to Microsoft Entra ID (Layer8 reads Active Directory only)
 - A collection run on 50 or more devices
 - Layer8.msi: upgrade over an older version, and an MECM deployment running as SYSTEM with a console open (3010)
@@ -66,10 +71,8 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 
 In order:
 
-1. **Send a message** to whoever is signed in, as a Windows notification or a pop-up.
-2. **Windows Security view**: Defender, firewall and BitLocker in one place, with Suspend BitLocker for a number of restarts.
-3. **AD cleanup**: computer accounts in Active Directory that ConfigMgr hasn't heard from, and the reverse.
-4. **Uninstall from System Information**: remove an MSI-installed program from the Programs tab (System Information only reads for now).
+1. **AD cleanup**: computer accounts in Active Directory that ConfigMgr hasn't heard from, and the reverse.
+2. **Uninstall from System Information**: remove an MSI-installed program from the Programs tab (System Information only reads for now).
 
 ## Ideas
 

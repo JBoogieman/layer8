@@ -204,6 +204,8 @@ Either way, the cab's description in the Console Extensions node says what it wa
 | `BitLockerKeys` | BitLocker Recovery Key (BitLocker Status stays: it shows no keys) |
 | `RemoteControl` | Remote Desktop, Remote Assistance, PowerShell Session |
 | `RestartComputer` | Restart Computer, Cancel Restart |
+| `SendMessage` | Send Message |
+| `WindowsSecurity` | Windows Security (Defender, firewall and BitLocker status; Suspend and Resume BitLocker; Defender quick scan) |
 | `InstallUpdates` | Install Missing Updates |
 | `InstallApplication` | Install Application |
 | `ClientRepair` | Repair Client, Reset Policy, Turn Off Provisioning Mode |
@@ -235,6 +237,8 @@ Layer8 goes only where the console is. Nothing is installed on the devices: Laye
 Managed networks usually open WMI and File and Printer Sharing by Group Policy already, because ConfigMgr's own client push and remote tools need them. A device with WMI blocked shows **Online, but WMI is blocked** when it answers a ping or port 135 or 445, and **Offline, or its firewall blocks WMI** when it answers nothing: Windows blocks ping by default, so a fully firewalled device looks the same as one that's switched off.
 
 **LAPS Password** reads Active Directory, not the device, as the account running the console. For Windows LAPS, that account needs read access on the computers' OU (`Set-LapsADReadPasswordPermission`), and for an encrypted password it has to be in the group the LAPS policy names as authorized decryptors (Domain Admins unless the policy says otherwise). **Expire Now** also needs `Set-LapsADResetPasswordPermission`. Legacy LAPS uses its own (`Set-AdmPwdReadPasswordPermission`, `Set-AdmPwdResetPasswordPermission`).
+
+**Driver Manager** works in the two folders set in Driver Manager Options: the driver source folder, where Dell, HP and Lenovo packs are extracted, and the driver package folder. Downloading and extracting run as the account running the console, which needs Modify on both. The Driver Package Importer then has ConfigMgr read the drivers and build the packages, and ConfigMgr does that as the SMS Provider's computer account (usually the site server's), not as you: that account needs **Full Control** on both folders, on the share and on the folder itself. Modify isn't enough. Use a normal share on a file server or the site server; an admin share such as `C$` only works if that account is an administrator on that computer.
 
 For a lab client, `tools\Prepare-Layer8LabClient.ps1` opens all of these except the Remote Assistance policy. Run it elevated on the client.
 
@@ -278,6 +282,10 @@ The cab was built without the path changes (an older build script, or built by h
 ### "Error: …\Forms\..\bin\Layer8" in SmsAdminUI.log
 
 The console writes this line when it opens a Layer8 window from an approved install. It's harmless: the window opens. You can ignore it.
+
+### The Driver Package Importer says "The digest is not valid"
+
+ConfigMgr's database refused the drivers. `SMSProv.log` on the site server has the database's own error. A known cause is a site database on SQL Server 2022 at compatibility level 160, which ConfigMgr supports only from version 2603: there every driver import fails, the console's own included, and `SMSProv.log` shows `sp_SetupCIContent` with *"Conversion failed when converting the nvarchar value … to data type int"*. Microsoft recommends level 150 for SQL Server 2022 ([supported SQL Server versions](https://learn.microsoft.com/intune/configmgr/core/plan-design/configs/support-for-sql-server-versions)). To check it, run `SELECT name, compatibility_level FROM sys.databases` on the site database server. Changing it is `ALTER DATABASE [CM_<site code>] SET COMPATIBILITY_LEVEL = 150`. A package with refused drivers isn't marked as imported, so the next import offers it again.
 
 ### Where to look
 
