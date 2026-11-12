@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription NamespaceGuid="96E14CE4-5BDB-425F-B933-88F03699C0C3" Class="AssemblyType" SelectionMode="Single" DisplayName="Windows Security..." MnemonicDisplayName="Windows Security" Description="Microsoft Defender, Windows Firewall and BitLocker on this device, with Suspend BitLocker for a number of restarts and a Defender quick scan" InsertBefore="B7009279-2666-45EF-9935-1FB3D3ED2ABF">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <ActionAssembly>
+    <Assembly>Layer8.Device.dll</Assembly>
+    <Type>Layer8.Device.WindowsSecurity</Type>
+    <Method>Show</Method>
+  </ActionAssembly>
+</ActionDescription>

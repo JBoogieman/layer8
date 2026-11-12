@@ -94,7 +94,7 @@ namespace Layer8.Device
         /// </summary>
         internal static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(60);
 
-        private static List<ManagementObject> Query(ManagementScope scope, string wql)
+        internal static List<ManagementObject> Query(ManagementScope scope, string wql)
         {
             EnumerationOptions options = new EnumerationOptions { Timeout = QueryTimeout, ReturnImmediately = true, Rewindable = false };
             using (ManagementObjectSearcher searcher = new ManagementObjectSearcher(scope, new ObjectQuery(wql), options))
@@ -103,7 +103,7 @@ namespace Layer8.Device
             }
         }
 
-        private static ManagementObject First(ManagementScope scope, string wql)
+        internal static ManagementObject First(ManagementScope scope, string wql)
         {
             List<ManagementObject> found = Query(scope, wql);
             for (int i = 1; i < found.Count; i++) found[i].Dispose();
@@ -414,7 +414,7 @@ namespace Layer8.Device
         private static string PathText(string value) => (value ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"");
 
         /// <summary>A registry value read through WMI's registry provider, or null if it isn't there.</summary>
-        private static object RegistryValue(string host, string method, string key, string name)
+        internal static object RegistryValue(string host, string method, string key, string name)
         {
             try
             {
@@ -437,7 +437,7 @@ namespace Layer8.Device
             }
         }
 
-        private static string Join(string separator, params string[] parts)
+        internal static string Join(string separator, params string[] parts)
         {
             return string.Join(separator, parts.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p.Trim()));
         }
@@ -461,21 +461,40 @@ namespace Layer8.Device
             public DateTime ReadAt;
             public bool Loading, Fitted, Descending;
             public int SortColumn = -1;
+            /// <summary>Buttons that act on what this tab shows; they're only there while it's open.</summary>
+            public List<Button> Buttons = new List<Button>();
+            /// <summary>What the last button click on this tab did, kept in the status line.</summary>
+            public string ActionResult;
         }
 
         private readonly string host;
+        private readonly string windowTitle;
         private readonly TabControl tabs;
         private readonly TextBox filter;
         private readonly Label status;
         private readonly List<Tab> tabList = new List<Tab>();
+        private bool acting;
 
-        public SystemInfoDialog(string host)
+        public SystemInfoDialog(string host) : this(host, "System Information")
+        {
+            AddTab("Overview", "item", SystemInfoReader.Overview);
+            AddTab("Programs", "program", SystemInfoReader.Programs);
+            AddTab("Updates", "update", SystemInfoReader.Updates);
+            AddTab("Services", "service", SystemInfoReader.Services);
+            AddTab("Drivers", "driver", SystemInfoReader.Drivers);
+            AddTab("Profiles", "profile", SystemInfoReader.Profiles);
+            AddTab("Administrators", "member", SystemInfoReader.Administrators);
+        }
+
+        /// <summary>An empty window titled "title: host"; AddTab fills it.</summary>
+        internal SystemInfoDialog(string host, string title)
         {
             this.host = host;
+            windowTitle = title;
             SuspendLayout();
             AutoScaleDimensions = new SizeF(6F, 13F);
             AutoScaleMode = AutoScaleMode.Font;
-            Text = "System Information: " + host;
+            Text = title + ": " + host;
             ClientSize = new Size(900, 560);
             MinimumSize = new Size(620, 400);
             StartPosition = FormStartPosition.CenterParent;
@@ -492,20 +511,12 @@ namespace Layer8.Device
             Button export = new Button { Text = "Export...", Location = new Point(732, 524), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
             Button close = new Button { Text = "Close", DialogResult = DialogResult.Cancel, Location = new Point(813, 524), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
 
-            AddTab("Overview", "item", SystemInfoReader.Overview);
-            AddTab("Programs", "program", SystemInfoReader.Programs);
-            AddTab("Updates", "update", SystemInfoReader.Updates);
-            AddTab("Services", "service", SystemInfoReader.Services);
-            AddTab("Drivers", "driver", SystemInfoReader.Drivers);
-            AddTab("Profiles", "profile", SystemInfoReader.Profiles);
-            AddTab("Administrators", "member", SystemInfoReader.Administrators);
-
-            tabs.SelectedIndexChanged += (s, e) => { LoadIfNeeded(Current); ShowTab(Current); };
+            tabs.SelectedIndexChanged += (s, e) => { ShowButtons(); LoadIfNeeded(Current); ShowTab(Current); };
             filter.TextChanged += (s, e) => ShowTab(Current);
-            refresh.Click += (s, e) => Load(Current);
+            refresh.Click += (s, e) => { Current.ActionResult = null; Load(Current); };
             copy.Click += (s, e) => CopyRows(Current, false);
             export.Click += (s, e) => Export(Current);
-            Shown += (s, e) => LoadIfNeeded(Current);
+            Shown += (s, e) => { ShowButtons(); LoadIfNeeded(Current); };
 
             Controls.AddRange(new Control[] { filterLabel, filter, tabs, status, refresh, copy, export, close });
             CancelButton = close;
@@ -514,7 +525,70 @@ namespace Layer8.Device
 
         private Tab Current => tabList[Math.Max(0, tabs.SelectedIndex)];
 
-        private void AddTab(string title, string noun, Func<string, InfoTable> read)
+        /// <summary>
+        /// A button on the tab that was added last, top right. Clicking it calls prepare on the UI thread (to ask
+        /// anything it needs); null from prepare cancels. Otherwise what prepare returns runs in the background, its
+        /// result goes in the status line, and the tab is read again.
+        /// </summary>
+        internal void AddTabButton(string text, Func<IWin32Window, string, Func<string>> prepare)
+        {
+            Tab tab = tabList[tabList.Count - 1];
+            int width = Math.Max(75, TextRenderer.MeasureText(text, Font).Width + 20);
+            int right = tab.Buttons.Count == 0 ? 888 : tab.Buttons[tab.Buttons.Count - 1].Left - 6;
+            Button button = new Button { Text = text, Size = new Size(width, 23), Location = new Point(right - width, 10), Anchor = AnchorStyles.Top | AnchorStyles.Right, Visible = false };
+            button.Click += (s, e) => Act(tab, text, prepare);
+            tab.Buttons.Add(button);
+            Controls.Add(button);
+        }
+
+        private void ShowButtons()
+        {
+            foreach (Tab tab in tabList)
+                foreach (Button button in tab.Buttons) button.Visible = tab == Current;
+        }
+
+        private void Act(Tab tab, string text, Func<IWin32Window, string, Func<string>> prepare)
+        {
+            if (acting || tab.Loading) return;
+            Func<string> run = prepare(this, host);
+            if (run == null) return;
+            string name = text.TrimEnd('.');
+            acting = true;
+            foreach (Button button in tab.Buttons) button.Enabled = false;
+            status.Text = name + " on " + host + "...";
+            Task.Run(() =>
+            {
+                try
+                {
+                    return run();
+                }
+                catch (Exception ex)
+                {
+                    log.Error(name + " on " + host + " failed", ex);
+                    return name + " failed: " + Describe(ex);
+                }
+            }).ContinueWith(task =>
+            {
+                try
+                {
+                    if (IsDisposed || !IsHandleCreated) return;
+                    BeginInvoke((Action)(() =>
+                    {
+                        acting = false;
+                        foreach (Button button in tab.Buttons) button.Enabled = true;
+                        log.InfoFormat("{0} {1} on {2}: {3}", windowTitle, name, host, task.Result);
+                        tab.ActionResult = task.Result;
+                        Load(tab);
+                    }));
+                }
+                catch (InvalidOperationException)
+                {
+                    // The window closed while the device was answering.
+                }
+            }, TaskScheduler.Default);
+        }
+
+        internal void AddTab(string title, string noun, Func<string, InfoTable> read)
         {
             ListView list = new ListView
             {
@@ -582,7 +656,7 @@ namespace Layer8.Device
                 tab.ReadAt = DateTime.Now;
                 tab.Fitted = false;
             }
-            log.InfoFormat("System Information {0} on {1}: {2}", tab.Title, host, error ?? Count(table.Rows.Count, tab.Noun));
+            log.InfoFormat("{0} {1} on {2}: {3}", windowTitle, tab.Title, host, error ?? Count(table.Rows.Count, tab.Noun));
             if (tab == Current) ShowTab(tab);
         }
 
@@ -655,7 +729,8 @@ namespace Layer8.Device
                 : string.Format("{0} of {1}", items.Count, Count(tab.Table.Rows.Count, tab.Noun));
             if (tab.Title == "Overview") count = "Overview";
             string note = string.IsNullOrEmpty(tab.Table.Note) ? string.Empty : "; " + tab.Table.Note;
-            status.Text = string.Format("{0}{1}. Read at {2:t}{3}", count, note, tab.ReadAt, tab.Error != null ? ". Refresh failed: " + tab.Error : string.Empty);
+            status.Text = string.Format("{0}{1}. Read at {2:t}{3}{4}", count, note, tab.ReadAt, tab.Error != null ? ". Refresh failed: " + tab.Error : string.Empty,
+                string.IsNullOrEmpty(tab.ActionResult) ? string.Empty : ". " + tab.ActionResult.TrimEnd('.'));
         }
 
         private static string Count(int count, string noun) => count + " " + (count == 1 ? noun : noun + "s");
@@ -723,7 +798,7 @@ namespace Layer8.Device
                 foreach (string[] row in Rows(tab, false)) csv.AppendLine(string.Join(",", row.Select(DeviceProgressDialog.CsvField)));
                 // With a byte order mark, Excel reads the file as UTF-8 instead of guessing.
                 File.WriteAllText(save.FileName, csv.ToString(), new UTF8Encoding(true));
-                log.InfoFormat("System Information {0} on {1}: exported {2} row(s) to {3}", tab.Title, host, tab.List.Items.Count, save.FileName);
+                log.InfoFormat("{0} {1} on {2}: exported {3} row(s) to {4}", windowTitle, tab.Title, host, tab.List.Items.Count, save.FileName);
             }
         }
     }

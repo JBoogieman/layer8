@@ -104,6 +104,7 @@
     <Compile Include="DeviceColumns.cs" />
     <Compile Include="ListViewSorter.cs" />
     <Compile Include="SystemInfo.cs" />
+    <Compile Include="WindowsSecurity.cs" />
     <Compile Include="Device.cs" />
     <Compile Include="ClientActions.cs" />
     <Compile Include="LAPSDialog.cs">
