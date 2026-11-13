@@ -8,7 +8,7 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 
 ## What's in it
 
-Organized by where you right-click in the console.
+Organized by where you right-click in the console. [The tour](docs/TOUR.md) has a screenshot of each.
 
 **A device, or a device collection** (a collection runs on every member):
 - **Client Actions:** the eleven standard client cycles, plus Quick Status (who's signed in, uptime, free space on C:, IP address, client version, each in a column you can sort), Find Software (by name, or older than a version: `Chrome < 131`), Check Pending Restart, List and Install Missing Updates, Full Machine Policy Refresh, Group Policy Update, Client Health Check, Client Info, Reset Policy, Clear Client Cache, Repair Client, Turn Off Provisioning Mode, Restart SMS Agent Host Service, Send Message (a pop-up for whoever is signed in), Restart Computer and Cancel Restart, Defender Status and Quick Scan, BitLocker Status
@@ -29,15 +29,15 @@ Organized by where you right-click in the console.
 
 **Elsewhere:** Quick Deployment (deploy to several collections at once), Task Sequence Export to XML, Clean Software Update Groups, Remove Retired Content, Incremental Collections and Collection Evaluation Statistics, Driver Manager (grabber, importers, Dell, HP and Lenovo driver packs; Lenovo's ticks the models your site has and checks each download against Lenovo's signed catalog)
 
-<img src="docs/images/readme-lenovo-driver-pack.png" alt="Lenovo Driver Pack: Lenovo's packs for Windows 11 25H2, one already downloaded" width="600">
+![Lenovo Driver Pack: Lenovo's packs for Windows 11 25H2, one already downloaded and one ticked to download](docs/images/tour/lenovo-driver-pack.png)
 
 **System Information** (a device's Layer8 menu): one window instead of remoting in. Tabs for an overview (model, serial, Windows version and build, uptime, memory, disks, battery health), installed programs, installed updates, services, drivers, user profiles and local administrators. Every tab sorts, filters as you type, and copies or exports what's shown. It only reads; nothing on the device changes.
 
-<img src="docs/images/readme-system-information.png" alt="System Information for a device, Overview tab" width="600">
+![System Information for a device, Overview tab](docs/images/tour/system-information-overview.png)
 
 **Windows Security** (a device's Layer8 menu): Microsoft Defender (mode, real-time and tamper protection, signature age, last scans, recent threats, Defender for Endpoint onboarding), Windows Firewall (each profile as Windows applies it, Group Policy included, and the networks it's on) and BitLocker (every drive: protection, encryption, method and the kinds of key protector; never a recovery password). Suspend BitLocker on the Windows drive for 1 to 15 restarts, for a BIOS update say, and Resume it; start a Defender quick scan.
 
-<img src="docs/images/readme-windows-security.png" alt="Windows Security for a device, Defender tab" width="600">
+![Windows Security for a device, Defender tab](docs/images/tour/windows-security-defender.png)
 
 **Error Lookup** (on the Layer8 menus): paste any error code (`0x87D00324`, `-2016410844`, `1603`) and see what it means, from ConfigMgr's own error catalog and Windows'. Copy Failed Devices and Install Application show the meaning next to every code too.
 
