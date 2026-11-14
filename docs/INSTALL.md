@@ -283,6 +283,10 @@ The cab was built without the path changes (an older build script, or built by h
 
 The console writes this line when it opens a Layer8 window from an approved install. It's harmless: the window opens. You can ignore it.
 
+### "Access denied" on the computer the console runs on
+
+Client actions, System Information or Windows Security say **Access denied** for the console's own computer, while every other device works. Windows gives an administrator a limited token unless a program runs as administrator, and on its own computer Layer8 reaches the ConfigMgr client with the console's token. Other devices are reached over the network, where that limit doesn't apply to domain accounts. To use Layer8 on the console's own computer, open the console with **Run as administrator**. Layer8 says this in the error instead of a bare "Access denied".
+
 ### The Driver Package Importer says "The digest is not valid"
 
 ConfigMgr's database refused the drivers. `SMSProv.log` on the site server has the database's own error. A known cause is a site database on SQL Server 2022 at compatibility level 160, which ConfigMgr supports only from version 2603: there every driver import fails, the console's own included, and `SMSProv.log` shows `sp_SetupCIContent` with *"Conversion failed when converting the nvarchar value … to data type int"*. Microsoft recommends level 150 for SQL Server 2022 ([supported SQL Server versions](https://learn.microsoft.com/intune/configmgr/core/plan-design/configs/support-for-sql-server-versions)). To check it, run `SELECT name, compatibility_level FROM sys.databases` on the site database server. Changing it is `ALTER DATABASE [CM_<site code>] SET COMPATIBILITY_LEVEL = 150`. A package with refused drivers isn't marked as imported, so the next import offers it again.
