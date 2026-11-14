@@ -31,6 +31,8 @@ namespace Layer8.CollectionManagement
 
             Title = "Add Resources to Collection";
 
+            // Esc closes without adding, like Cancel.
+            CancelButton = buttonCancel;
 
             controlsInspector = new ControlsInspector();
             controlsInspector.AddControl(listViewSelectedResources, new ControlDataStateEvaluator(ValidateResourceValue), "Search for resources");
