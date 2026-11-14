@@ -1,15 +1,15 @@
 # Layer8 status
 
-Updated November 14, 2026. Version 0.8.2.
+Updated November 14, 2026. Version 0.9.0.
 
-Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (console 5.2509.1038.1000): a site server, the client the console runs on, and a second Windows 11 client reached over the network. The site server stands in for "no ConfigMgr client". Treat anything that changes clients as something to try on a few devices first.
+Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (console 5.2509.1038.1000): a site server (with a software update point since 0.9.0, synchronizing Windows 11 security and critical updates), the client the console runs on, and a second Windows 11 client reached over the network. The site server stands in for "no ConfigMgr client". Treat anything that changes clients as something to try on a few devices first.
 
 ## What's been tested
 
 | Area | Tested against | Notes |
 |---|---|---|
 | Client actions (policy and evaluation cycles) | Both clients | Machine Policy and App Deployment Evaluation fired |
-| Client tools (quick status, find software, missing updates, pending restart, policy and GP refresh, client health, clear cache, repair, client info, BitLocker and Defender status, Defender quick scan) | Both clients; site server for "No ConfigMgr client found" | Repair: ccmrepair.log on the second client ends "Repair complete". Install Missing Updates has only ever seen "No missing updates" |
+| Client tools (quick status, find software, missing updates, pending restart, policy and GP refresh, client health, clear cache, repair, client info, BitLocker and Defender status, Defender quick scan) | Both clients; site server for "No ConfigMgr client found" | Repair: ccmrepair.log on the second client ends "Repair complete". Missing updates: see 0.9.0 below |
 | Restart, Cancel Restart, Restart SMS Agent Host Service | Second client | Restart then Cancel Restart: no reboot, uptime kept counting |
 | Runs on a whole collection | All Systems; a two-client collection | The four built-in placeholder records (Unknown Computer, Provisioning Device) are skipped by name |
 | Online Status, and the offline check before a run | Both clients; site server ("ping blocked, port 445 answers"); the second client switched off, and on with its WMI firewall rules off | Off: "no ping reply, port 445 closed", and Quick Status says "ports 135 and 445 don't answer". WMI blocked: "Online, but WMI is blocked (RPC server unavailable)" |
@@ -18,7 +18,7 @@ Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (conso
 | BitLocker Recovery Key | No keys; a fake key from the lab script | Key ID filter works |
 | Clear Client Cache | Both clients | On the second client it freed the installed test app's content (110 MB) |
 | Install Application | Both clients | Installs an app and reaches Installed; shows a failing app's 1603 (0x643) |
-| Retry Failed Devices, Copy Failed Devices | Required and Available app deployments with the client in Error | Copy groups by error code. Update deployments not tested (the lab has no updates yet) |
+| Retry Failed Devices, Copy Failed Devices | Required and Available app deployments with the client in Error | Copy groups by error code. Update deployments not tested |
 | Monitoring > Deployments > Delete | A throwaway app deployment | |
 | Redistribute Failed Content (Distribution Status) | A package whose source share doesn't exist | |
 | Collections: add and remove resources from a pasted list | Pasted names with blanks, duplicates, padding and made-up names | |
@@ -30,6 +30,7 @@ Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (conso
 | Send Message (0.8.0) | The second client with nobody signed in; the console machine | "Nobody signed in; not sent", and "Sent to LAB\Administrator" with the pop-up on screen. A 258-character message is refused with the 255 limit and the prompt keeps the text |
 | Windows Security (0.8.0) | The second client | Defender: 14 items, including signatures, last scans, threats in the last 30 days and Defender for Endpoint (not onboarded); Quick Scan started a scan that the tab then showed. Firewall: the three profiles from the effective policy, the domain profile in use. BitLocker: an unencrypted C:, where Suspend and Resume now say there's nothing to do. A test build had called both a success, and Windows recorded a suspend and added a recovery password protector to the unencrypted drive |
 | Access denied on the console's own computer (0.8.2) | The console's computer, with the console opened as a second admin account (not the built-in Administrator) and not run as administrator | Machine Policy on that computer alone: a warning that it's the console's own computer and needs Run as administrator, instead of "Access denied" and a stack trace. On a two-client collection: that row says the same and the other client completes. System Information reads every tab without elevation |
+| List Missing Updates and Install Missing Updates with a real update (0.9.0) | The console's computer one cumulative update behind (November's KB5132061 removed); the second client up to date | Not deployed: "Deployed: none missing. Needed, not deployed: KB5132061". The client's update store lists that KB under two update IDs; it's shown once. Deployed as Available to the two-client collection: "Deployed, missing: KB5132061. Nothing else needed", while the console's All Software Updates still counted it Installed on both (summarized state). Install Missing Updates installed it, downloaded from Microsoft Update (no deployment package); after the restart the computer is on 26300.9974 and its scan shows nothing missing. The up-to-date client: "No missing updates" |
 | Layer8.msi | Install, closing open consoles, uninstall; the published 0.8.0 MSI upgraded by 0.8.1 | Uninstall keeps the console's `XmlStorage\Extensions\Actions` and `Forms` folders. Upgrade: one Programs entry before and after, Layer8.dll 0.8.0.3 to 0.8.1.0, the same 46 menu files. The SYSTEM/3010 path not tested |
 | System Information (0.6.0) | Both clients (Windows 11 26H2 and the console machine) | All seven tabs loaded: Overview (model, BIOS, 26H2 build 26300.9974, uptime, memory, C:, IP, "None" for battery on a VM, client version), 7 programs, 6 updates, 252 services, 87 drivers (about 10 seconds), 1 profile, 3 administrators (two local accounts, LAB\Domain Admins). Filter, sorting both ways with an arrow, and Export (filtered rows, sorted order) work. The 64-bit and 32-bit program classes each returned the full list, so programs are listed once without a 64-bit/32-bit label. Not tried: a device with a battery, an offline device, a query that times out (60 seconds) |
 | Quick Status in columns (0.5.0) | All Systems: both clients, the site server (no client) and the four placeholder records | Signed in, Up, C: free, C: size, IP address and Client columns. Sorted by C: free (26.8 GB, 61 GB, 100 GB, not as text) and by Up both ways, blanks last; ties go by name; one sort arrow at a time. Export writes every column in the sorted order |
@@ -43,7 +44,8 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 ## Not tested yet
 
 - Remote Desktop against a client other than the console's own
-- Update deployments: Retry and Copy Failed Devices, Install Missing Updates with an update actually missing, Quick Deployment
+- Update deployments: Retry and Copy Failed Devices, Quick Deployment
+- List Missing Updates on a client that has never scanned for updates ("No update scan yet")
 - Task Sequence Export to XML and phased deployments
 - Application uninstall and repair from Install Application (the lab's apps don't offer them), setting the cache size on many devices at once
 - Configuration baselines: re-evaluating non-compliant devices and Retry Failed Devices (see rough edges)
