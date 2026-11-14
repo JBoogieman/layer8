@@ -60,6 +60,9 @@ namespace Layer8.Device
         // HRESULT for "The RPC server is unavailable", what WMI throws when nothing answers.
         private const int RpcServerUnavailable = unchecked((int)0x800706BA);
 
+        // Set once every device has answered, or Stop was pressed: the button then closes the window.
+        private bool runEnded;
+
         // Tools that answer in columns (Quick Status): the dialog sorts those itself, by each cell's real value.
         private bool hasDeviceColumns;
         private int sortColumn = -1;
@@ -68,6 +71,11 @@ namespace Layer8.Device
         public DeviceProgressDialog()
         {
             InitializeComponent();
+
+            // Esc does what the button says: Stop while devices are still being contacted, Close after. Setting
+            // CancelButton gives the button DialogResult.Cancel, which would close the window on Stop too.
+            CancelButton = buttonCancel;
+            buttonCancel.DialogResult = DialogResult.None;
 
             IsLoading = true;
             listViewHosts.Items.Clear();
@@ -460,9 +468,7 @@ namespace Layer8.Device
 
             if (clientActionProgressBar.Value == clientActionProgressBar.Maximum)
             {
-                IsLoading = false;
-                buttonOK.Enabled = true;
-                EnableRunAgain();
+                EndRun();
                 LogSummary();
 
                 if (hasDeviceColumns)
@@ -521,12 +527,29 @@ namespace Layer8.Device
             lock (retryable) runAgain.Enabled = retryable.Count > 0;
         }
 
-        private void ButtonCancel_Click(object sender, EventArgs e)
+        private void EndRun()
         {
-            CancellationTokenSource.Cancel();
+            runEnded = true;
             IsLoading = false;
             buttonOK.Enabled = true;
+            buttonCancel.Text = "Close";
             EnableRunAgain();
+        }
+
+        private void ButtonCancel_Click(object sender, EventArgs e)
+        {
+            if (runEnded)
+            {
+                DialogResult = DialogResult.Cancel;
+                Close();
+                return;
+            }
+
+            // Stop: devices still waiting for their turn are marked Canceled. Ones already being contacted
+            // finish and show their answer, so what was done stays on screen to copy or export.
+            log.InfoFormat("{0}: stopped", Title);
+            CancellationTokenSource.Cancel();
+            EndRun();
         }
 
         private void ButtonOK_Click(object sender, EventArgs e)
