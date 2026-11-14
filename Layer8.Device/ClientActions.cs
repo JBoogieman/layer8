@@ -469,23 +469,98 @@ namespace Layer8.Device
             }
         }
 
-        /// <summary>The updates the client reports as missing (ComplianceState 0), by KB number.</summary>
+        /// <summary>
+        /// A device's missing software updates by KB number, in two lists: updates deployed to it that it hasn't
+        /// installed (the client SDK's CCM_SoftwareUpdate, ComplianceState 0), and updates its last scan says it
+        /// needs that no deployment covers (the update store's CCM_UpdateStatus, Status Missing, minus the
+        /// deployed ones). The second list only knows the products and classifications the site synchronizes.
+        /// </summary>
         public static string MissingUpdates(IResultObject resultObject)
         {
             string host = resultObject["Name"].StringValue;
+
+            // Deployed and missing. Keyed by KB: the update store can list one KB under two update IDs.
             ManagementScope clientSdk = Utility.GetWMIScope(host, @"ccm\ClientSDK");
-            List<string> updates = new List<string>();
-            foreach (ManagementObject update in Utility.SearchWMIToList(clientSdk, "SELECT ArticleID, Name FROM CCM_SoftwareUpdate WHERE ComplianceState = 0"))
+            List<string> deployed = new List<string>();
+            HashSet<string> deployedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (ManagementObject update in Utility.SearchWMIToList(clientSdk, "SELECT * FROM CCM_SoftwareUpdate WHERE ComplianceState = 0"))
             {
                 using (update)
                 {
-                    string article = update["ArticleID"] as string;
-                    updates.Add(!string.IsNullOrEmpty(article) ? "KB" + article : (update["Name"] as string ?? "(unnamed update)"));
+                    string key = UpdateKey(update["ArticleID"] as string, update["Name"] as string);
+                    if (!deployed.Contains(key)) deployed.Add(key);
+                    string id = UpdateGuid(PropertyText(update, "UpdateID"));
+                    if (id != null) deployedIds.Add(id);
                 }
             }
-            if (updates.Count == 0) return "No missing updates";
-            if (updates.Count > ShownInRow) log.InfoFormat("MissingUpdates on {0}, all {1}: {2}", host, updates.Count, string.Join(", ", updates));
-            return string.Format("{0} missing: {1}", updates.Count, Summarize(updates));
+
+            // Needed but not deployed, from the device's last software update scan.
+            List<string> needed = new List<string>();
+            string neededNote = null;
+            try
+            {
+                if (CountWMI(Utility.GetWMIScope(host, @"ccm\ScanAgent"), "SELECT * FROM CCM_ScanUpdateSourceHistory") == 0)
+                {
+                    neededNote = "No update scan yet";
+                }
+                else
+                {
+                    ManagementScope store = Utility.GetWMIScope(host, @"ccm\SoftwareUpdates\UpdatesStore");
+                    foreach (ManagementObject update in Utility.SearchWMIToList(store, "SELECT Article, Title, UniqueId FROM CCM_UpdateStatus WHERE Status = 'Missing'"))
+                    {
+                        using (update)
+                        {
+                            string key = UpdateKey(update["Article"] as string, update["Title"] as string);
+                            string id = UpdateGuid(update["UniqueId"] as string);
+                            if (deployed.Contains(key) || (id != null && deployedIds.Contains(id)) || needed.Contains(key)) continue;
+                            needed.Add(key);
+                        }
+                    }
+                }
+            }
+            catch (ManagementException ex) when (IsNoClient(ex))
+            {
+                // A client without the software updates agent has no scan history or update store.
+                neededNote = "No update scan results";
+            }
+
+            if (deployed.Count == 0 && needed.Count == 0 && neededNote == null) return "No missing updates";
+            if (deployed.Count > ShownInRow) log.InfoFormat("MissingUpdates on {0}, deployed and missing, all {1}: {2}", host, deployed.Count, string.Join(", ", deployed));
+            if (needed.Count > ShownInRow) log.InfoFormat("MissingUpdates on {0}, needed and not deployed, all {1}: {2}", host, needed.Count, string.Join(", ", needed));
+            string deployedPart = deployed.Count == 0 ? "Deployed: none missing" : "Deployed, missing: " + Summarize(deployed);
+            string neededPart = neededNote ?? (needed.Count == 0 ? "Nothing else needed" : "Needed, not deployed: " + Summarize(needed));
+            return deployedPart + ". " + neededPart;
+        }
+
+        // How an update is listed: KB number, or the title when it has none.
+        private static string UpdateKey(string article, string title)
+        {
+            return !string.IsNullOrEmpty(article) ? "KB" + article : (title ?? "(unnamed update)");
+        }
+
+        // The update's GUID, lower case, from an ID that may carry a prefix (such as "Site_.../SUM_<guid>").
+        private static string UpdateGuid(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            System.Text.RegularExpressions.MatchCollection guids = System.Text.RegularExpressions.Regex.Matches(id, @"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+            return guids.Count > 0 ? guids[guids.Count - 1].Value.ToLowerInvariant() : null;
+        }
+
+        // A property's text, or null when the class doesn't have it.
+        private static string PropertyText(ManagementBaseObject wmiObject, string name)
+        {
+            foreach (PropertyData property in wmiObject.Properties)
+            {
+                if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) return property.Value as string;
+            }
+            return null;
+        }
+
+        private static int CountWMI(ManagementScope scope, string query)
+        {
+            List<ManagementObject> found = Utility.SearchWMIToList(scope, query);
+            foreach (ManagementObject item in found) item.Dispose();
+            return found.Count;
         }
 
         /// <summary>

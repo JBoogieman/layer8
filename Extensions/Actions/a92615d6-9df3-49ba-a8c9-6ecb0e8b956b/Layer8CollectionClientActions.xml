@@ -215,7 +215,7 @@
       </ActionAssembly>
       <DialogId>CheckPendingRestart</DialogId>
     </ActionDescription>
-    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="List Missing Updates" MnemonicDisplayName="List Missing Updates" Description="List the software updates each device reports as missing, by KB number">
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="List Missing Updates" MnemonicDisplayName="List Missing Updates" Description="List each device's missing software updates by KB number: deployed ones it hasn't installed, and ones its last scan says it needs that nothing deploys">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>
@@ -459,4 +459,4 @@
       </ActionAssembly>
     </ActionDescription>
   </ActionGroups>
-</ActionDescription>
+</ActionDescription>
