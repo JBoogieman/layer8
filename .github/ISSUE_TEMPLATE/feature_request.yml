@@ -1,0 +1,20 @@
+name: Feature request
+description: Something you'd like Layer8 to do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like Layer8 to do?
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where in the console?
+      placeholder: Right-click a device, a collection, a deployment...
+  - type: textarea
+    id: today
+    attributes:
+      label: How do you do it today?
+      description: Another tool, a script, remoting in. It helps to know what it would replace.
