@@ -14,6 +14,7 @@ using System.Windows.Forms;
 using Microsoft.ConfigurationManagement.ManagementProvider.DialogFramework;
 using System.Net;
 using System.Security.AccessControl;
+using System.Security.Principal;
 
 namespace Layer8
 {
@@ -189,6 +190,50 @@ namespace Layer8
             if (instance == null)
                 return new int?();
             return new int?(instance["ContainerNodeID"].IntegerValue);
+        }
+
+        /// <summary>
+        /// Is host the computer the console runs on? WMI there runs with the console's own token, so Windows UAC
+        /// applies: an administrator's token is limited unless the console was started with Run as administrator.
+        /// Every other device is reached over the network, where that limit doesn't apply to domain accounts.
+        /// </summary>
+        public static bool IsThisComputer(string host)
+        {
+            if (string.IsNullOrWhiteSpace(host)) return false;
+            string name = host.Trim();
+            if (name == "." || string.Equals(name, "localhost", StringComparison.OrdinalIgnoreCase)) return true;
+            int dot = name.IndexOf('.');
+            if (dot > 0) name = name.Substring(0, dot);
+            return string.Equals(name, Environment.MachineName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>Is the console running with full administrator rights (Run as administrator, or UAC not limiting it)?</summary>
+        public static bool IsElevated()
+        {
+            using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
+            {
+                return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
+            }
+        }
+
+        /// <summary>Did Windows or WMI refuse access?</summary>
+        public static bool IsAccessDenied(Exception error)
+        {
+            return error is UnauthorizedAccessException
+                || (error is ManagementException wmi && wmi.ErrorCode == ManagementStatus.AccessDenied)
+                || (error is System.Runtime.InteropServices.COMException com && com.ErrorCode == unchecked((int)0x80070005));
+        }
+
+        /// <summary>
+        /// When an access-denied error came from the computer the console runs on, and the console isn't running as
+        /// administrator, the reason and the fix in one short line (it has to fit a result window's Status column);
+        /// otherwise null. Reported by people whose admin account isn't the
+        /// built-in Administrator: a bare "Access denied" there gives no hint that the fix is Run as administrator.
+        /// </summary>
+        public static string LocalAccessDeniedReason(string host, Exception error)
+        {
+            if (!IsAccessDenied(error) || !IsThisComputer(host) || IsElevated()) return null;
+            return "Access denied: on the console's own computer, run the console as administrator";
         }
 
         /// <summary>

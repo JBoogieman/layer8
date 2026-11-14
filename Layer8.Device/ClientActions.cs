@@ -219,8 +219,30 @@ namespace Layer8.Device
             {
                 Exception root = SafeAction.Unwrap(ex);
                 log.Error(string.Format("{0} on {1} failed", actionName, device), root);
-                ShowError(root);
+                if (Utility.LocalAccessDeniedReason(device, root) != null)
+                    ShowMessage("Access denied on " + device + "." + Environment.NewLine + Environment.NewLine +
+                        device + " is the computer the console runs on, and Windows only lets Layer8 into its ConfigMgr client here when the console runs as administrator. Other devices aren't affected." + Environment.NewLine + Environment.NewLine +
+                        "Close the console and open it again with Run as administrator.");
+                else
+                    ShowError(root);
             }
+        }
+
+        // An explanation instead of an exception, for an error with a known cause and fix.
+        private static void ShowMessage(string text)
+        {
+            SendOrPostCallback show = state =>
+            {
+                try
+                {
+                    MessageBox.Show(text, "Layer8", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                catch (Exception ex)
+                {
+                    log.Error("Could not show the message", ex);
+                }
+            };
+            if (uiContext != null) uiContext.Post(show, null); else show(null);
         }
 
         // Single-device actions run on a background thread; show any error back on the console's UI thread.

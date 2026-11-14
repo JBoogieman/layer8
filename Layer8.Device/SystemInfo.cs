@@ -674,6 +674,8 @@ namespace Layer8.Device
             {
                 return host + " didn't answer within " + SystemInfoReader.QueryTimeout.TotalSeconds + " seconds. Windows can be slow to list these; Refresh tries again";
             }
+            string localDenied = Utility.LocalAccessDeniedReason(host, root);
+            if (localDenied != null) return localDenied;
             if (root is UnauthorizedAccessException || (root is ManagementException wmi && wmi.ErrorCode == ManagementStatus.AccessDenied))
             {
                 return "Access denied: the account running the console needs to be a local administrator on " + host;

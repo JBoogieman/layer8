@@ -339,6 +339,11 @@ namespace Layer8.Device
                     status = root.Message;
                     Interlocked.Increment(ref offline);
                 }
+                else if (Utility.LocalAccessDeniedReason(item.Text, root) is string localDenied)
+                {
+                    status = localDenied;
+                    Interlocked.Increment(ref failed);
+                }
                 else if (root is ManagementException wmiError && ClientActions.IsNoClient(wmiError))
                 {
                     // The ConfigMgr WMI namespace or class isn't there: no client, or a broken one.
