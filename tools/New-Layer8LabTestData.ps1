@@ -32,6 +32,10 @@
     "Layer8 Test TS" and "Layer8 Fail TS" are custom task sequences with one Run Command Line step that exits 0
     or 1, made available to the collection: for Task Sequence Export and, later, retrying task sequences.
 
+    With -LongList, also "Layer8 List App 01" to "12", made available like the test app (each writes and detects its
+    own key under HKLM\SOFTWARE\Layer8ListTest), so Install Application's list is long enough to need a scrollbar.
+    That's the case that hung its window up to 0.9.2 (GitHub issue #2).
+
     The fake recovery key has Key ID 4C415938-0000-4000-8000-000000000001 (its first 8 characters spell "LAY8"
     in hex) and the obviously fake password 111111-222222-333333-444444-555555-666666-777777-888888.
 
@@ -44,11 +48,17 @@
 .PARAMETER Computer
     The computer that gets the fake recovery key. Default: this computer.
 
+.PARAMETER LongList
+    Also creates the twelve list apps (see above). -Remove deletes them whether or not it's given.
+
 .PARAMETER Remove
     Deletes the test apps, their deployments and the fake key.
 
 .EXAMPLE
     .\tools\New-Layer8LabTestData.ps1
+
+.EXAMPLE
+    .\tools\New-Layer8LabTestData.ps1 -LongList
 
 .EXAMPLE
     .\tools\New-Layer8LabTestData.ps1 -Remove
@@ -57,6 +67,7 @@
 param(
     [string]$Collection = 'Layer8 Dev',
     [string]$Computer = $env:COMPUTERNAME,
+    [switch]$LongList,
     [switch]$Remove
 )
 
@@ -68,6 +79,12 @@ $brokenPackageName = 'Layer8 Broken Package'
 $baselineName = 'Layer8 Test Baseline'
 $baselineCIs = 'Layer8 Error CI', 'Layer8 Drift CI'
 $taskSequences = [ordered]@{ 'Layer8 Test TS' = 0; 'Layer8 Fail TS' = 1 }
+# Names of different lengths, as a real list has; a couple as long as the driver packages in issue #2.
+$listApps = 1..12 | ForEach-Object {
+    $name = 'Layer8 List App {0:D2}' -f $_
+    if ($_ % 4 -eq 0) { $name += ' - a long name, like Driver Package 2k25 - 0.1.302-1' }
+    $name
+}
 $keyGuid = [guid]'4C415938-0000-4000-8000-000000000001'
 $volumeGuid = [guid]'4C415938-0000-4000-8000-0000000000FF'
 
@@ -207,6 +224,7 @@ try {
         Remove-LabBrokenPackage
         Remove-LabBaseline
         foreach ($name in $taskSequences.Keys) { Remove-LabTaskSequence $name }
+        foreach ($name in $listApps) { Remove-LabApp $name }
     }
     else {
         New-LabApp $appName 'SOFTWARE\Layer8Test' 'cmd.exe /c reg add HKLM\SOFTWARE\Layer8Test /v Installed /d 1 /f /reg:64'
@@ -216,6 +234,12 @@ try {
         New-LabBrokenPackage
         New-LabBaseline
         foreach ($name in $taskSequences.Keys) { New-LabTaskSequence $name $taskSequences[$name] }
+        if ($LongList) {
+            for ($i = 0; $i -lt $listApps.Count; $i++) {
+                $key = 'SOFTWARE\Layer8ListTest\App{0:D2}' -f ($i + 1)
+                New-LabApp $listApps[$i] $key "cmd.exe /c reg add HKLM\$key /v Installed /d 1 /f /reg:64"
+            }
+        }
     }
 }
 finally {
