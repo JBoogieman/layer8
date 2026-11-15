@@ -754,9 +754,11 @@ namespace Layer8.Device
         private Tab Current => tabList[Math.Max(0, tabs.SelectedIndex)];
 
         /// <summary>
-        /// A button on the tab that was added last, top right. Clicking it calls prepare on the UI thread (to ask
-        /// anything it needs); null from prepare cancels. Otherwise what prepare returns runs in the background, its
-        /// result goes in the status line, and the tab is read again.
+        /// A button on the tab that was added last, right of the Filter box (after that tab's earlier buttons). Not
+        /// top right: with the window maximized, Windows 11 takes clicks there as clicks on the title bar's Restore
+        /// and Close buttons. Clicking it calls prepare on the UI thread (to ask anything it needs); null from prepare
+        /// cancels. Otherwise what prepare returns runs in the background, its result goes in the status line, and
+        /// the tab is read again.
         /// </summary>
         internal void AddTabButton(string text, Func<IWin32Window, string, Func<string>> prepare)
         {
@@ -768,8 +770,8 @@ namespace Layer8.Device
         {
             Tab tab = tabList[tabList.Count - 1];
             int width = Math.Max(75, TextRenderer.MeasureText(text, Font).Width + 20);
-            int right = tab.Buttons.Count == 0 ? 888 : tab.Buttons[tab.Buttons.Count - 1].Left - 6;
-            Button button = new Button { Text = text, Size = new Size(width, 23), Location = new Point(right - width, 10), Anchor = AnchorStyles.Top | AnchorStyles.Right, Visible = false };
+            int left = tab.Buttons.Count == 0 ? filter.Right + 12 : tab.Buttons[tab.Buttons.Count - 1].Right + 6;
+            Button button = new Button { Text = text, Size = new Size(width, 23), Location = new Point(left, 10), Anchor = AnchorStyles.Top | AnchorStyles.Left, Visible = false };
             button.Click += (s, e) => Act(tab, text, prepare);
             tab.Buttons.Add(button);
             Controls.Add(button);
