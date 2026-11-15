@@ -1,6 +1,6 @@
 # Layer8 status
 
-Updated November 15, 2026. Version 0.9.0.
+Updated November 15, 2026. Version 0.9.1.
 
 Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (console 5.2509.1038.1000), and the lab has since been upgraded to 2609 (console 5.2609.1050.1000; see the 2609 row): a site server (with a software update point since 0.9.0, synchronizing Windows 11 security and critical updates), the client the console runs on, and a second Windows 11 client reached over the network. The site server stands in for "no ConfigMgr client". Treat anything that changes clients as something to try on a few devices first.
 
@@ -33,6 +33,8 @@ Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (conso
 | List Missing Updates and Install Missing Updates with a real update (0.9.0) | The console's computer one cumulative update behind (November's KB5132061 removed); the second client up to date | Not deployed: "Deployed: none missing. Needed, not deployed: KB5132061". The client's update store lists that KB under two update IDs; it's shown once. Deployed as Available to the two-client collection: "Deployed, missing: KB5132061. Nothing else needed", while the console's All Software Updates still counted it Installed on both (summarized state). Install Missing Updates installed it, downloaded from Microsoft Update (no deployment package); after the restart the computer is on 26300.9974 and its scan shows nothing missing. The up-to-date client: "No missing updates" |
 | Upgrade to ConfigMgr 2609 (0.9.0) | Site and console upgraded in place from 2509 (early update ring); both clients still on the 2509 client (5.00.9141.1011) | The extension survived the console upgrade without re-importing: menus and ribbon groups all there. On the two-client collection: Quick Status, List Missing Updates, Check Pending Restart, Machine Policy Retrieval and Client Info all completed. Layer8 Settings opens; System Information on the second client reads Overview and Updates. Not yet on 2609: the MSI install, and everything else in this table |
 | The unsigned release cab on 2609 (0.9.0) | The v0.9.0 cab from GitHub (same SHA-256 as the build), with Hierarchy approved console extensions can be unsigned turned on | Delete removed the signed test copy from the site. The import wizard's Allow extension to be unsigned box stayed greyed until the hierarchy setting was on; with it on, the cab imported (Signed: No, Unsigned Binaries Allowed: Yes), then approve and enable notifications. Install was greyed because this console already had 0.9.0.0 from the test cab, so Uninstall first, then Install. The console reopened with the menus back and Quick Status worked |
+| Uninstall on System Information's Programs tab (0.9.1) | The second client: a test copy of Layer8.msi (installed for the whole computer), the Teams Meeting Add-in (registered to one local user), Edge (not a Windows Installer program) | Layer8.msi: the question shows the exact msiexec command, then "Uninstalled Layer8 0.9.1.2" and the list refreshed without it. Teams add-in: "was installed for one user (DEV02\labadmin) ... Nothing was run"; before Layer8 checked the registration, msiexec ran and answered 1605. Edge: "wasn't installed by Windows Installer", nothing run |
+| 64-bit programs on the Programs tab and in Find Software (0.9.1) | The second client | The Programs tab listed 7 programs, the 32-bit list read twice; with the 64-bit WMI context it lists 13, the ConfigMgr client and Teams Meeting Add-in among them. Find Software finds the 64-bit Teams Meeting Add-in |
 | Layer8.msi | Install, closing open consoles, uninstall; the published 0.8.0 MSI upgraded by 0.8.1 | Uninstall keeps the console's `XmlStorage\Extensions\Actions` and `Forms` folders. Upgrade: one Programs entry before and after, Layer8.dll 0.8.0.3 to 0.8.1.0, the same 46 menu files. The SYSTEM/3010 path not tested |
 | System Information (0.6.0) | Both clients (Windows 11 26H2 and the console machine) | All seven tabs loaded: Overview (model, BIOS, 26H2 build 26300.9974, uptime, memory, C:, IP, "None" for battery on a VM, client version), 7 programs, 6 updates, 252 services, 87 drivers (about 10 seconds), 1 profile, 3 administrators (two local accounts, LAB\Domain Admins). Filter, sorting both ways with an arrow, and Export (filtered rows, sorted order) work. The 64-bit and 32-bit program classes each returned the full list, so programs are listed once without a 64-bit/32-bit label. Not tried: a device with a battery, an offline device, a query that times out (60 seconds) |
 | Quick Status in columns (0.5.0) | All Systems: both clients, the site server (no client) and the four placeholder records | Signed in, Up, C: free, C: size, IP address and Client columns. Sorted by C: free (26.8 GB, 61 GB, 100 GB, not as text) and by Up both ways, blanks last; ties go by name; one sort arrow at a time. Export writes every column in the sorted order |
@@ -47,6 +49,7 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 
 - Remote Desktop against a client other than the console's own
 - Update deployments: Retry and Copy Failed Devices, Quick Deployment
+- Uninstall: a program that needs a restart to finish (3010), one that fails, one that takes longer than 30 minutes
 - List Missing Updates on a client that has never scanned for updates ("No update scan yet")
 - Task Sequence Export to XML and phased deployments
 - Application uninstall and repair from Install Application (the lab's apps don't offer them), setting the cache size on many devices at once
@@ -74,15 +77,13 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 
 ## Next up
 
-In order:
-
-1. **AD cleanup**: computer accounts in Active Directory that ConfigMgr hasn't heard from, and the reverse.
-2. **Uninstall from System Information**: remove an MSI-installed program from the Programs tab (System Information only reads for now).
+Nothing queued. AD cleanup is parked under Ideas.
 
 ## Ideas
 
 | Idea | Why |
 |---|---|
+| AD cleanup (parked) | Computers in AD that ConfigMgr hasn't heard from, and the reverse: stale in AD, in AD without a client, in ConfigMgr but gone from AD, alive in AD with a silent client. Read-only report first, then disable, move and delete behind confirmations |
 | Entra-backed LAPS passwords (Microsoft Graph) | Windows LAPS can back up to Entra ID instead of AD |
 | Columns for Online Status, BitLocker Status, Defender Status and Client Info | Quick Status's sortable columns (0.5.0) work for any tool |
 | Recent sign-ins in Quick Status | Who was on it, not just who is on it |

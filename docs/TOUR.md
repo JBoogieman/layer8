@@ -26,11 +26,11 @@ Every client action opens a window like these, with one answer per device: done,
 
 ## One device
 
-**System Information**: one window instead of remoting in. It only reads; nothing on the device changes.
+**System Information**: one window instead of remoting in. Reading changes nothing on the device; the one exception is Uninstall on the Programs tab.
 
 ![System Information for a device, Overview tab: model, BIOS, Windows version and build, uptime, last restart, processor, memory, free space, IP address, battery and client version](images/tour/system-information-overview.png)
 
-The other tabs (programs, updates, services, drivers, profiles, local administrators) work the same way: sort, filter as you type, copy or export what's shown.
+The other tabs (programs, updates, services, drivers, profiles, local administrators) work the same way: sort, filter as you type, copy or export what's shown. On Programs, select a Windows Installer program and click **Uninstall...** to remove it quietly; Layer8 asks first, waits for msiexec, and puts the result in the status line.
 
 ![System Information, Programs tab: installed programs with version, publisher and install date](images/tour/system-information-programs.png)
 

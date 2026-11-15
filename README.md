@@ -31,7 +31,7 @@ Organized by where you right-click in the console. [The tour](docs/TOUR.md) has 
 
 ![Lenovo Driver Pack: Lenovo's packs for Windows 11 25H2, one already downloaded and one ticked to download](docs/images/tour/lenovo-driver-pack.png)
 
-**System Information** (a device's Layer8 menu): one window instead of remoting in. Tabs for an overview (model, serial, Windows version and build, uptime, memory, disks, battery health), installed programs, installed updates, services, drivers, user profiles and local administrators. Every tab sorts, filters as you type, and copies or exports what's shown. It only reads; nothing on the device changes.
+**System Information** (a device's Layer8 menu): one window instead of remoting in. Tabs for an overview (model, serial, Windows version and build, uptime, memory, disks, battery health), installed programs, installed updates, services, drivers, user profiles and local administrators. Every tab sorts, filters as you type, and copies or exports what's shown. Reading changes nothing on the device. The one thing that does: **Uninstall** on the Programs tab removes a Windows Installer program quietly (msiexec /x), after asking, and says how it went.
 
 ![System Information for a device, Overview tab](docs/images/tour/system-information-overview.png)
 
