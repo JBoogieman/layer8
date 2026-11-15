@@ -1,6 +1,6 @@
 # Layer8 status
 
-Updated November 15, 2026. Version 0.9.2.
+Updated November 15, 2026. Version 0.9.3.
 
 Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (console 5.2509.1038.1000), and the lab has since been upgraded to 2609 (console 5.2609.1050.1000, both clients on the 2609 client 5.00.9152.1004; see the 2609 rows): a site server (with a software update point since 0.9.0, synchronizing Windows 11 security and critical updates), the client the console runs on, and a second Windows 11 client reached over the network. The site server stands in for "no ConfigMgr client". Treat anything that changes clients as something to try on a few devices first.
 
@@ -18,6 +18,7 @@ Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (conso
 | BitLocker Recovery Key | No keys; a fake key from the lab script | Key ID filter works |
 | Clear Client Cache | Both clients | On the second client it freed the installed test app's content (110 MB) |
 | Install Application | Both clients | Installs an app and reaches Installed; shows a failing app's 1603 (0x643) |
+| Install Application with a long list (0.9.3) | The second client with 15 apps deployed (the lab's test apps and `tools\New-Layer8LabTestData.ps1 -LongList`) | Up to 0.9.2 the window hung the console once its list needed a scrollbar (GitHub issue #2, 14 apps): every resize refit the columns, and a scrollbar coming or going is a resize. Reproduced on the console machine with the reporter's 14 app names at the window's opening size. 0.9.3 opens and settles with 15; maximize, restore and resizing bigger and smaller leave no horizontal scrollbar; selecting the failed app shows its 1603 in the status line; Refresh reloads. A standalone copy of the list, sized 211 ways (12 to 16 apps, two widths, 21 heights), settled every time |
 | Retry Failed Devices, Copy Failed Devices | Required and Available app deployments with the client in Error | Copy groups by error code. Update deployments not tested |
 | Monitoring > Deployments > Delete | A throwaway app deployment | |
 | Redistribute Failed Content (Distribution Status) | A package whose source share doesn't exist | |
