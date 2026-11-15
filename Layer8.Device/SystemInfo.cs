@@ -318,8 +318,10 @@ namespace Layer8.Device
         /// <summary>
         /// Removes a Windows Installer program quietly: msiexec /x {product code} /qn /norestart on the device, started
         /// over WMI as the console user, with a verbose log in the device's Windows\Temp. Waits for msiexec to end, then
-        /// takes the result from the event Windows Installer writes when a removal ends (MsiInstaller 1034, which
-        /// carries the exit code), or else from the end of the log over the admin share. Runs off the UI thread.
+        /// takes the result from the events Windows Installer writes when a removal ends (MsiInstaller 1034, with 1038
+        /// when it needs a restart), or else from the end of the log over the admin share. Runs off the UI thread.
+        /// Windows Installer takes the program off the device's program list as the removal starts (and puts it back
+        /// if the removal fails), so while msiexec runs the list can already leave it out.
         /// </summary>
         internal static string UninstallMsi(string host, InstalledProgram program)
         {
@@ -354,13 +356,17 @@ namespace Layer8.Device
             {
                 if (DateTime.Now > deadline)
                 {
-                    return string.Format("{0}: msiexec is still running on {1} after {2} minutes. Refresh later to see whether it's gone; its log is {3} there",
+                    return string.Format("{0}: msiexec is still running on {1} after {2} minutes. The list may already leave it out: Windows Installer takes a program off it "
+                                         + "as the removal starts, and puts it back if the removal fails. Its log there, {3}, ends with the result",
                                          program.Name, host, UninstallWait.TotalMinutes, logFile);
                 }
                 System.Threading.Thread.Sleep(3000);
             }
 
-            uint? code = RemovalStatus(cimv2, deviceNow, program.Name) ?? LogExitCode(host, logFile);
+            uint? fromEvent = RemovalStatus(cimv2, deviceNow, program.Name);
+            uint? code = fromEvent ?? LogExitCode(host, logFile);
+            log.InfoFormat("Uninstall on {0}: {1} ended with {2}, from {3}", host, program.Name, code.HasValue ? code.Value.ToString(CultureInfo.InvariantCulture) : "no exit code",
+                           fromEvent.HasValue ? "MsiInstaller events 1034 and 1038" : code.HasValue ? "msiexec's log" : "neither event 1034 nor msiexec's log");
             if (!code.HasValue)
             {
                 return string.Format("msiexec ended on {0} without saying how it went. The list below shows whether {1} is gone; the log is {2} there", host, program.Name, logFile);
@@ -460,22 +466,35 @@ namespace Layer8.Device
         }
 
         /// <summary>
-        /// The exit code in the newest MsiInstaller 1034 event ("Windows Installer removed the product") written since
+        /// The exit code from the newest MsiInstaller 1034 event ("Windows Installer removed the product") written since
         /// the uninstall started, preferring one for this product name. Null when there's none: msiexec stopped before
         /// it got that far (another installation in progress, say).
+        ///
+        /// Two things the lab showed. The event's text shows the status as %4 but after the manufacturer (%5), so in
+        /// InsertionStrings the status is [3] and [4] is the manufacturer. And 1034 says 0 for a removal that needs a
+        /// restart, where msiexec itself returns 3010; Windows Installer writes that in a separate event, 1038
+        /// ("requires a system restart"), so 0 plus a 1038 for the same product counts as 3010.
         /// </summary>
         private static uint? RemovalStatus(ManagementScope cimv2, string since, string productName)
         {
             if (string.IsNullOrEmpty(since)) return null;
-            string wql = "SELECT InsertionStrings, TimeWritten FROM Win32_NTLogEvent WHERE Logfile = 'Application' AND SourceName = 'MsiInstaller' AND EventCode = 1034 AND TimeWritten >= '" + since + "'";
+            string wql = "SELECT EventCode, InsertionStrings, TimeWritten FROM Win32_NTLogEvent WHERE Logfile = 'Application' AND SourceName = 'MsiInstaller' "
+                       + "AND (EventCode = 1034 OR EventCode = 1038) AND TimeWritten >= '" + since + "'";
             try
             {
                 List<ManagementObject> events = Query(cimv2, wql);
                 try
                 {
-                    string[][] found = events.Select(e => e["InsertionStrings"] as string[]).Where(s => s != null && s.Length >= 5).ToArray();
-                    string[] match = found.LastOrDefault(s => string.Equals(s[0]?.Trim(), productName, StringComparison.OrdinalIgnoreCase)) ?? found.LastOrDefault();
-                    return match != null && uint.TryParse(match[4]?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out uint code) ? code : (uint?)null;
+                    // Oldest first, so Last is the newest. Same-day WMI times with the device's own offset sort as text.
+                    var found = events.Select(e => new { Code = Convert.ToInt32(e["EventCode"], CultureInfo.InvariantCulture), Strings = e["InsertionStrings"] as string[], Time = e["TimeWritten"] as string ?? "" })
+                                      .Where(e => e.Strings != null && e.Strings.Length > 0)
+                                      .OrderBy(e => e.Time, StringComparer.Ordinal)
+                                      .ToList();
+                    bool IsProduct(string[] strings, string name) => string.Equals(strings[0]?.Trim(), name?.Trim(), StringComparison.OrdinalIgnoreCase);
+                    string[][] removals = found.Where(e => e.Code == 1034 && e.Strings.Length >= 4).Select(e => e.Strings).ToArray();
+                    string[] match = removals.LastOrDefault(s => IsProduct(s, productName)) ?? removals.LastOrDefault();
+                    if (match == null || !uint.TryParse(match[3]?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out uint code)) return null;
+                    return code == 0 && found.Any(e => e.Code == 1038 && IsProduct(e.Strings, match[0])) ? 3010u : code;
                 }
                 finally
                 {
