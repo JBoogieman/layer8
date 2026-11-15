@@ -600,7 +600,7 @@ namespace Layer8.Device
                 string query = string.Format("SELECT DisplayName, Version FROM {0} WHERE DisplayName LIKE '%{1}%'", inventoryClass, WqlLikeText(search));
                 try
                 {
-                    foreach (ManagementObject program in Utility.SearchWMIToList(cimv2, query))
+                    foreach (ManagementObject program in Utility.SearchWMIToList(cimv2, query, Utility.ContextFor(inventoryClass)))
                     {
                         using (program)
                         {
@@ -1052,9 +1052,9 @@ namespace Layer8.Device
         /// <summary>
         /// Starts a program on the device through WMI (Win32_Process.Create), hidden; doesn't wait for it to finish.
         /// On another computer it runs out of sight anyway, but when the device is the one the console runs on,
-        /// Windows would otherwise open its window on the admin's own desktop.
+        /// Windows would otherwise open its window on the admin's own desktop. Returns its process ID.
         /// </summary>
-        private static void StartRemoteProcess(string host, string commandLine, string programName)
+        internal static uint StartRemoteProcess(string host, string commandLine, string programName)
         {
             ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
             using (ManagementClass process = new ManagementClass(cimv2, new ManagementPath("Win32_Process"), null))
@@ -1070,7 +1070,7 @@ namespace Layer8.Device
                     long code = Convert.ToInt64(outParams?["ReturnValue"] ?? 0);
                     switch (code)
                     {
-                        case 0: return;
+                        case 0: return Convert.ToUInt32(outParams["ProcessId"]);
                         case 2: throw new UnauthorizedAccessException("Access denied starting " + programName + " on " + host + ".");
                         case 9: throw new FileNotFoundException(programName + " isn't on " + host + ".");
                         default: throw new InvalidOperationException(string.Format("Starting {0} on {1} failed (Win32_Process.Create returned {2}).", programName, host, code));

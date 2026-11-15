@@ -396,10 +396,36 @@ namespace Layer8
             return SearchWMIToList(scope, new ObjectQuery(query));
         }
 
-        public static List<ManagementObject> SearchWMIToList(ManagementScope scope, ObjectQuery query)
+        /// <summary>
+        /// WMI context that makes the device answer from its 64-bit providers. The ConfigMgr console is a 32-bit
+        /// program, and without this a class read from the registry answers from the 32-bit view: the ConfigMgr
+        /// client's Win32Reg_AddRemovePrograms64 returned the 32-bit program list, so 64-bit programs were missing.
+        /// </summary>
+        public static ManagementNamedValueCollection Provider64Context()
+        {
+            ManagementNamedValueCollection context = new ManagementNamedValueCollection();
+            context.Add("__ProviderArchitecture", 64);
+            context.Add("__RequiredArchitecture", true);
+            return context;
+        }
+
+        /// <summary>The 64-bit context for the client's 64-bit program class, none for anything else.</summary>
+        public static ManagementNamedValueCollection ContextFor(string wmiClass)
+        {
+            return wmiClass.EndsWith("64", StringComparison.Ordinal) ? Provider64Context() : null;
+        }
+
+        public static List<ManagementObject> SearchWMIToList(ManagementScope scope, string query, ManagementNamedValueCollection context)
+        {
+            return SearchWMIToList(scope, new ObjectQuery(query), context);
+        }
+
+        public static List<ManagementObject> SearchWMIToList(ManagementScope scope, ObjectQuery query, ManagementNamedValueCollection context = null)
         {
             List<ManagementObject> list = new List<ManagementObject>();
-            ManagementObjectSearcher searcher = new ManagementObjectSearcher(scope, query);
+            ManagementObjectSearcher searcher = context == null
+                ? new ManagementObjectSearcher(scope, query)
+                : new ManagementObjectSearcher(scope, query, new EnumerationOptions { Context = context });
             using (ManagementObjectCollection queryCollection = searcher.Get())
             {
                 foreach (ManagementObject managmentObject in queryCollection)

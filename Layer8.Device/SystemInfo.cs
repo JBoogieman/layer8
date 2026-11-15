@@ -22,7 +22,8 @@ namespace Layer8.Device
     /// an overview (model, serial, Windows build, uptime, memory, disks, battery), installed programs, installed
     /// updates, services, drivers, user profiles and local administrators. Each tab is read over WMI the first
     /// time it's opened, sorts by any column, filters as you type, and copies or exports what's shown.
-    /// Read-only: nothing on the device changes.
+    /// Reading changes nothing on the device. The one thing that does is Uninstall on the Programs tab, for a
+    /// Windows Installer program, after asking.
     /// </summary>
     public static class SystemInfo
     {
@@ -80,12 +81,40 @@ namespace Layer8.Device
         /// <summary>Said after the row count, for anything the rows don't show (why a tab is empty, say).</summary>
         public string Note { get; set; }
 
+        // What a row stands for, for tab buttons that act on the selected rows. Keyed by the row array itself.
+        private readonly Dictionary<InfoCell[], object> tags = new Dictionary<InfoCell[], object>();
+
         public void Add(params InfoCell[] cells) => Rows.Add(cells);
+
+        /// <summary>A row that stands for something a tab button can act on (a program, say).</summary>
+        public void AddTagged(object tag, params InfoCell[] cells)
+        {
+            Rows.Add(cells);
+            tags[cells] = tag;
+        }
+
+        public object TagOf(InfoCell[] row) => row != null && tags.TryGetValue(row, out object tag) ? tag : null;
+    }
+
+    /// <summary>A program on the Programs tab, for Uninstall.</summary>
+    internal sealed class InstalledProgram
+    {
+        private static readonly Regex ProductCode = new Regex(@"^\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}$", RegexOptions.Compiled);
+
+        public string Name, Version;
+
+        /// <summary>Its key under Windows' Uninstall key. For a Windows Installer program it's the product code.</summary>
+        public string Key;
+
+        public bool IsWindowsInstaller => Key != null && ProductCode.IsMatch(Key);
+
+        public string NameAndVersion => string.IsNullOrEmpty(Version) ? Name : Name + " " + Version;
     }
 
     /// <summary>Reads each tab from the device. Every method runs off the UI thread.</summary>
     internal static class SystemInfoReader
     {
+        private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(typeof(SystemInfoReader));
         private const uint HKEY_LOCAL_MACHINE = 0x80000002;
 
         /// <summary>
@@ -94,9 +123,10 @@ namespace Layer8.Device
         /// </summary>
         internal static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(60);
 
-        internal static List<ManagementObject> Query(ManagementScope scope, string wql)
+        internal static List<ManagementObject> Query(ManagementScope scope, string wql, ManagementNamedValueCollection context = null)
         {
             EnumerationOptions options = new EnumerationOptions { Timeout = QueryTimeout, ReturnImmediately = true, Rewindable = false };
+            if (context != null) options.Context = context;
             using (ManagementObjectSearcher searcher = new ManagementObjectSearcher(scope, new ObjectQuery(wql), options))
             {
                 return searcher.Get().Cast<ManagementObject>().ToList();
@@ -239,9 +269,9 @@ namespace Layer8.Device
         /// <summary>
         /// Installed programs as Programs and Features lists them, from the ConfigMgr client's own inventory
         /// classes (the ones Find Software reads). Win32_Product is never touched: reading it makes Windows
-        /// check, and sometimes repair, every MSI on the device. Asked from the console (a 32-bit program), the
-        /// 64-bit and 32-bit classes came back with the same list in the lab, so each program is listed once and
-        /// without a 64-bit or 32-bit label that couldn't be trusted.
+        /// check, and sometimes repair, every MSI on the device. The 64-bit class is read with the 64-bit WMI
+        /// context: the console is a 32-bit program, and without it the 64-bit class answered with the 32-bit list.
+        /// A program in both lists (same name and version) is listed once.
         /// </summary>
         public static InfoTable Programs(string host)
         {
@@ -253,7 +283,7 @@ namespace Layer8.Device
             {
                 try
                 {
-                    foreach (ManagementObject program in Query(cimv2, "SELECT DisplayName, Version, Publisher, InstallDate FROM " + inventoryClass))
+                    foreach (ManagementObject program in Query(cimv2, "SELECT DisplayName, Version, Publisher, InstallDate, ProdID FROM " + inventoryClass, Utility.ContextFor(inventoryClass)))
                     {
                         using (program)
                         {
@@ -261,7 +291,8 @@ namespace Layer8.Device
                             if (string.IsNullOrEmpty(name)) continue;
                             string version = program["Version"] as string;
                             if (!seen.Add(name + "|" + version)) continue;
-                            table.Add(name, version, program["Publisher"] as string, InfoCell.Date(InstallDate(program["InstallDate"] as string)));
+                            InstalledProgram tag = new InstalledProgram { Name = name, Version = version, Key = (program["ProdID"] as string)?.Trim() };
+                            table.AddTagged(tag, name, version, program["Publisher"] as string, InfoCell.Date(InstallDate(program["InstallDate"] as string)));
                         }
                     }
                     classesRead++;
@@ -279,6 +310,202 @@ namespace Layer8.Device
         private static DateTime? InstallDate(string text)
         {
             return DateTime.TryParseExact(text?.Trim(), "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime date) ? date : (DateTime?)null;
+        }
+
+        /// <summary>How long Uninstall waits for msiexec before saying it's still running.</summary>
+        internal static readonly TimeSpan UninstallWait = TimeSpan.FromMinutes(30);
+
+        /// <summary>
+        /// Removes a Windows Installer program quietly: msiexec /x {product code} /qn /norestart on the device, started
+        /// over WMI as the console user, with a verbose log in the device's Windows\Temp. Waits for msiexec to end, then
+        /// takes the result from the event Windows Installer writes when a removal ends (MsiInstaller 1034, which
+        /// carries the exit code), or else from the end of the log over the admin share. Runs off the UI thread.
+        /// </summary>
+        internal static string UninstallMsi(string host, InstalledProgram program)
+        {
+            // msiexec /x only sees products installed for the whole computer, or for the account running it. In the
+            // lab, the Teams Meeting Add-in was in the machine's program list but registered to one local user, and
+            // msiexec answered 1605 ("only valid for products that are currently installed"). Say why instead.
+            string registeredTo = InstallerRegistration(host, program.Key);
+            if (registeredTo == null)
+            {
+                return string.Format("Windows Installer has no record of {0} on {1}, so its entry in the program list is left over. Nothing was run", program.Name, host);
+            }
+            if (registeredTo != MachineSid)
+            {
+                return string.Format("{0} was installed for one user ({1}), not for the whole computer, so msiexec run as anyone else can't remove it. "
+                                     + "Remove it as that user, or with a deployment that runs as that user. Nothing was run", program.Name, DeviceAccountName(host, registeredTo));
+            }
+
+            ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
+            string windows, deviceNow;
+            using (ManagementObject os = First(cimv2, "SELECT WindowsDirectory, LocalDateTime FROM Win32_OperatingSystem"))
+            {
+                windows = os?["WindowsDirectory"] as string ?? @"C:\Windows";
+                deviceNow = os?["LocalDateTime"] as string;
+            }
+            string logFile = Path.Combine(windows, "Temp", "Layer8-uninstall-" + program.Key.Trim('{', '}') + ".log");
+            string commandLine = string.Format("msiexec.exe /x {0} /qn /norestart /l*v \"{1}\"", program.Key, logFile);
+            log.InfoFormat("Uninstall on {0}: {1} ({2})", host, program.NameAndVersion, commandLine);
+
+            uint processId = ClientActions.StartRemoteProcess(host, commandLine, "msiexec.exe");
+            DateTime deadline = DateTime.Now + UninstallWait;
+            while (ProcessRunning(cimv2, processId))
+            {
+                if (DateTime.Now > deadline)
+                {
+                    return string.Format("{0}: msiexec is still running on {1} after {2} minutes. Refresh later to see whether it's gone; its log is {3} there",
+                                         program.Name, host, UninstallWait.TotalMinutes, logFile);
+                }
+                System.Threading.Thread.Sleep(3000);
+            }
+
+            uint? code = RemovalStatus(cimv2, deviceNow, program.Name) ?? LogExitCode(host, logFile);
+            if (!code.HasValue)
+            {
+                return string.Format("msiexec ended on {0} without saying how it went. The list below shows whether {1} is gone; the log is {2} there", host, program.Name, logFile);
+            }
+            switch (code.Value)
+            {
+                case 0: return "Uninstalled " + program.NameAndVersion;
+                case 1641:
+                case 3010: return "Uninstalled " + program.NameAndVersion + ". " + host + " needs a restart to finish";
+                case 1605: return program.Name + " isn't installed on " + host + " as a Windows Installer product (1605). Refresh to see the current list";
+                default: return string.Format("Uninstalling {0} failed: {1}. The log is {2} on {3}", program.Name, ErrorCodes.FormatAndDescribe(code.Value), logFile, host);
+            }
+        }
+
+        /// <summary>Windows Installer's registrations for the whole computer live under SYSTEM's SID.</summary>
+        private const string MachineSid = "S-1-5-18";
+
+        private const string InstallerUserData = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Installer\UserData";
+
+        /// <summary>
+        /// Whose Windows Installer registration a product has on the device: MachineSid for the whole computer, a
+        /// user's SID for a per-user install, or null when it isn't registered at all. Read with WMI's registry
+        /// provider in the 64-bit view, where Windows Installer keeps them.
+        /// </summary>
+        internal static string InstallerRegistration(string host, string productCode)
+        {
+            string packed = PackedGuid(productCode);
+            using (ManagementClass registry = new ManagementClass(Utility.GetWMIScope(host, "default"), new ManagementPath("StdRegProv"), null))
+            {
+                InvokeMethodOptions options = new InvokeMethodOptions { Context = Utility.Provider64Context() };
+                string[] sids = EnumKey(registry, options, InstallerUserData) ?? new string[0];
+                foreach (string sid in sids.OrderBy(s => s == MachineSid ? 0 : 1))
+                {
+                    if (EnumKey(registry, options, InstallerUserData + "\\" + sid + "\\Products\\" + packed) != null) return sid;
+                }
+                return null;
+            }
+        }
+
+        /// <summary>A key's subkeys (empty when it has none), or null when the key isn't there.</summary>
+        private static string[] EnumKey(ManagementClass registry, InvokeMethodOptions options, string key)
+        {
+            using (ManagementBaseObject input = registry.GetMethodParameters("EnumKey"))
+            {
+                input["hDefKey"] = HKEY_LOCAL_MACHINE;
+                input["sSubKeyName"] = key;
+                using (ManagementBaseObject output = registry.InvokeMethod("EnumKey", input, options))
+                {
+                    if (Convert.ToUInt32(output?["ReturnValue"] ?? 1u) != 0) return null;
+                    return output["sNames"] as string[] ?? new string[0];
+                }
+            }
+        }
+
+        /// <summary>
+        /// A product code the way Windows Installer writes it in the registry: each of the first three parts
+        /// reversed, then each byte of the rest with its two hex digits swapped.
+        /// </summary>
+        internal static string PackedGuid(string productCode)
+        {
+            string hex = productCode.Trim('{', '}').Replace("-", string.Empty).ToUpperInvariant();
+            StringBuilder packed = new StringBuilder(32);
+            packed.Append(new string(hex.Substring(0, 8).Reverse().ToArray()));
+            packed.Append(new string(hex.Substring(8, 4).Reverse().ToArray()));
+            packed.Append(new string(hex.Substring(12, 4).Reverse().ToArray()));
+            for (int i = 16; i < 32; i += 2) packed.Append(hex[i + 1]).Append(hex[i]);
+            return packed.ToString();
+        }
+
+        /// <summary>
+        /// An account's name, asked of the device itself so local accounts resolve too ("DEV02\labuser"). Falls back
+        /// to the console's own lookup, then the SID.
+        /// </summary>
+        private static string DeviceAccountName(string host, string sid)
+        {
+            try
+            {
+                using (ManagementObject account = new ManagementObject(Utility.GetWMIScope(host, "cimv2"), new ManagementPath("Win32_SID.SID='" + sid + "'"), null))
+                {
+                    account.Get();
+                    string name = account["AccountName"] as string, domain = account["ReferencedDomainName"] as string;
+                    if (!string.IsNullOrEmpty(name)) return string.IsNullOrEmpty(domain) ? name : domain + "\\" + name;
+                }
+            }
+            catch (ManagementException)
+            {
+                // Fall through.
+            }
+            return AccountName(sid) ?? sid;
+        }
+
+        private static bool ProcessRunning(ManagementScope cimv2, uint processId)
+        {
+            List<ManagementObject> found = Query(cimv2, "SELECT ProcessId FROM Win32_Process WHERE ProcessId = " + processId);
+            foreach (ManagementObject process in found) process.Dispose();
+            return found.Count > 0;
+        }
+
+        /// <summary>
+        /// The exit code in the newest MsiInstaller 1034 event ("Windows Installer removed the product") written since
+        /// the uninstall started, preferring one for this product name. Null when there's none: msiexec stopped before
+        /// it got that far (another installation in progress, say).
+        /// </summary>
+        private static uint? RemovalStatus(ManagementScope cimv2, string since, string productName)
+        {
+            if (string.IsNullOrEmpty(since)) return null;
+            string wql = "SELECT InsertionStrings, TimeWritten FROM Win32_NTLogEvent WHERE Logfile = 'Application' AND SourceName = 'MsiInstaller' AND EventCode = 1034 AND TimeWritten >= '" + since + "'";
+            try
+            {
+                List<ManagementObject> events = Query(cimv2, wql);
+                try
+                {
+                    string[][] found = events.Select(e => e["InsertionStrings"] as string[]).Where(s => s != null && s.Length >= 5).ToArray();
+                    string[] match = found.LastOrDefault(s => string.Equals(s[0]?.Trim(), productName, StringComparison.OrdinalIgnoreCase)) ?? found.LastOrDefault();
+                    return match != null && uint.TryParse(match[4]?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out uint code) ? code : (uint?)null;
+                }
+                finally
+                {
+                    foreach (ManagementObject e in events) e.Dispose();
+                }
+            }
+            catch (ManagementException ex)
+            {
+                log.Warn("Reading MsiInstaller events failed", ex);
+                return null;
+            }
+        }
+
+        private static readonly Regex MainEngineReturn = new Regex(@"MainEngineThread is returning (\d+)", RegexOptions.Compiled);
+
+        /// <summary>msiexec's exit code from the last lines of its verbose log, read over the admin share. Null when the share can't be read.</summary>
+        private static uint? LogExitCode(string host, string logFile)
+        {
+            try
+            {
+                string unc = @"\\" + host + @"\" + logFile.Substring(0, 1) + "$" + logFile.Substring(2);
+                // Verbose MSI logs are UTF-16 with a byte order mark, which ReadAllLines picks up.
+                Match last = MainEngineReturn.Matches(string.Join("\n", File.ReadAllLines(unc).Reverse().Take(200))).Cast<Match>().FirstOrDefault();
+                return last != null && uint.TryParse(last.Groups[1].Value, out uint code) ? code : (uint?)null;
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                log.Warn("Reading " + logFile + " on " + host + " failed", ex);
+                return null;
+            }
         }
 
         /// <summary>
@@ -479,6 +706,7 @@ namespace Layer8.Device
         {
             AddTab("Overview", "item", SystemInfoReader.Overview);
             AddTab("Programs", "program", SystemInfoReader.Programs);
+            AddTabButton("Uninstall...", PrepareUninstall);
             AddTab("Updates", "update", SystemInfoReader.Updates);
             AddTab("Services", "service", SystemInfoReader.Services);
             AddTab("Drivers", "driver", SystemInfoReader.Drivers);
@@ -532,6 +760,12 @@ namespace Layer8.Device
         /// </summary>
         internal void AddTabButton(string text, Func<IWin32Window, string, Func<string>> prepare)
         {
+            AddTabButton(text, (owner, device, selected) => prepare(owner, device));
+        }
+
+        /// <summary>The same, with prepare also given what the selected rows stand for (their tags), in list order.</summary>
+        internal void AddTabButton(string text, Func<IWin32Window, string, IList<object>, Func<string>> prepare)
+        {
             Tab tab = tabList[tabList.Count - 1];
             int width = Math.Max(75, TextRenderer.MeasureText(text, Font).Width + 20);
             int right = tab.Buttons.Count == 0 ? 888 : tab.Buttons[tab.Buttons.Count - 1].Left - 6;
@@ -541,16 +775,46 @@ namespace Layer8.Device
             Controls.Add(button);
         }
 
+        /// <summary>
+        /// Uninstall on the Programs tab: one selected program, and only one Windows Installer installed. Other
+        /// programs come with their vendor's own uninstaller, each with its own switches for running quietly (if any),
+        /// so there's nothing Layer8 could run for them that would be safe to guess.
+        /// </summary>
+        private static Func<string> PrepareUninstall(IWin32Window owner, string host, IList<object> selected)
+        {
+            List<InstalledProgram> programs = selected.OfType<InstalledProgram>().ToList();
+            if (programs.Count != 1)
+            {
+                MessageBox.Show(owner, "Select the one program to uninstall.", "Uninstall", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return null;
+            }
+            InstalledProgram program = programs[0];
+            if (!program.IsWindowsInstaller)
+            {
+                MessageBox.Show(owner, program.Name + " wasn't installed by Windows Installer, so Layer8 can't remove it quietly. Programs like it come with their own uninstaller, and each has its own switches.\n\n"
+                                + "Use the vendor's silent uninstall command, through a ConfigMgr application or script.", "Uninstall", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return null;
+            }
+            string question = string.Format("Uninstall {0} from {1}?\n\nLayer8 runs this on {1}, as you, and waits up to {2} minutes for it:\n\nmsiexec /x {3} /qn /norestart\n\n"
+                                            + "Nobody signed in on {1} is asked. If it needs a restart to finish, {1} doesn't restart by itself.",
+                                            program.NameAndVersion, host, SystemInfoReader.UninstallWait.TotalMinutes, program.Key);
+            return MessageBox.Show(owner, question, "Uninstall", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes
+                ? (Func<string>)(() => SystemInfoReader.UninstallMsi(host, program))
+                : null;
+        }
+
         private void ShowButtons()
         {
             foreach (Tab tab in tabList)
                 foreach (Button button in tab.Buttons) button.Visible = tab == Current;
         }
 
-        private void Act(Tab tab, string text, Func<IWin32Window, string, Func<string>> prepare)
+        private void Act(Tab tab, string text, Func<IWin32Window, string, IList<object>, Func<string>> prepare)
         {
             if (acting || tab.Loading) return;
-            Func<string> run = prepare(this, host);
+            List<object> selected = tab.Table == null ? new List<object>() : tab.List.SelectedItems.Cast<ListViewItem>()
+                .Select(item => tab.Table.TagOf(item.Tag as InfoCell[])).Where(t => t != null).ToList();
+            Func<string> run = prepare(this, host, selected);
             if (run == null) return;
             string name = text.TrimEnd('.');
             acting = true;
@@ -699,7 +963,7 @@ namespace Layer8.Device
             foreach (InfoCell[] row in tab.Table.Rows)
             {
                 if (text.Length > 0 && !row.Any(cell => cell.Text.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0)) continue;
-                ListViewItem item = new ListViewItem(row.Length > 0 ? row[0].Text : string.Empty);
+                ListViewItem item = new ListViewItem(row.Length > 0 ? row[0].Text : string.Empty) { Tag = row };
                 item.SubItems[0].Tag = row.Length > 0 ? row[0].Key : null;
                 for (int i = 1; i < columns.Length; i++)
                 {
