@@ -237,6 +237,7 @@ namespace Layer8.Device
             private readonly Button refresh;
             private readonly Button uninstall;
             private readonly Button repair;
+            private bool fitting, fitQueued;
 
             public ApplicationsDialog(string host)
             {
@@ -283,7 +284,7 @@ namespace Layer8.Device
                     else if (app?.Error != null) status.Text = app.Name + " last failed with error " + app.Error;
                 };
                 list.DoubleClick += (s, e) => InstallSelected();
-                list.Resize += (s, e) => FitColumns();
+                list.Resize += (s, e) => QueueFitStatusColumn();
 
                 status = new Label
                 {
@@ -352,27 +353,69 @@ namespace Layer8.Device
                     if (!app.IsMachineTarget) item.ForeColor = SystemColors.GrayText;
                     list.Items.Add(item);
                 }
-                FitColumns();
+                SizeColumns();
                 list.EndUpdate();
                 status.Text = apps.Count == 0 ? "No applications are deployed to " + host + "." : string.Format("{0} application{1} deployed to {2}.", apps.Count, apps.Count == 1 ? "" : "s", host);
             }
 
             /// <summary>
-            /// Every column fits its text (Application up to a limit) and Status takes any width left over, so as much
-            /// of the error as possible shows. Selecting the app shows the whole error in the status line.
+            /// After a load: the first three columns fit their text (Application up to a limit), once, and Status takes
+            /// the width left (see FitStatusColumn). Selecting an app with an error shows the whole error in the status line.
             /// </summary>
-            private void FitColumns()
+            private void SizeColumns()
             {
                 if (list.Columns.Count < 4) return;
                 if (list.Items.Count > 0)
                 {
-                    for (int i = 0; i < 4; i++) list.AutoResizeColumn(i, ColumnHeaderAutoResizeStyle.ColumnContent);
+                    for (int i = 0; i < 3; i++) list.AutoResizeColumn(i, ColumnHeaderAutoResizeStyle.ColumnContent);
                     list.Columns[0].Width = Math.Min(Math.Max(list.Columns[0].Width, LogicalToDeviceUnits(120)), LogicalToDeviceUnits(260));
                     list.Columns[1].Width = Math.Max(list.Columns[1].Width, LogicalToDeviceUnits(55));
                     list.Columns[2].Width = Math.Max(list.Columns[2].Width, LogicalToDeviceUnits(90));
                 }
-                int spare = list.ClientSize.Width - list.Columns[0].Width - list.Columns[1].Width - list.Columns[2].Width;
-                if (spare > list.Columns[3].Width) list.Columns[3].Width = spare;
+                FitStatusColumn();
+            }
+
+            /// <summary>
+            /// Fits Status once the layout in progress is done, not in the middle of it. Restoring from maximized resizes
+            /// the list more than once in a row, and a fit run partway through left Status sized for the maximized width.
+            /// Resizes that come together share one fit; one caused by the fit itself queues a fit that changes nothing.
+            /// </summary>
+            private void QueueFitStatusColumn()
+            {
+                if (fitQueued || !IsHandleCreated || IsDisposed) return;
+                fitQueued = true;
+                BeginInvoke(new Action(() =>
+                {
+                    fitQueued = false;
+                    if (!IsDisposed) FitStatusColumn();
+                }));
+            }
+
+            /// <summary>
+            /// Status gets what the other columns leave of the list's width inside its border, less room for a vertical
+            /// scrollbar and a pixel. That comes from the list's outer width, which no scrollbar coming or going
+            /// changes. (Its client width and whether a scrollbar shows can be read out of step halfway through a
+            /// restore from maximized, which left Status a scrollbar's width too wide.) Up to 0.9.2 every
+            /// Resize resized all four columns to their text and then stretched Status to the list's current width; a
+            /// scrollbar appearing or disappearing is itself a Resize and changes that width, so with enough apps to
+            /// need a scrollbar the fitting kept setting itself off and the console hung (issue #2, 14 apps).
+            /// </summary>
+            private void FitStatusColumn()
+            {
+                if (fitting || list.Columns.Count < 4) return;
+                fitting = true;
+                try
+                {
+                    int scrollBar = SystemInformation.VerticalScrollBarWidth;
+                    int full = list.Width - 2 * SystemInformation.Border3DSize.Width;
+                    int others = list.Columns[0].Width + list.Columns[1].Width + list.Columns[2].Width;
+                    int width = Math.Max(LogicalToDeviceUnits(60), full - scrollBar - 1 - others);
+                    if (list.Columns[3].Width != width) list.Columns[3].Width = width;
+                }
+                finally
+                {
+                    fitting = false;
+                }
             }
 
             private void EnforceSelected(string method)
