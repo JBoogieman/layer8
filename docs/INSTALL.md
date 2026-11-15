@@ -86,7 +86,7 @@ Two details we found by testing, which Microsoft doesn't document:
 
 **1. Get the cab.** Download `Layer8-<version>.cab` from [Releases](https://github.com/JBoogieman/layer8/releases), or build it (see [Building the packages](#building-the-packages)). The released cab is unsigned and has every feature. To sign it with your own certificate, leave features out, or both, run `Customize-Layer8Cab.ps1` from the same release first (see the table above and [Leaving features out](#leaving-features-out)).
 
-**2. Import it.** In the console: **Administration > Updates and Servicing > Console Extensions**, then **Import Console Extension** on the ribbon. Browse to the cab. Tick **Allow extension to be unsigned** only for an unsigned cab. Click **Next** twice.
+**2. Import it.** In the console: **Administration > Updates and Servicing > Console Extensions**, then **Import Console Extension** on the ribbon. Browse to the cab. Tick **Allow extension to be unsigned** only for an unsigned cab. That box stays greyed out until **Hierarchy approved console extensions can be unsigned** is on (see the table above), so turn the setting on before you open the wizard. Click **Next** twice.
 
 ![Import Custom Console Extension Wizard, Select page](images/install-import-select.png)
 
@@ -103,11 +103,13 @@ The last page should say *"Custom extension was imported."*
 
 Both are Microsoft's description. In the lab, notifications were enabled and Layer8 was installed with the Install button (step 5); neither prompt has been watched on a second console yet.
 
-Click **Refresh**. The row should read **Approved: Yes**, **Enabled: Yes**, and for a signed cab **Signed: Yes** with **Unsigned Binaries Allowed: No**.
+Click **Refresh**. The row should read **Approved: Yes**, **Enabled: Yes**, and for a signed cab **Signed: Yes** with **Unsigned Binaries Allowed: No**. The unsigned release cab reads **Signed: No** with **Unsigned Binaries Allowed: Yes**.
 
 ![Console Extensions node with Layer8 approved and enabled](images/install-console-extensions.png)
 
 **5. Install it on this console.** Close any other console windows first. Still on Layer8, click **Install** (Local Extension group on the ribbon, or right-click Layer8), then **OK**. The console closes, and the extension installer runs. When it shows *"Update complete for extension 1 of 1"*, click **Close**, and the console reopens with Layer8 in it.
+
+If **Install** is greyed out and **Uninstall** isn't, this console already has this version of Layer8, for example from a test build with the same version number. Click **Uninstall**, let the console reopen, then **Install**.
 
 If another console window is still open, the installer stops with *"The feature update task requires that you close the Configuration Manager console"*. Close that window and click **Retry**.
 
@@ -139,7 +141,7 @@ Import the newer cab (same steps). It replaces the older version in the Console 
 | Every console, but keep it in the list for later | **Revoke Approval**. Consoles uninstall it the next time they start. |
 | Every console, and the list | **Delete**. Consoles uninstall it the next time they start. |
 
-The last two are Microsoft's description of those buttons; only Uninstall has been tried in the Layer8 lab.
+The last two are Microsoft's description of those buttons. In the Layer8 lab, Uninstall and Delete have both been tried; consoles uninstalling it by themselves after a Delete hasn't been watched yet.
 
 ---
 
