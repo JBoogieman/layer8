@@ -1,6 +1,6 @@
 # Layer8 status
 
-Updated November 15, 2026. Version 0.9.1.
+Updated November 15, 2026. Version 0.9.2.
 
 Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (console 5.2509.1038.1000), and the lab has since been upgraded to 2609 (console 5.2609.1050.1000, both clients on the 2609 client 5.00.9152.1004; see the 2609 rows): a site server (with a software update point since 0.9.0, synchronizing Windows 11 security and critical updates), the client the console runs on, and a second Windows 11 client reached over the network. The site server stands in for "no ConfigMgr client". Treat anything that changes clients as something to try on a few devices first.
 
@@ -37,6 +37,7 @@ Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (conso
 | Uninstall on System Information's Programs tab (0.9.1) | The second client: a test copy of Layer8.msi (installed for the whole computer), the Teams Meeting Add-in (registered to one local user), Edge (not a Windows Installer program) | Layer8.msi: the question shows the exact msiexec command, then "Uninstalled Layer8 0.9.1.2" and the list refreshed without it. Teams add-in: "was installed for one user (DEV02\labadmin) ... Nothing was run"; before Layer8 checked the registration, msiexec ran and answered 1605. Edge: "wasn't installed by Windows Installer", nothing run |
 | 64-bit programs on the Programs tab and in Find Software (0.9.1) | The second client | The Programs tab listed 7 programs, the 32-bit list read twice; with the 64-bit WMI context it lists 13, the ConfigMgr client and Teams Meeting Add-in among them. Find Software finds the 64-bit Teams Meeting Add-in |
 | Buttons on a tab with the window maximized (0.9.1) | The second client | Uninstall had sat top right, under the title bar's buttons, and maximized on Windows 11 a click there went to them instead: the Close tooltip, or the Snap Layouts panel for Restore, and Uninstall never opened. Next to the Filter box it answers maximized (Edge: "wasn't installed by Windows Installer"). Windows Security's Quick Scan, Resume and Suspend moved with it, clear of the title bar maximized |
+| Uninstall results (0.9.2) | The second client, with three test MSIs whose uninstall asks for a restart, fails, or runs 33 minutes | Restart: "Uninstalled Layer8 Test - Restart 1.0.0. DEV02 needs a restart to finish". Fail: "failed: 1603 (0x643): Fatal error during installation", and it stays in the list. Slow: at 30 minutes, "msiexec is still running"; the list read then already left it out, because Windows Installer takes a program off the list as the removal starts, before the slow part, and 0.9.2's message says so (that wording hasn't been through a 30-minute run). Found on the way: Layer8 read the event's manufacturer as the exit code (1034's status is the fourth insertion string, the manufacturer the fifth), so every result before 0.9.2 came from msiexec's log over the admin share; and 1034 says 0 for a removal that needs a restart, which Windows records in a separate 1038. With 0.9.2, Layer8's log shows the restart and failure results came from the events |
 | Layer8.msi | Install, closing open consoles, uninstall; the published 0.8.0 MSI upgraded by 0.8.1 | Uninstall keeps the console's `XmlStorage\Extensions\Actions` and `Forms` folders. Upgrade: one Programs entry before and after, Layer8.dll 0.8.0.3 to 0.8.1.0, the same 46 menu files. The SYSTEM/3010 path not tested |
 | System Information (0.6.0) | Both clients (Windows 11 26H2 and the console machine) | All seven tabs loaded: Overview (model, BIOS, 26H2 build 26300.9974, uptime, memory, C:, IP, "None" for battery on a VM, client version), 7 programs, 6 updates, 252 services, 87 drivers (about 10 seconds), 1 profile, 3 administrators (two local accounts, LAB\Domain Admins). Filter, sorting both ways with an arrow, and Export (filtered rows, sorted order) work. Programs are listed once, without a 64-bit/32-bit label. (The 64-bit class seemed to return the full list too; 0.9.1 found it was answering with the 32-bit one, see the 64-bit row.) Not tried: a device with a battery, an offline device, a query that times out (60 seconds) |
 | Quick Status in columns (0.5.0) | All Systems: both clients, the site server (no client) and the four placeholder records | Signed in, Up, C: free, C: size, IP address and Client columns. Sorted by C: free (26.8 GB, 61 GB, 100 GB, not as text) and by Up both ways, blanks last; ties go by name; one sort arrow at a time. Export writes every column in the sorted order |
@@ -51,7 +52,6 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 
 - Remote Desktop against a client other than the console's own
 - Update deployments: Retry and Copy Failed Devices, Quick Deployment
-- Uninstall: a program that needs a restart to finish (3010), one that fails, one that takes longer than 30 minutes
 - List Missing Updates on a client that has never scanned for updates ("No update scan yet")
 - Task Sequence Export to XML and phased deployments
 - Application uninstall and repair from Install Application (the lab's apps don't offer them), setting the cache size on many devices at once
@@ -75,6 +75,7 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 - **Times from ConfigMgr** can come with a "+000" that isn't UTC. Install Application's deadlines are fixed; Check Pending Restart's restart deadline goes through the same kind of conversion and hasn't been checked against Software Center.
 - **Collection Evaluation Statistics** can take a while to read colleval.log from the site server, and OK doesn't close the window until it finishes (the X does).
 - **Skipped records** share the offline color in the progress bar; the counts under it list them as Skipped.
+- **Long results in System Information's status line** are cut off at the window's width. Hover over the line to see all of it (an uninstall's log path is at the end).
 - **Large retries** keep every device record in memory until the window closes. Fine at lab scale; not yet tried on a 1,000-device deployment.
 
 ## Next up
