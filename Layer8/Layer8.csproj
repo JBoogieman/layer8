@@ -109,6 +109,9 @@
     <Compile Include="Layer8Log.cs" />
     <Compile Include="Layer8Settings.cs" />
     <Compile Include="SafeAction.cs" />
+    <Compile Include="HealthDashboardOptionsControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
     <Compile Include="OptionsControl.cs">
       <SubType>UserControl</SubType>
     </Compile>

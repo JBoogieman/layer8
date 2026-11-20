@@ -106,6 +106,6 @@ Software Library > Driver Packages, **Layer8** on the ribbon: the Driver Package
 
 ## Settings
 
-**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, when to ask before a big run, the quick check that each device answers, and the log level. They're saved for your Windows account.
+**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, when to ask before a big run, the quick check that each device answers, and the log level. A second page sets the Health Dashboard's low disk and long uptime tiles. They're saved for your Windows account.
 
 ![Layer8 Settings: 32 devices at once, ask before more than 100, check that each device answers within 2 seconds, log level Info](images/tour/layer8-settings.png)

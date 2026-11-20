@@ -45,7 +45,7 @@ Organized by where you right-click in the console. [The tour](docs/TOUR.md) has 
 
 **Error Lookup** (on the Layer8 menus): paste any error code (`0x87D00324`, `-2016410844`, `1603`) and see what it means, from ConfigMgr's own error catalog and Windows'. Copy Failed Devices and Install Application show the meaning next to every code too.
 
-**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, a quick offline check before connecting, and the log level.
+**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, a quick offline check before connecting, the log level, and the Health Dashboard's low disk and long uptime thresholds.
 
 Don't want some of it? `Customize-Layer8Cab.ps1 -Exclude LAPS, BitLockerKeys, RemoteControl` takes those menu items out of the released cab entirely, no building needed ([how](docs/INSTALL.md#leaving-features-out)).
 
@@ -94,11 +94,7 @@ reg add HKCU\SOFTWARE\Layer8 /v LogLevel /d Debug /f
 
 Use `Debug`, `Info` (the default), `Warn` or `Error`.
 
-The Health Dashboard's two thresholds live in the same key until they get a place in Layer8 Settings: `LowDiskGB` (default 10) and `LongUptimeDays` (default 14), for example:
-
-```
-reg add HKCU\SOFTWARE\Layer8 /v LowDiskGB /t REG_DWORD /d 20 /f
-```
+The Health Dashboard's two thresholds, low disk (10 GB) and long uptime (14 days), are on the settings' Health Dashboard page, and in the same key as `LowDiskGB` and `LongUptimeDays`.
 
 The log rolls over to `Layer8.lo_` at 2 MB, the same way ConfigMgr's own logs do.
 
