@@ -33,12 +33,17 @@ namespace Layer8
         public const int MinLongUptimeDays = 1;
         public const int MaxLongUptimeDays = 365;
 
+        public const int DefaultNotReportingDays = 7;
+        public const int MinNotReportingDays = 1;
+        public const int MaxNotReportingDays = 365;
+
         private const string DevicesAtOnceValue = "DevicesAtOnce";
         private const string ConfirmAboveValue = "ConfirmAbove";
         private const string CheckReachableValue = "CheckReachable";
         private const string ReachableSecondsValue = "ReachableSeconds";
         private const string LowDiskGBValue = "LowDiskGB";
         private const string LongUptimeDaysValue = "LongUptimeDays";
+        private const string NotReportingDaysValue = "NotReportingDays";
 
         /// <summary>How many devices an action on many devices contacts at the same time.</summary>
         public static int DevicesAtOnce
@@ -87,6 +92,16 @@ namespace Layer8
         {
             get { return ReadInt(LongUptimeDaysValue, DefaultLongUptimeDays, MinLongUptimeDays, MaxLongUptimeDays); }
             set { WriteInt(LongUptimeDaysValue, Clamp(value, MinLongUptimeDays, MaxLongUptimeDays)); }
+        }
+
+        /// <summary>
+        /// Health Dashboard: a client the site hasn't had a policy request from in this many days counts as not
+        /// reporting. Seven matches ConfigMgr's own default for client activity.
+        /// </summary>
+        public static int NotReportingDays
+        {
+            get { return ReadInt(NotReportingDaysValue, DefaultNotReportingDays, MinNotReportingDays, MaxNotReportingDays); }
+            set { WriteInt(NotReportingDaysValue, Clamp(value, MinNotReportingDays, MaxNotReportingDays)); }
         }
 
         /// <summary>The log level. Layer8Log reads the same value and picks a change up within a few seconds.</summary>

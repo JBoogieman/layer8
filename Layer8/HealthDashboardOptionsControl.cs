@@ -7,7 +7,8 @@ using System.Windows.Forms;
 namespace Layer8
 {
     /// <summary>
-    /// The Health Dashboard page of Layer8 Settings: when a device counts as low on disk, and as up too long. Saved
+    /// The Health Dashboard page of Layer8 Settings: when a device counts as low on disk, as up too long, and as not
+    /// reporting to the site. Saved
     /// per Windows user like the General page (see Layer8Settings); a dashboard opened after a change uses the new
     /// values. Laid out in code to match the General page: the same column for the number boxes, the same note at
     /// the bottom.
@@ -18,6 +19,7 @@ namespace Layer8
 
         private readonly NumericUpDown numericLowDiskGB;
         private readonly NumericUpDown numericLongUptimeDays;
+        private readonly NumericUpDown numericNotReportingDays;
 
         // Set while the page fills its controls, so filling them doesn't count as a change.
         private bool loading;
@@ -34,7 +36,7 @@ namespace Layer8
             {
                 Text = "Tiles",
                 Location = new Point(10, 10),
-                Size = new Size(360, 120),
+                Size = new Size(360, 150),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 TabIndex = 0,
             };
@@ -42,20 +44,22 @@ namespace Layer8
             numericLowDiskGB = new NumericUpDown { Location = new Point(270, 24), Size = new Size(70, 20), TabIndex = 1 };
             Label labelLongUptime = new Label { Text = "Long uptime: up this many days or more:", AutoSize = true, Location = new Point(12, 56), TabIndex = 2 };
             numericLongUptimeDays = new NumericUpDown { Location = new Point(270, 54), Size = new Size(70, 20), TabIndex = 3 };
+            Label labelNotReporting = new Label { Text = "Not reporting: no policy request in (days):", AutoSize = true, Location = new Point(12, 86), TabIndex = 4 };
+            numericNotReportingDays = new NumericUpDown { Location = new Point(270, 84), Size = new Size(70, 20), TabIndex = 5 };
             Label labelTilesHelp = new Label
             {
                 Text = "The other tiles follow Windows and ConfigMgr themselves. Hover over a tile in the dashboard for its rule.",
-                Location = new Point(12, 84),
+                Location = new Point(12, 114),
                 Size = new Size(336, 28),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-                TabIndex = 4,
+                TabIndex = 6,
             };
-            tiles.Controls.AddRange(new Control[] { labelLowDisk, numericLowDiskGB, labelLongUptime, numericLongUptimeDays, labelTilesHelp });
+            tiles.Controls.AddRange(new Control[] { labelLowDisk, numericLowDiskGB, labelLongUptime, numericLongUptimeDays, labelNotReporting, numericNotReportingDays, labelTilesHelp });
 
             Label labelSavedFor = new Label
             {
                 Text = "Saved for your Windows account. A dashboard opened after a change uses the new values.",
-                Location = new Point(10, 142),
+                Location = new Point(10, 172),
                 Size = new Size(360, 30),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 TabIndex = 1,
@@ -65,6 +69,7 @@ namespace Layer8
             Controls.Add(labelSavedFor);
             numericLowDiskGB.ValueChanged += Setting_Changed;
             numericLongUptimeDays.ValueChanged += Setting_Changed;
+            numericNotReportingDays.ValueChanged += Setting_Changed;
             ResumeLayout(false);
 
             Title = "Health Dashboard";
@@ -84,6 +89,10 @@ namespace Layer8
             numericLongUptimeDays.Maximum = Layer8Settings.MaxLongUptimeDays;
             numericLongUptimeDays.Value = Layer8Settings.LongUptimeDays;
 
+            numericNotReportingDays.Minimum = Layer8Settings.MinNotReportingDays;
+            numericNotReportingDays.Maximum = Layer8Settings.MaxNotReportingDays;
+            numericNotReportingDays.Value = Layer8Settings.NotReportingDays;
+
             loading = false;
 
             Dirty = false;
@@ -97,6 +106,7 @@ namespace Layer8
             {
                 Layer8Settings.LowDiskGB = (int)numericLowDiskGB.Value;
                 Layer8Settings.LongUptimeDays = (int)numericLongUptimeDays.Value;
+                Layer8Settings.NotReportingDays = (int)numericNotReportingDays.Value;
             }
             catch (Exception ex) when (ex is UnauthorizedAccessException || ex is System.Security.SecurityException || ex is IOException)
             {
@@ -107,8 +117,8 @@ namespace Layer8
                 return false;
             }
 
-            log.InfoFormat("Health Dashboard settings saved: low disk under {0} GB; long uptime {1} days or more",
-                (int)numericLowDiskGB.Value, (int)numericLongUptimeDays.Value);
+            log.InfoFormat("Health Dashboard settings saved: low disk under {0} GB; long uptime {1} days or more; not reporting after {2} days",
+                (int)numericLowDiskGB.Value, (int)numericLongUptimeDays.Value, (int)numericNotReportingDays.Value);
 
             Dirty = false;
 

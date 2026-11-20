@@ -117,8 +117,28 @@ namespace Layer8.Device
             /// <summary>Changed on the window's thread only, like everything the grid shows.</summary>
             public RowState State;
             public HealthReport Report;
+            /// <summary>What the site last heard from it, read alongside the device's own check; null until then.</summary>
+            public SiteContact Site;
 
-            public bool Has(HealthIssue issue) => Report != null && Report.Issues.Contains(issue);
+            public bool Has(HealthIssue issue) => issue == HealthIssue.NotReporting
+                ? Site != null && Site.NotReporting
+                : Report != null && Report.Issues.Contains(issue);
+
+            /// <summary>
+            /// What's wrong with it, in the tiles' order: that it didn't answer or couldn't be checked, what its check
+            /// found, and what the site says. The Issues column, the tiles and the row's tooltip all read this.
+            /// </summary>
+            public List<string> IssueNames()
+            {
+                List<string> names = new List<string>();
+                if (State == RowState.Offline) names.Add("Offline");
+                else if (State == RowState.Failed) names.Add(HealthCheck.Name(HealthIssue.CouldNotCheck));
+                foreach (HealthIssue issue in Enum.GetValues(typeof(HealthIssue)))
+                {
+                    if (Has(issue)) names.Add(issue == HealthIssue.CouldNotCheck ? Report.UnreadText : HealthCheck.Name(issue));
+                }
+                return names;
+            }
         }
 
         /// <summary>A client action the dashboard runs on selected devices, named as the console's Client Actions menu names it.</summary>
@@ -187,10 +207,11 @@ namespace Layer8.Device
             },
         };
 
-        private static readonly string[] Columns = { "Device", "Status", "Issues", "Signed in", "Up", "C: free", "Restart", "BitLocker", "Defender", "Updates missing", "Client" };
-        private static readonly int[] StartWidths = { 120, 90, 220, 130, 60, 110, 110, 90, 90, 130, 110 };
+        private static readonly string[] Columns = { "Device", "Status", "Issues", "Signed in", "Up", "C: free", "Restart", "BitLocker", "Defender", "Updates missing", "Client", "Policy request" };
+        private static readonly int[] StartWidths = { 120, 90, 220, 130, 60, 110, 110, 90, 90, 130, 110, 100 };
         private const int StatusColumn = 1;
         private const int IssuesColumn = 2;
+        private const int PolicyColumn = 11;
 
         private readonly ActionDescription action;
         private readonly ConnectionManagerBase connection;
@@ -200,6 +221,9 @@ namespace Layer8.Device
         // Read once, so the tiles' rules and the checks agree for the whole window.
         private readonly int lowDiskGB = Layer8Settings.LowDiskGB;
         private readonly int longUptimeDays = Layer8Settings.LongUptimeDays;
+        private readonly int notReportingDays = Layer8Settings.NotReportingDays;
+        // Why the site's side couldn't be read this pass, for the status line; null when it could.
+        private string siteNote;
 
         private readonly ToolTip tips = new ToolTip();
         private readonly FlowLayoutPanel tilePanel;
@@ -254,7 +278,7 @@ namespace Layer8.Device
             allTile = AddTile("Devices", "Every device in " + scope + ". Click to show them all", Tone.Neutral, row => true);
             allTile.Selected = true;
             AddTile("Healthy", "Checked, with none of the issues on the other tiles", Tone.Good,
-                row => row.State == RowState.Checked && row.Report.Issues.Count == 0);
+                row => row.State == RowState.Checked && row.IssueNames().Count == 0);
             AddTile("Offline", "Didn't answer: ports 135 and 445 closed, or WMI's RPC server unreachable", Tone.Muted,
                 row => row.State == RowState.Offline);
             AddIssueTile(HealthIssue.RestartPending, "ConfigMgr, Windows servicing or Windows Update is waiting on a restart");
@@ -265,6 +289,8 @@ namespace Layer8.Device
                 HealthCheck.DefenderSignatureDays));
             AddIssueTile(HealthIssue.MissingUpdates, "Deployed software updates the client reports as missing");
             AddIssueTile(HealthIssue.Client, "No ConfigMgr client, its service (CcmExec) isn't running, or it's in provisioning mode");
+            AddIssueTile(HealthIssue.NotReporting, string.Format(
+                "The site hasn't had a policy request from its client in {0} days or more. Read from the site, so offline devices count too", notReportingDays));
             AddIssueTile(HealthIssue.LongUptime, string.Format("Up {0} days or more since the last restart", longUptimeDays));
             AddTile(HealthCheck.Name(HealthIssue.CouldNotCheck),
                 "Answered, but couldn't be checked (access denied, a WMI error), or one check couldn't be read: the Issues column says which", Tone.Bad,
@@ -459,6 +485,7 @@ namespace Layer8.Device
             {
                 row.State = RowState.Queued;
                 row.Report = null;
+                row.Site = null;
                 FillRow(row, "Queued");
             }
             list.EndUpdate();
@@ -471,8 +498,34 @@ namespace Layer8.Device
             progress.Value = 0;
             progress.Visible = true;
             stopwatch.Restart();
+            siteNote = null;
             log.InfoFormat("{0} on {1}: checking {2} device(s), {3} at a time", title, scope, runTotal, devicesAtOnce);
             UpdateSummary();
+
+            // What the site last heard from each one: a query per 300 devices, alongside the devices' own checks.
+            List<int> ids = targets.Select(row => row.ResourceId).ToList();
+            int days = notReportingDays;
+            Task.Run(() =>
+            {
+                try
+                {
+                    Dictionary<int, SiteContact> contact = HealthCheck.ReadSiteContact(connection, ids, days, token);
+                    OnUi(() => ApplySiteContact(targets, contact));
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (Exception ex)
+                {
+                    Exception root = SafeAction.Unwrap(ex);
+                    log.Warn(string.Format("{0} on {1}: couldn't read when the site last heard from each device", title, scope), root);
+                    OnUi(() =>
+                    {
+                        siteNote = "couldn't read the site's policy requests: " + root.Message;
+                        dirty = true;
+                    });
+                }
+            });
 
             foreach (Row row in targets)
             {
@@ -587,7 +640,6 @@ namespace Layer8.Device
             HealthReport report = row.Report;
             ListViewItem item = row.Item;
             SetCell(item, StatusColumn, new InfoCell(text));
-            SetCell(item, IssuesColumn, IssuesCell(row));
             SetCell(item, 3, report?.SignedIn);
             SetCell(item, 4, report?.Uptime);
             SetCell(item, 5, report?.DiskFree);
@@ -596,7 +648,7 @@ namespace Layer8.Device
             SetCell(item, 8, report?.Defender);
             SetCell(item, 9, report?.Updates);
             SetCell(item, 10, report?.Client);
-            item.ToolTipText = report != null && report.Issues.Count > 0 ? report.IssueText : text;
+            ShowIssues(row);
             item.ForeColor = row.State == RowState.Offline || row.State == RowState.Skipped || row.State == RowState.Canceled
                 ? SystemColors.GrayText
                 : SystemColors.WindowText;
@@ -607,19 +659,45 @@ namespace Layer8.Device
         /// checked (one issue each). Sorted by how many, so sorting the column puts every device that needs a look
         /// first, ahead of healthy and skipped ones, which leave it blank.
         /// </summary>
-        private static InfoCell IssuesCell(Row row)
+        private static void ShowIssues(Row row)
         {
-            switch (row.State)
+            List<string> names = row.IssueNames();
+            string issues = string.Join(", ", names);
+            SetCell(row.Item, IssuesColumn, names.Count == 0 ? null : new InfoCell(issues, names.Count));
+            SetCell(row.Item, PolicyColumn, PolicyCell(row.Site));
+            row.Item.ToolTipText = names.Count > 0 ? issues : row.Item.SubItems[StatusColumn].Text;
+        }
+
+        /// <summary>When the site last had a policy request from its client: "40m ago", "3d ago", "Never". Blank without a client.</summary>
+        private static InfoCell PolicyCell(SiteContact site)
+        {
+            if (site == null || !site.IsClient) return null;
+            if (!site.LastPolicyRequest.HasValue) return new InfoCell("Never", TimeSpan.MaxValue);
+            TimeSpan age = HealthCheck.Age(site.LastPolicyRequest.Value);
+            return new InfoCell(HealthCheck.FormatAge(age), age);
+        }
+
+        /// <summary>
+        /// The site's side arrives: each row's Policy request cell, and Not reporting where it applies. Rows a tile
+        /// or the filter box hid may match now.
+        /// </summary>
+        private void ApplySiteContact(List<Row> targets, Dictionary<int, SiteContact> contact)
+        {
+            list.BeginUpdate();
+            foreach (Row row in targets)
             {
-                case RowState.Offline:
-                    return new InfoCell("Offline", 1);
-                case RowState.Failed:
-                    return new InfoCell(HealthCheck.Name(HealthIssue.CouldNotCheck), 1);
-                case RowState.Checked:
-                    return row.Report.Issues.Count == 0 ? null : new InfoCell(row.Report.IssueText, row.Report.Issues.Count);
-                default:
-                    return null;
+                contact.TryGetValue(row.ResourceId, out row.Site);
+                ShowIssues(row);
+                if (row.Item.ListView == null && Matches(row))
+                {
+                    list.Items.Add(row.Item);
+                    needsSort = true;
+                }
             }
+            list.EndUpdate();
+            dirty = true;
+            log.InfoFormat("{0} on {1}: the site's last policy request read for {2} device(s); {3} not reporting in {4} days",
+                title, scope, contact.Count, targets.Count(row => row.Has(HealthIssue.NotReporting)), notReportingDays);
         }
 
         private static void SetCell(ListViewItem item, int column, InfoCell cell)
@@ -674,6 +752,7 @@ namespace Layer8.Device
             {
                 status.Text = string.Format("Checked {0} in {1}, at {2:t}{3}", Count(runTotal, "device"), Elapsed(), finishedAt, stopping ? " (stopped early)" : string.Empty);
             }
+            if (siteNote != null) status.Text += "; " + siteNote;
 
             int visible = list.Items.Count;
             shown.Text = visible == rows.Count

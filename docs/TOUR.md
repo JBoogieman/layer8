@@ -25,6 +25,7 @@ Right-click a device collection, **Health Dashboard** (or select devices, **Laye
 | Defender | antivirus or real-time protection is off, or the signatures are more than 7 days old (not counted when Defender is passive behind another antivirus) |
 | Missing updates | the client reports deployed updates as missing |
 | Client | there's no ConfigMgr client, its service (CcmExec) isn't running, or it's in provisioning mode |
+| Not reporting | the site hasn't had a policy request from its client in 7 days or more (read from the site, so it counts offline devices too) |
 | Long uptime | it's been up 14 days or more |
 | Couldn't check | it answered but couldn't be checked (access denied, a WMI error), or one check couldn't be read; the Issues column says which |
 
@@ -106,6 +107,6 @@ Software Library > Driver Packages, **Layer8** on the ribbon: the Driver Package
 
 ## Settings
 
-**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, when to ask before a big run, the quick check that each device answers, and the log level. A second page sets the Health Dashboard's low disk and long uptime tiles. They're saved for your Windows account.
+**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, when to ask before a big run, the quick check that each device answers, and the log level. A second page sets the Health Dashboard's low disk, long uptime and not reporting tiles. They're saved for your Windows account.
 
 ![Layer8 Settings: 32 devices at once, ask before more than 100, check that each device answers within 2 seconds, log level Info](images/tour/layer8-settings.png)

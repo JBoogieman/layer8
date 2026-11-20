@@ -10,7 +10,7 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 
 Organized by where you right-click in the console. [The tour](docs/TOUR.md) has a screenshot of each.
 
-**Health Dashboard** (right-click a device collection, or select devices): one live pass over every device, with tiles counting what needs attention: offline, restart pending, low disk (under 10 GB free on C:), BitLocker off, Defender off or out of date, missing updates, client problems, and up 14 days or more. Click a tile to see just those devices, then fix them from the same window: select devices and right-click for the console's client actions (policy and inventory cycles, update scans and installs, restarts, client repair, Defender scans). The grid sorts, filters as you type, copies and exports; double-click a device for System Information. The check itself only reads.
+**Health Dashboard** (right-click a device collection, or select devices): one live pass over every device, with tiles counting what needs attention: offline, restart pending, low disk (under 10 GB free on C:), BitLocker off, Defender off or out of date, missing updates, client problems, clients the site hasn't heard from in a week, and up 14 days or more. Click a tile to see just those devices, then fix them from the same window: select devices and right-click for the console's client actions (policy and inventory cycles, update scans and installs, restarts, client repair, Defender scans). The grid sorts, filters as you type, copies and exports; double-click a device for System Information. The check itself only reads.
 
 ![Health Dashboard on All Systems: tiles counting offline, BitLocker off and client problems over one row per device](docs/images/tour/health-dashboard.png)
 
@@ -45,7 +45,7 @@ Organized by where you right-click in the console. [The tour](docs/TOUR.md) has 
 
 **Error Lookup** (on the Layer8 menus): paste any error code (`0x87D00324`, `-2016410844`, `1603`) and see what it means, from ConfigMgr's own error catalog and Windows'. Copy Failed Devices and Install Application show the meaning next to every code too.
 
-**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, a quick offline check before connecting, the log level, and the Health Dashboard's low disk and long uptime thresholds.
+**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, a quick offline check before connecting, the log level, and the Health Dashboard's thresholds.
 
 Don't want some of it? `Customize-Layer8Cab.ps1 -Exclude LAPS, BitLockerKeys, RemoteControl` takes those menu items out of the released cab entirely, no building needed ([how](docs/INSTALL.md#leaving-features-out)).
 
@@ -94,7 +94,7 @@ reg add HKCU\SOFTWARE\Layer8 /v LogLevel /d Debug /f
 
 Use `Debug`, `Info` (the default), `Warn` or `Error`.
 
-The Health Dashboard's two thresholds, low disk (10 GB) and long uptime (14 days), are on the settings' Health Dashboard page, and in the same key as `LowDiskGB` and `LongUptimeDays`.
+The Health Dashboard's thresholds, low disk (10 GB), long uptime (14 days) and not reporting (7 days), are on the settings' Health Dashboard page, and in the same key as `LowDiskGB`, `LongUptimeDays` and `NotReportingDays`.
 
 The log rolls over to `Layer8.lo_` at 2 MB, the same way ConfigMgr's own logs do.
 

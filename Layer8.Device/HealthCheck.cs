@@ -1,8 +1,10 @@
-﻿using System;
+﻿using Microsoft.ConfigurationManagement.ManagementProvider;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Management;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace Layer8.Device
 {
@@ -15,6 +17,8 @@ namespace Layer8.Device
         Defender,
         MissingUpdates,
         Client,
+        /// <summary>The site hasn't heard from its client lately. Read from the site (SiteContact), not the device.</summary>
+        NotReporting,
         LongUptime,
         /// <summary>One of the checks couldn't be read; the report's Unread list says which, and why.</summary>
         CouldNotCheck,
@@ -28,6 +32,9 @@ namespace Layer8.Device
         public readonly List<string> Unread = new List<string>();
         public InfoCell SignedIn, Uptime, DiskFree, Restart, BitLocker, Defender, Updates, Client;
 
+        /// <summary>"Couldn't check: BitLocker (access denied)", as the Issues column shows it.</summary>
+        public string UnreadText => HealthCheck.Name(HealthIssue.CouldNotCheck) + ": " + string.Join(", ", Unread);
+
         /// <summary>The issues as the Issues column shows them, in the tiles' order. Empty when there are none.</summary>
         public string IssueText
         {
@@ -37,11 +44,24 @@ namespace Layer8.Device
                 foreach (HealthIssue issue in Enum.GetValues(typeof(HealthIssue)))
                 {
                     if (!Issues.Contains(issue)) continue;
-                    parts.Add(issue == HealthIssue.CouldNotCheck ? HealthCheck.Name(issue) + ": " + string.Join(", ", Unread) : HealthCheck.Name(issue));
+                    parts.Add(issue == HealthIssue.CouldNotCheck ? UnreadText : HealthCheck.Name(issue));
                 }
                 return string.Join(", ", parts);
             }
         }
+    }
+
+    /// <summary>
+    /// What the site last heard from a device's client. Read from the site, not the device, so it's there for
+    /// offline devices too.
+    /// </summary>
+    internal sealed class SiteContact
+    {
+        public bool IsClient;
+        /// <summary>When its client last asked the site for policy (every hour by default); null if it never has.</summary>
+        public DateTime? LastPolicyRequest;
+        /// <summary>A client that hasn't asked for policy in the Not reporting tile's number of days, or ever.</summary>
+        public bool NotReporting;
     }
 
     /// <summary>
@@ -75,6 +95,7 @@ namespace Layer8.Device
                 case HealthIssue.Defender: return "Defender";
                 case HealthIssue.MissingUpdates: return "Missing updates";
                 case HealthIssue.Client: return "Client";
+                case HealthIssue.NotReporting: return "Not reporting";
                 case HealthIssue.LongUptime: return "Long uptime";
                 default: return "Couldn't check";
             }
@@ -255,6 +276,62 @@ namespace Layer8.Device
             });
 
             return report;
+        }
+
+        private const int IdsPerQuery = 300;
+
+        /// <summary>
+        /// When the site last heard from each device's client, by ResourceID: SMS_CombinedDeviceResources, the data
+        /// behind the console's Client Activity, 300 devices a query. Runs on a background thread, and stops between
+        /// queries when canceled. Devices the site has no record of are left out.
+        /// </summary>
+        internal static Dictionary<int, SiteContact> ReadSiteContact(ConnectionManagerBase connection, IList<int> ids, int notReportingDays, CancellationToken token)
+        {
+            Dictionary<int, SiteContact> contact = new Dictionary<int, SiteContact>();
+            for (int start = 0; start < ids.Count; start += IdsPerQuery)
+            {
+                token.ThrowIfCancellationRequested();
+                string idList = string.Join(",", ids.Skip(start).Take(IdsPerQuery));
+                using (IResultObject results = connection.QueryProcessor.ExecuteQuery(
+                    "SELECT ResourceID, IsClient, LastPolicyRequest FROM SMS_CombinedDeviceResources WHERE ResourceID IN (" + idList + ")"))
+                {
+                    foreach (IResultObject device in results)
+                    {
+                        SiteContact site = new SiteContact
+                        {
+                            IsClient = device["IsClient"].ObjectValue != null && device["IsClient"].BooleanValue,
+                        };
+                        if (device["LastPolicyRequest"].ObjectValue != null)
+                        {
+                            DateTime when = device["LastPolicyRequest"].DateTimeValue;
+                            // An empty date can come back as year 1 or 1970 instead of null.
+                            // The site keeps this time in UTC but hands it back unmarked; read as local time it
+                            // would sit hours in the future (west of UTC) and every client would look "just now".
+                            if (when.Year >= 2000) site.LastPolicyRequest = DateTime.SpecifyKind(when, DateTimeKind.Utc);
+                        }
+                        site.NotReporting = site.IsClient &&
+                            (!site.LastPolicyRequest.HasValue || Age(site.LastPolicyRequest.Value).TotalDays >= notReportingDays);
+                        contact[device["ResourceID"].IntegerValue] = site;
+                    }
+                }
+            }
+            return contact;
+        }
+
+        /// <summary>How long ago a time was, whether it came back as local time or UTC. Never negative.</summary>
+        internal static TimeSpan Age(DateTime when)
+        {
+            TimeSpan age = (when.Kind == DateTimeKind.Utc ? DateTime.UtcNow : DateTime.Now) - when;
+            return age < TimeSpan.Zero ? TimeSpan.Zero : age;
+        }
+
+        /// <summary>"just now", "40m ago", "5h ago", "3d ago".</summary>
+        internal static string FormatAge(TimeSpan age)
+        {
+            if (age.TotalMinutes < 1) return "just now";
+            if (age.TotalHours < 1) return (int)age.TotalMinutes + "m ago";
+            if (age.TotalHours < 48) return (int)age.TotalHours + "h ago";
+            return (int)age.TotalDays + "d ago";
         }
 
         /// <summary>
