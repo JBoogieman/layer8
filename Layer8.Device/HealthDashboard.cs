@@ -501,7 +501,7 @@ namespace Layer8.Device
             HealthReport report = row.Report;
             ListViewItem item = row.Item;
             SetCell(item, StatusColumn, new InfoCell(text));
-            SetCell(item, IssuesColumn, report == null || report.Issues.Count == 0 ? null : new InfoCell(report.IssueText, report.Issues.Count));
+            SetCell(item, IssuesColumn, IssuesCell(row));
             SetCell(item, 3, report?.SignedIn);
             SetCell(item, 4, report?.Uptime);
             SetCell(item, 5, report?.DiskFree);
@@ -514,6 +514,26 @@ namespace Layer8.Device
             item.ForeColor = row.State == RowState.Offline || row.State == RowState.Skipped || row.State == RowState.Canceled
                 ? SystemColors.GrayText
                 : SystemColors.WindowText;
+        }
+
+        /// <summary>
+        /// What's wrong, for the Issues column: the issues found, or that the device didn't answer or couldn't be
+        /// checked (one issue each). Sorted by how many, so sorting the column puts every device that needs a look
+        /// first, ahead of healthy and skipped ones, which leave it blank.
+        /// </summary>
+        private static InfoCell IssuesCell(Row row)
+        {
+            switch (row.State)
+            {
+                case RowState.Offline:
+                    return new InfoCell("Offline", 1);
+                case RowState.Failed:
+                    return new InfoCell(HealthCheck.Name(HealthIssue.CouldNotCheck), 1);
+                case RowState.Checked:
+                    return row.Report.Issues.Count == 0 ? null : new InfoCell(row.Report.IssueText, row.Report.Issues.Count);
+                default:
+                    return null;
+            }
         }
 
         private static void SetCell(ListViewItem item, int column, InfoCell cell)
@@ -585,12 +605,16 @@ namespace Layer8.Device
 
         /// <summary>
         /// Each column as wide as its header or its widest shown cell, up to a limit, once the first pass is done.
-        /// False when nothing is shown yet to measure.
+        /// Skipped records (Unknown Computer and the like) don't count: their long names say nothing about the
+        /// devices, and would leave too little room for the columns that do. They're taken out while the list is
+        /// measured and put back after; the caller sorts. False when there's nothing else shown yet to measure.
         /// </summary>
         private bool FitColumns()
         {
-            if (list.Items.Count == 0) return false;
+            ListViewItem[] skipped = list.Items.Cast<ListViewItem>().Where(item => ((Row)item.Tag).State == RowState.Skipped).ToArray();
+            if (list.Items.Count == skipped.Length) return false;
             list.BeginUpdate();
+            foreach (ListViewItem item in skipped) list.Items.Remove(item);
             for (int i = 0; i < list.Columns.Count; i++)
             {
                 list.AutoResizeColumn(i, ColumnHeaderAutoResizeStyle.ColumnContent);
@@ -598,6 +622,7 @@ namespace Layer8.Device
                 int limit = LogicalToDeviceUnits(i == StatusColumn || i == IssuesColumn ? 320 : 240);
                 list.Columns[i].Width = Math.Min(Math.Max(list.Columns[i].Width + LogicalToDeviceUnits(6), header), limit);
             }
+            list.Items.AddRange(skipped);
             list.EndUpdate();
             return true;
         }
