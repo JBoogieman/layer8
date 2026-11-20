@@ -324,7 +324,7 @@ namespace Layer8.Device
         }
 
         /// <summary>The SMS_R_System records for the given resource IDs (the progress dialog works on device records).</summary>
-        private static List<IResultObject> DevicesById(ConnectionManagerBase connection, List<int> ids)
+        internal static List<IResultObject> DevicesById(ConnectionManagerBase connection, List<int> ids)
         {
             List<IResultObject> devices = new List<IResultObject>();
             for (int start = 0; start < ids.Count; start += IdsPerQuery)

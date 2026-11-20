@@ -14,7 +14,7 @@ Right-click a device, **Layer8**: the tools for that one device. Its own Client 
 
 ## Health Dashboard
 
-Right-click a device collection, **Health Dashboard** (or select devices, **Layer8** > **Health Dashboard**): one live pass over every device. The tiles fill in as devices answer. Click one to show just those devices; click it again, or **Devices**, for all of them. Hover over a tile for its rule. The grid sorts on any column, filters as you type, and Copy and Export take what's shown. Double-click a device for System Information; right-click it to check it again. Reading changes nothing on the devices.
+Right-click a device collection, **Health Dashboard** (or select devices, **Layer8** > **Health Dashboard**): one live pass over every device. The tiles fill in as devices answer. Click one to show just those devices; click it again, or **Devices**, for all of them. Hover over a tile for its rule. The grid sorts on any column, filters as you type, and Copy and Export take what's shown. Double-click a device for System Information. Right-click selected devices to check them again, or to run a client action on them: the console's own (policy and inventory cycles, update scans and installs, Send Message, restarts, client health and repair, Defender quick scan, Find Software), with the same questions before anything that changes a device and the same progress window. The check itself only reads.
 
 | Tile | Counts a device when |
 |---|---|

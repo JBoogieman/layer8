@@ -10,7 +10,7 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 
 Organized by where you right-click in the console. [The tour](docs/TOUR.md) has a screenshot of each.
 
-**Health Dashboard** (right-click a device collection, or select devices): one live pass over every device, with tiles counting what needs attention: offline, restart pending, low disk (under 10 GB free on C:), BitLocker off, Defender off or out of date, missing updates, client problems, and up 14 days or more. Click a tile to see just those devices. The grid sorts, filters as you type, copies and exports; double-click a device for System Information. Reading changes nothing on the devices.
+**Health Dashboard** (right-click a device collection, or select devices): one live pass over every device, with tiles counting what needs attention: offline, restart pending, low disk (under 10 GB free on C:), BitLocker off, Defender off or out of date, missing updates, client problems, and up 14 days or more. Click a tile to see just those devices, then fix them from the same window: select devices and right-click for the console's client actions (policy and inventory cycles, update scans and installs, restarts, client repair, Defender scans). The grid sorts, filters as you type, copies and exports; double-click a device for System Information. The check itself only reads.
 
 ![Health Dashboard on All Systems: tiles counting offline, BitLocker off and client problems over one row per device](docs/images/tour/health-dashboard.png)
 

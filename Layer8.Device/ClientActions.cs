@@ -75,35 +75,60 @@ namespace Layer8.Device
             SafeAction.Run(action?.DisplayName ?? "RunClientTool", () =>
             {
                 string tool = action?.DialogId;
-                if (tool == null || !ClientTools.TryGetValue(tool, out string confirmQuestion))
-                {
-                    throw new InvalidOperationException("Unknown client tool '" + tool + "' in the menu XML.");
-                }
-
-                string title = null;
-                Func<IResultObject, object> run;
-                if (tool == nameof(FindSoftware))
-                {
-                    string search = InputPrompt.Ask("Find Software", "Software name, or part of it (for example Chrome, 7-Zip or Office). Add a version test to find old ones: Chrome < 131", softwareSearch);
-                    if (search == null) return;
-                    softwareSearch = search;
-                    title = "Find Software: " + search;
-                    run = device => FindSoftware(device, search);
-                }
-                else if (tool == nameof(SendMessage))
-                {
-                    string message = AskForMessage();
-                    if (message == null) return;
-                    title = "Send Message: " + message;
-                    run = device => SendMessage(device, message);
-                }
-                else
-                {
-                    MethodInfo toolMethod = typeof(ClientActions).GetMethod(tool, new[] { typeof(IResultObject) });
-                    run = device => toolMethod.Invoke(null, new object[] { device });
-                }
+                if (!PrepareClientTool(tool, out Func<IResultObject, object> run, out string title, out string confirmQuestion)) return;
                 ProcessAction(scopeNode, action, selectedResultObjects, tool, run, title, alwaysShowDialog: true, confirmQuestion: confirmQuestion);
             });
+        }
+
+        /// <summary>
+        /// Gets a client tool ready to run: what runs on each device, the progress window's title (null for the
+        /// menu's name) and the question to ask first ({0} is what it runs on; null to run without asking). Find
+        /// Software and Send Message ask for their search or message here; false when that's canceled. The console's
+        /// menus and the Health Dashboard both start client tools here.
+        /// </summary>
+        internal static bool PrepareClientTool(string tool, out Func<IResultObject, object> run, out string title, out string confirmQuestion)
+        {
+            if (tool == null || !ClientTools.TryGetValue(tool, out confirmQuestion))
+            {
+                throw new InvalidOperationException("Unknown client tool '" + tool + "'.");
+            }
+
+            run = null;
+            title = null;
+            if (tool == nameof(FindSoftware))
+            {
+                string search = InputPrompt.Ask("Find Software", "Software name, or part of it (for example Chrome, 7-Zip or Office). Add a version test to find old ones: Chrome < 131", softwareSearch);
+                if (search == null) return false;
+                softwareSearch = search;
+                title = "Find Software: " + search;
+                run = device => FindSoftware(device, search);
+            }
+            else if (tool == nameof(SendMessage))
+            {
+                string message = AskForMessage();
+                if (message == null) return false;
+                title = "Send Message: " + message;
+                run = device => SendMessage(device, message);
+            }
+            else
+            {
+                MethodInfo toolMethod = typeof(ClientActions).GetMethod(tool, new[] { typeof(IResultObject) });
+                run = device => toolMethod.Invoke(null, new object[] { device });
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Runs a client tool or client action on device records the caller already has (the Health Dashboard's
+        /// selected rows), in the same progress window the menus use. The caller has already asked any question.
+        /// </summary>
+        internal static void RunOnDevices(ActionDescription action, List<IResultObject> devices, string actionName, Func<IResultObject, object> run, string title)
+        {
+            deviceProgressDialog = new DeviceProgressDialog(action, devices, actionName, run, title)
+            {
+                Total = devices.Count
+            };
+            deviceProgressDialog.ShowDialog();
         }
 
         // Each client tool's method name, and the question to ask before running it ({0} is what it runs on),

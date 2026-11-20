@@ -35,7 +35,8 @@ namespace Layer8.Device
         {
             string title = action?.DisplayName ?? "Health Dashboard";
             bool isCollection = selected.ObjectClass == "SMS_Collection";
-            List<string> names = new List<string>();
+            // Name and ResourceID: the name to check, the ID to find its record again for a client action.
+            List<KeyValuePair<string, int>> found = new List<KeyValuePair<string, int>>();
             string scope;
             if (isCollection)
             {
@@ -45,7 +46,7 @@ namespace Layer8.Device
                 {
                     foreach (IResultObject member in selected.ConnectionManager.QueryProcessor.ExecuteQuery(query))
                     {
-                        names.Add(member["Name"].StringValue);
+                        found.Add(new KeyValuePair<string, int>(member["Name"].StringValue, member["ResourceID"].IntegerValue));
                     }
                 }
                 catch (SmsQueryException ex)
@@ -58,13 +59,14 @@ namespace Layer8.Device
             {
                 foreach (IResultObject device in selected)
                 {
-                    names.Add(device["Name"].StringValue);
+                    found.Add(new KeyValuePair<string, int>(device["Name"].StringValue, device["ResourceID"].IntegerValue));
                 }
-                scope = names.Count == 1 ? names[0] : names.Count + " selected devices";
+                scope = found.Count == 1 ? found[0].Key : found.Count + " selected devices";
             }
 
             // Each device once, even when two records share its name (a reimaged device, say).
-            List<string> devices = names.Where(name => !string.IsNullOrWhiteSpace(name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            List<KeyValuePair<string, int>> devices = found.Where(device => !string.IsNullOrWhiteSpace(device.Key) && seen.Add(device.Key)).ToList();
             if (devices.Count == 0)
             {
                 MessageBox.Show(scope + " has no devices to check.", title, MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -83,7 +85,7 @@ namespace Layer8.Device
                 return;
             }
 
-            using (HealthDashboardDialog dialog = new HealthDashboardDialog(title, scope, devices))
+            using (HealthDashboardDialog dialog = new HealthDashboardDialog(action, title, scope, devices, selected.ConnectionManager))
             {
                 dialog.ShowDialog();
             }
@@ -101,14 +103,16 @@ namespace Layer8.Device
         /// <summary>One device: its row in the grid (kept while a filter hides it), and what the last check found.</summary>
         private sealed class Row
         {
-            public Row(string host, int columns)
+            public Row(string host, int resourceId, int columns)
             {
                 Host = host;
+                ResourceId = resourceId;
                 Item = new ListViewItem(host) { Tag = this };
                 for (int i = 1; i < columns; i++) Item.SubItems.Add(string.Empty);
             }
 
             public readonly string Host;
+            public readonly int ResourceId;
             public readonly ListViewItem Item;
             /// <summary>Changed on the window's thread only, like everything the grid shows.</summary>
             public RowState State;
@@ -117,11 +121,79 @@ namespace Layer8.Device
             public bool Has(HealthIssue issue) => Report != null && Report.Issues.Contains(issue);
         }
 
+        /// <summary>A client action the dashboard runs on selected devices, named as the console's Client Actions menu names it.</summary>
+        private sealed class DeviceAction
+        {
+            public DeviceAction(string name, string tool, string schedule, bool full)
+            {
+                Name = name;
+                Tool = tool;
+                Schedule = schedule;
+                Full = full;
+            }
+
+            public readonly string Name;
+            /// <summary>A client tool (a ClientActions method), or null for a client action cycle.</summary>
+            public readonly string Tool;
+            /// <summary>A client action cycle's schedule ID, and whether it's a full inventory.</summary>
+            public readonly string Schedule;
+            public readonly bool Full;
+        }
+
+        private static DeviceAction ClientTool(string name, string tool) => new DeviceAction(name, tool, null, false);
+
+        private static DeviceAction Cycle(string name, string schedule, bool full = false) => new DeviceAction(name, null, schedule, full);
+
+        // Grouped by what the tiles find: policy and inventory, updates, restarts, the client itself, and the rest.
+        // The read-only tools the grid already answers (Quick Status, Check Pending Restart, BitLocker and Defender
+        // Status) are left out.
+        private static readonly DeviceAction[][] DeviceActionGroups =
+        {
+            new[]
+            {
+                Cycle("Machine Policy Retrieval and Evaluation Cycle", "{00000000-0000-0000-0000-000000000021}"),
+                ClientTool("Full Machine Policy Refresh", nameof(ClientActions.FullMachinePolicyRefresh)),
+                Cycle("Application Deployment Evaluation Cycle", "{00000000-0000-0000-0000-000000000121}"),
+                ClientTool("Group Policy Update (Computer)", nameof(ClientActions.GroupPolicyUpdate)),
+                Cycle("Hardware Inventory Cycle", "{00000000-0000-0000-0000-000000000001}"),
+            },
+            new[]
+            {
+                Cycle("Software Updates Scan Cycle", "{00000000-0000-0000-0000-000000000113}"),
+                Cycle("Software Updates Deployment Evaluation Cycle", "{00000000-0000-0000-0000-000000000108}"),
+                ClientTool("List Missing Updates", nameof(ClientActions.MissingUpdates)),
+                ClientTool("Install Missing Updates", nameof(ClientActions.InstallMissingUpdates)),
+            },
+            new[]
+            {
+                ClientTool("Send Message...", nameof(ClientActions.SendMessage)),
+                ClientTool("Restart Computer", nameof(ClientActions.RestartComputer)),
+                ClientTool("Cancel Restart", nameof(ClientActions.CancelRestart)),
+            },
+            new[]
+            {
+                ClientTool("Run Client Health Check", nameof(ClientActions.ClientHealthCheck)),
+                ClientTool("Repair Client", nameof(ClientActions.RepairClient)),
+                ClientTool("Reset Policy", nameof(ClientActions.ResetPolicy)),
+                ClientTool("Turn Off Provisioning Mode", nameof(ClientActions.TurnOffProvisioningMode)),
+                ClientTool("Clear Client Cache", nameof(ClientActions.ClearClientCache)),
+                ClientTool("Client Info", nameof(ClientActions.ClientInfo)),
+                ClientTool("Collect Client Logs", nameof(ClientActions.CollectLogs)),
+            },
+            new[]
+            {
+                ClientTool("Defender Quick Scan", nameof(ClientActions.DefenderQuickScan)),
+                ClientTool("Find Software...", nameof(ClientActions.FindSoftware)),
+            },
+        };
+
         private static readonly string[] Columns = { "Device", "Status", "Issues", "Signed in", "Up", "C: free", "Restart", "BitLocker", "Defender", "Updates missing", "Client" };
         private static readonly int[] StartWidths = { 120, 90, 220, 130, 60, 110, 110, 90, 90, 130, 110 };
         private const int StatusColumn = 1;
         private const int IssuesColumn = 2;
 
+        private readonly ActionDescription action;
+        private readonly ConnectionManagerBase connection;
         private readonly string title;
         private readonly string scope;
         private readonly List<Row> rows;
@@ -151,11 +223,13 @@ namespace Layer8.Device
         private int sortColumn;
         private bool descending;
 
-        public HealthDashboardDialog(string title, string scope, IEnumerable<string> devices)
+        public HealthDashboardDialog(ActionDescription action, string title, string scope, IEnumerable<KeyValuePair<string, int>> devices, ConnectionManagerBase connection)
         {
+            this.action = action;
+            this.connection = connection;
             this.title = title;
             this.scope = scope;
-            rows = devices.Select(device => new Row(device, Columns.Length)).ToList();
+            rows = devices.Select(device => new Row(device.Key, device.Value, Columns.Length)).ToList();
 
             SuspendLayout();
             AutoScaleDimensions = new SizeF(6F, 13F);
@@ -222,7 +296,18 @@ namespace Layer8.Device
             ToolStripMenuItem systemInfo = new ToolStripMenuItem("System Information...", null, (s, e) => OpenSystemInfo());
             ToolStripMenuItem checkAgain = new ToolStripMenuItem("Check Again", null, (s, e) => CheckAgain());
             ToolStripMenuItem copySelected = new ToolStripMenuItem("Copy", null, (s, e) => CopyRows(true));
-            menu.Items.AddRange(new ToolStripItem[] { systemInfo, checkAgain, new ToolStripSeparator(), copySelected });
+            // Find something, fix it here: the console's client actions, on the selected devices.
+            ToolStripMenuItem clientActions = new ToolStripMenuItem("Client Actions");
+            foreach (DeviceAction[] group in DeviceActionGroups)
+            {
+                if (clientActions.DropDownItems.Count > 0) clientActions.DropDownItems.Add(new ToolStripSeparator());
+                foreach (DeviceAction deviceAction in group)
+                {
+                    DeviceAction chosen = deviceAction;
+                    clientActions.DropDownItems.Add(new ToolStripMenuItem(chosen.Name, null, (s, e) => SafeAction.Run(chosen.Name, () => RunDeviceAction(chosen))));
+                }
+            }
+            menu.Items.AddRange(new ToolStripItem[] { systemInfo, checkAgain, clientActions, new ToolStripSeparator(), copySelected });
             menu.Opening += (s, e) =>
             {
                 int selectedCount = list.SelectedItems.Count;
@@ -234,6 +319,7 @@ namespace Layer8.Device
                 systemInfo.Enabled = selectedCount == 1;
                 checkAgain.Enabled = !running;
                 checkAgain.Text = selectedCount == 1 ? "Check Again" : string.Format("Check These {0} Again", selectedCount);
+                clientActions.Enabled = SelectedDevices().Count > 0;
             };
             list.ContextMenuStrip = menu;
 
@@ -653,6 +739,58 @@ namespace Layer8.Device
             {
                 dialog.ShowDialog(this);
             }
+        }
+
+        /// <summary>The selected rows that are machines: placeholder records (Unknown Computer and the like) are left out.</summary>
+        private List<Row> SelectedDevices()
+        {
+            return list.SelectedItems.Cast<ListViewItem>().Select(item => (Row)item.Tag).Where(row => RemoteTools.IsComputerName(row.Host)).ToList();
+        }
+
+        /// <summary>
+        /// Runs a client action on the selected devices, with the same questions and in the same progress window as
+        /// the console's Client Actions menu. The grid doesn't change by itself: check the devices again once the
+        /// action has had time to work.
+        /// </summary>
+        private void RunDeviceAction(DeviceAction chosen)
+        {
+            List<Row> targets = SelectedDevices();
+            if (targets.Count == 0) return;
+
+            string actionTitle = chosen.Name.TrimEnd('.');
+            string confirmQuestion = null;
+            string actionName;
+            Func<IResultObject, object> run;
+            if (chosen.Tool != null)
+            {
+                if (!ClientActions.PrepareClientTool(chosen.Tool, out run, out string toolTitle, out confirmQuestion)) return;
+                actionName = chosen.Tool;
+                actionTitle = toolTitle ?? actionTitle;
+            }
+            else
+            {
+                string schedule = chosen.Schedule;
+                bool full = chosen.Full;
+                actionName = nameof(ClientActions.ClientAction);
+                run = device => { ClientActions.ClientAction(device, schedule, full); return null; };
+            }
+
+            // The same questions the menus ask: the action's own, or, for a big selection, whether to go ahead.
+            string target = targets.Count == 1 ? targets[0].Host : targets.Count + " devices";
+            int confirmAbove = Layer8Settings.ConfirmAbove;
+            if (confirmQuestion != null)
+            {
+                if (MessageBox.Show(this, string.Format(confirmQuestion, target), actionTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            }
+            else if (confirmAbove > 0 && targets.Count > confirmAbove &&
+                     MessageBox.Show(this, string.Format("Run {0} on {1}?", actionTitle, target), actionTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            {
+                return;
+            }
+
+            List<IResultObject> devices = DeploymentRetry.DevicesById(connection, targets.Select(row => row.ResourceId).ToList());
+            log.InfoFormat("{0} on {1}: {2} on {3}", title, scope, actionTitle, target);
+            ClientActions.RunOnDevices(action, devices, actionName, run, actionTitle);
         }
 
         private void CheckAgain()
