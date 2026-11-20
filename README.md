@@ -10,6 +10,10 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 
 Organized by where you right-click in the console. [The tour](docs/TOUR.md) has a screenshot of each.
 
+**Health Dashboard** (right-click a device collection, or select devices): one live pass over every device, with tiles counting what needs attention: offline, restart pending, low disk (under 10 GB free on C:), BitLocker off, Defender off or out of date, missing updates, client problems, and up 14 days or more. Click a tile to see just those devices. The grid sorts, filters as you type, copies and exports; double-click a device for System Information. Reading changes nothing on the devices.
+
+![Health Dashboard on All Systems: tiles counting offline, BitLocker off and client problems over one row per device](docs/images/tour/health-dashboard.png)
+
 **A device, or a device collection** (a collection runs on every member):
 - **Client Actions:** the eleven standard client cycles, plus Quick Status (who's signed in, uptime, free space on C:, IP address, client version, each in a column you can sort), Find Software (by name, or older than a version: `Chrome < 131`), Check Pending Restart, List Missing Updates (deployed ones, and ones a device needs that nothing deploys) and Install Missing Updates, Full Machine Policy Refresh, Group Policy Update, Client Health Check, Client Info, Reset Policy, Clear Client Cache, Repair Client, Turn Off Provisioning Mode, Restart SMS Agent Host Service, Send Message (a pop-up for whoever is signed in), Restart Computer and Cancel Restart, Defender Status and Quick Scan, BitLocker Status
 - **On a collection, also:** Online Status, Collect Client Logs, and Retry All Failed Deployments (every app, update and baseline deployment to the collection, on the devices in error)
@@ -89,6 +93,12 @@ reg add HKCU\SOFTWARE\Layer8 /v LogLevel /d Debug /f
 ```
 
 Use `Debug`, `Info` (the default), `Warn` or `Error`.
+
+The Health Dashboard's two thresholds live in the same key until they get a place in Layer8 Settings: `LowDiskGB` (default 10) and `LongUptimeDays` (default 14), for example:
+
+```
+reg add HKCU\SOFTWARE\Layer8 /v LowDiskGB /t REG_DWORD /d 20 /f
+```
 
 The log rolls over to `Layer8.lo_` at 2 MB, the same way ConfigMgr's own logs do.
 

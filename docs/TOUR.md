@@ -1,6 +1,6 @@
 # Layer8 tour
 
-What Layer8 looks like in the ConfigMgr console. The screenshots are from a lab site (ConfigMgr 2509, two Windows 11 clients). Everything here is on a right-click menu or the ribbon; there's no separate app to open.
+What Layer8 looks like in the ConfigMgr console. The screenshots are from a lab site (ConfigMgr 2509, later 2609; two Windows 11 clients and the site server). Everything here is on a right-click menu or the ribbon; there's no separate app to open.
 
 ## Right-click menus
 
@@ -11,6 +11,24 @@ Right-click a device collection, **Client Actions**: the eleven standard client 
 Right-click a device, **Layer8**: the tools for that one device. Its own Client Actions and Remote Tools menus are further down.
 
 ![A device's context menu, Layer8 open: Driver Grabber, Client Cache, Copy Names, Copy Device Info, Install Application, BitLocker Recovery Key, Error Lookup, LAPS Password, Layer8 Settings, System Information, Windows Security](images/tour/device-menu.png)
+
+## Health Dashboard
+
+Right-click a device collection, **Health Dashboard** (or select devices, **Layer8** > **Health Dashboard**): one live pass over every device. The tiles fill in as devices answer. Click one to show just those devices; click it again, or **Devices**, for all of them. Hover over a tile for its rule. The grid sorts on any column, filters as you type, and Copy and Export take what's shown. Double-click a device for System Information; right-click it to check it again. Reading changes nothing on the devices.
+
+| Tile | Counts a device when |
+|---|---|
+| Offline | it doesn't answer: ports 135 and 445 closed, or WMI's RPC server unreachable |
+| Restart pending | ConfigMgr, Windows servicing or Windows Update is waiting on a restart |
+| Low disk | C: has less than 10 GB free |
+| BitLocker off | C: isn't protected: BitLocker off, or protection suspended |
+| Defender | antivirus or real-time protection is off, or the signatures are more than 7 days old (not counted when Defender is passive behind another antivirus) |
+| Missing updates | the client reports deployed updates as missing |
+| Client | there's no ConfigMgr client, its service (CcmExec) isn't running, or it's in provisioning mode |
+| Long uptime | it's been up 14 days or more |
+| Couldn't check | it answered but couldn't be checked (access denied, a WMI error), or one check couldn't be read; the Issues column says which |
+
+![Health Dashboard on All Systems: tiles counting offline, BitLocker off and client problems over one row per device](images/tour/health-dashboard.png)
 
 ## One row per device
 
