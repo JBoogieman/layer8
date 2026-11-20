@@ -103,6 +103,8 @@
     </Compile>
     <Compile Include="DeviceColumns.cs" />
     <Compile Include="ListViewSorter.cs" />
+    <Compile Include="HealthCheck.cs" />
+    <Compile Include="HealthDashboard.cs" />
     <Compile Include="SystemInfo.cs" />
     <Compile Include="WindowsSecurity.cs" />
     <Compile Include="Device.cs" />

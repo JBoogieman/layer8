@@ -533,7 +533,7 @@ namespace Layer8.Device
         }
 
         // How an update is listed: KB number, or the title when it has none.
-        private static string UpdateKey(string article, string title)
+        internal static string UpdateKey(string article, string title)
         {
             return !string.IsNullOrEmpty(article) ? "KB" + article : (title ?? "(unnamed update)");
         }
@@ -845,22 +845,36 @@ namespace Layer8.Device
         {
             string host = resultObject["Name"].StringValue;
             List<string> reasons = new List<string>();
+            string configMgr = ConfigMgrRestartReason(Utility.GetWMIScope(host, @"ccm\ClientSDK"));
+            if (configMgr != null) reasons.Add(configMgr);
+            reasons.AddRange(WindowsRestartReasons(Utility.GetWMIScope(host, "default")));
+            return reasons.Count == 0 ? "No restart pending" : "Restart pending: " + string.Join("; ", reasons);
+        }
 
-            ManagementScope clientSdk = Utility.GetWMIScope(host, @"ccm\ClientSDK");
+        /// <summary>
+        /// Whether the ConfigMgr client is waiting on a restart: "ConfigMgr", or "ConfigMgr (hard restart)", with its
+        /// deadline when it has one. Null when it isn't. Check Pending Restart and the Health Dashboard both ask here.
+        /// </summary>
+        internal static string ConfigMgrRestartReason(ManagementScope clientSdk)
+        {
             using (ManagementClass utilities = new ManagementClass(clientSdk, new ManagementPath("CCM_ClientUtilities"), null))
             using (ManagementBaseObject outParams = utilities.InvokeMethod("DetermineIfRebootPending", null, null))
             {
-                if (IsTrue(outParams["RebootPending"]) || IsTrue(outParams["IsHardRebootPending"]))
-                {
-                    string reason = IsTrue(outParams["IsHardRebootPending"]) ? "ConfigMgr (hard restart)" : "ConfigMgr";
-                    DateTime? deadline = ToDateTime(outParams["RebootDeadline"]);
-                    if (deadline.HasValue) reason += ", deadline " + deadline.Value.ToString("g");
-                    reasons.Add(reason);
-                }
+                if (!IsTrue(outParams["RebootPending"]) && !IsTrue(outParams["IsHardRebootPending"])) return null;
+                string reason = IsTrue(outParams["IsHardRebootPending"]) ? "ConfigMgr (hard restart)" : "ConfigMgr";
+                DateTime? deadline = ToDateTime(outParams["RebootDeadline"]);
+                if (deadline.HasValue) reason += ", deadline " + deadline.Value.ToString("g");
+                return reason;
             }
+        }
 
-            // The same registry keys Windows itself uses, read through WMI's registry provider.
-            ManagementScope registryScope = Utility.GetWMIScope(host, "default");
+        /// <summary>
+        /// Windows' own restart flags ("Windows servicing", "Windows Update"): the same registry keys Windows itself
+        /// uses, read through WMI's registry provider (root\default). Empty when neither is set.
+        /// </summary>
+        internal static List<string> WindowsRestartReasons(ManagementScope registryScope)
+        {
+            List<string> reasons = new List<string>();
             using (ManagementClass registry = new ManagementClass(registryScope, new ManagementPath("StdRegProv"), null))
             {
                 if (HasSubKey(registry, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing", "RebootPending"))
@@ -868,8 +882,7 @@ namespace Layer8.Device
                 if (HasSubKey(registry, @"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update", "RebootRequired"))
                     reasons.Add("Windows Update");
             }
-
-            return reasons.Count == 0 ? "No restart pending" : "Restart pending: " + string.Join("; ", reasons);
+            return reasons;
         }
 
         /// <summary>Installs every update the client reports as missing (ComplianceState 0) from its deployments.</summary>
@@ -934,8 +947,22 @@ namespace Layer8.Device
             string host = resultObject["Name"].StringValue;
 
             // Read the current state first so the result says whether this changed anything.
-            bool wasOn;
-            ManagementScope registryScope = Utility.GetWMIScope(host, "default");
+            bool wasOn = ProvisioningModeOn(Utility.GetWMIScope(host, "default"));
+
+            ObjectGetOptions options = new ObjectGetOptions(null, TimeSpan.FromSeconds(5), true);
+            using (ManagementClass client = new ManagementClass(string.Format(@"\\{0}\root\ccm:SMS_Client", host), options))
+            {
+                client.InvokeMethod("SetClientProvisioningMode", new object[] { false });
+            }
+            return wasOn ? "Was in provisioning mode; turned it off" : "Wasn't in provisioning mode";
+        }
+
+        /// <summary>
+        /// Whether the client is in provisioning mode, where it ignores policy (often left on by a failed task
+        /// sequence): HKLM\SOFTWARE\Microsoft\CCM\CcmExec ProvisioningMode, read through root\default.
+        /// </summary>
+        internal static bool ProvisioningModeOn(ManagementScope registryScope)
+        {
             using (ManagementClass registry = new ManagementClass(registryScope, new ManagementPath("StdRegProv"), null))
             using (ManagementBaseObject inParams = registry.GetMethodParameters("GetStringValue"))
             {
@@ -944,16 +971,9 @@ namespace Layer8.Device
                 inParams["sValueName"] = "ProvisioningMode";
                 using (ManagementBaseObject outParams = registry.InvokeMethod("GetStringValue", inParams, null))
                 {
-                    wasOn = string.Equals(outParams["sValue"] as string, "true", StringComparison.OrdinalIgnoreCase);
+                    return string.Equals(outParams["sValue"] as string, "true", StringComparison.OrdinalIgnoreCase);
                 }
             }
-
-            ObjectGetOptions options = new ObjectGetOptions(null, TimeSpan.FromSeconds(5), true);
-            using (ManagementClass client = new ManagementClass(string.Format(@"\\{0}\root\ccm:SMS_Client", host), options))
-            {
-                client.InvokeMethod("SetClientProvisioningMode", new object[] { false });
-            }
-            return wasOn ? "Was in provisioning mode; turned it off" : "Wasn't in provisioning mode";
         }
 
         /// <summary>Retry Failed Devices for an application: the client re-evaluates its application deployments now.</summary>
@@ -1104,7 +1124,7 @@ namespace Layer8.Device
             }
         }
 
-        private static bool IsTrue(object value)
+        internal static bool IsTrue(object value)
         {
             return value is bool flag && flag;
         }
@@ -1238,29 +1258,66 @@ namespace Layer8.Device
         /// <summary>Microsoft Defender at a glance: antivirus and real-time protection, signature age, last quick scan.</summary>
         public static string DefenderStatus(IResultObject resultObject)
         {
-            string host = resultObject["Name"].StringValue;
-            ManagementScope defender;
+            DefenderState state;
             try
             {
-                defender = Utility.GetWMIScope(host, @"Microsoft\Windows\Defender");
+                state = ReadDefender(resultObject["Name"].StringValue);
             }
             catch (ManagementException ex) when (ex.ErrorCode == ManagementStatus.InvalidNamespace)
             {
                 return "No Microsoft Defender on this device";
             }
-            using (ManagementObject status = Utility.GetFirstWMIInstance(defender, "SELECT AntivirusEnabled, RealTimeProtectionEnabled, AntivirusSignatureLastUpdated, AntivirusSignatureAge, QuickScanAge FROM MSFT_MpComputerStatus"))
+            if (state == null) return "Defender reports no status (another antivirus may be in charge)";
+            List<string> parts = new List<string>
             {
-                if (status == null) return "Defender reports no status (another antivirus may be in charge)";
-                List<string> parts = new List<string>
+                state.AntivirusOn ? "AV on" : "AV OFF",
+                state.RealTimeOn ? "real-time on" : "real-time OFF",
+            };
+            parts.Add(string.Format("signatures {0} day(s) old{1}", state.SignatureAge, state.SignaturesUpdated.HasValue ? " (" + state.SignaturesUpdated.Value.ToString("g") + ")" : ""));
+            parts.Add(state.QuickScanAge >= uint.MaxValue ? "no quick scan yet" : string.Format("last quick scan {0} day(s) ago", state.QuickScanAge));
+            return string.Join(", ", parts);
+        }
+
+        /// <summary>What Microsoft Defender reports about itself (MSFT_MpComputerStatus).</summary>
+        internal sealed class DefenderState
+        {
+            public bool AntivirusOn, RealTimeOn;
+            /// <summary>Days since the signatures were updated; null when Defender didn't say.</summary>
+            public long? SignatureAge;
+            public DateTime? SignaturesUpdated;
+            /// <summary>Days since the last quick scan; uint.MaxValue when there hasn't been one.</summary>
+            public long QuickScanAge;
+            /// <summary>
+            /// AMRunningMode, on Defender platforms that report it: "Normal", "Passive Mode", "SxS Passive Mode" or
+            /// "EDR Block Mode". Passive means another antivirus is in charge and Defender's protection is off on
+            /// purpose. Null on older platforms.
+            /// </summary>
+            public string RunningMode;
+
+            public bool IsPassive => RunningMode != null && RunningMode.IndexOf("Passive", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>
+        /// Defender's status, or null when it reports none (another antivirus may be in charge). Throws a
+        /// ManagementException with InvalidNamespace when the device has no Defender. All properties are asked
+        /// for: naming AMRunningMode fails the whole query on platforms that don't have it.
+        /// </summary>
+        internal static DefenderState ReadDefender(string host)
+        {
+            ManagementScope defender = Utility.GetWMIScope(host, @"Microsoft\Windows\Defender");
+            using (ManagementObject status = Utility.GetFirstWMIInstance(defender, "SELECT * FROM MSFT_MpComputerStatus"))
+            {
+                if (status == null) return null;
+                object signatureAge = status["AntivirusSignatureAge"];
+                return new DefenderState
                 {
-                    IsTrue(status["AntivirusEnabled"]) ? "AV on" : "AV OFF",
-                    IsTrue(status["RealTimeProtectionEnabled"]) ? "real-time on" : "real-time OFF",
+                    AntivirusOn = IsTrue(status["AntivirusEnabled"]),
+                    RealTimeOn = IsTrue(status["RealTimeProtectionEnabled"]),
+                    SignatureAge = signatureAge == null ? (long?)null : Convert.ToInt64(signatureAge),
+                    SignaturesUpdated = ToDateTime(status["AntivirusSignatureLastUpdated"]),
+                    QuickScanAge = Convert.ToInt64(status["QuickScanAge"] ?? uint.MaxValue),
+                    RunningMode = HasProperty(status, "AMRunningMode") ? status["AMRunningMode"] as string : null,
                 };
-                DateTime? signatures = ToDateTime(status["AntivirusSignatureLastUpdated"]);
-                parts.Add(string.Format("signatures {0} day(s) old{1}", status["AntivirusSignatureAge"], signatures.HasValue ? " (" + signatures.Value.ToString("g") + ")" : ""));
-                long quickScanAge = Convert.ToInt64(status["QuickScanAge"] ?? uint.MaxValue);
-                parts.Add(quickScanAge >= uint.MaxValue ? "no quick scan yet" : string.Format("last quick scan {0} day(s) ago", quickScanAge));
-                return string.Join(", ", parts);
             }
         }
 
@@ -1284,24 +1341,39 @@ namespace Layer8.Device
         /// <summary>Is C: protected, and is it still encrypting? Read-only; never touches recovery passwords.</summary>
         public static string BitLockerStatus(IResultObject resultObject)
         {
-            string host = resultObject["Name"].StringValue;
+            BitLockerState state = ReadBitLocker(resultObject["Name"].StringValue);
+            if (state == null) return "C: isn't an encryptable volume";
+            string protectedText = state.Protection == 1 ? "protected" : state.Protection == 0 ? "not protected" : "protection unknown";
+            return "C: " + protectedText + (state.Conversion.Length > 0 ? ", " + state.Conversion : "");
+        }
+
+        /// <summary>C:'s BitLocker protection and conversion state. Never touches recovery passwords.</summary>
+        internal sealed class BitLockerState
+        {
+            /// <summary>Win32_EncryptableVolume.ProtectionStatus: 0 off, 1 on, 2 unknown (locked).</summary>
+            public uint Protection;
+            /// <summary>"fully encrypted", "encrypting 45%" and so on; empty when the volume didn't say.</summary>
+            public string Conversion = "";
+        }
+
+        /// <summary>C:'s BitLocker state, or null when C: isn't an encryptable volume.</summary>
+        internal static BitLockerState ReadBitLocker(string host)
+        {
             ManagementScope scope = Utility.GetWMIScope(host, @"cimv2\Security\MicrosoftVolumeEncryption");
             using (ManagementObject volume = Utility.GetFirstWMIInstance(scope, "SELECT * FROM Win32_EncryptableVolume WHERE DriveLetter = 'C:'"))
             {
-                if (volume == null) return "C: isn't an encryptable volume";
-                uint protection = Convert.ToUInt32(volume["ProtectionStatus"] ?? 2u);   // 0 off, 1 on, 2 unknown (locked)
-                string state = "";
+                if (volume == null) return null;
+                BitLockerState state = new BitLockerState { Protection = Convert.ToUInt32(volume["ProtectionStatus"] ?? 2u) };
                 using (ManagementBaseObject conversion = volume.InvokeMethod("GetConversionStatus", null, null))
                 {
                     if (conversion != null && Convert.ToUInt32(conversion["ReturnValue"]) == 0)
                     {
                         uint status = Convert.ToUInt32(conversion["ConversionStatus"]);
-                        state = status < ConversionStates.Length ? ConversionStates[status] : "conversion state " + status;
-                        if (status == 2 || status == 3 || status == 4 || status == 5) state += " " + conversion["EncryptionPercentage"] + "%";
+                        state.Conversion = status < ConversionStates.Length ? ConversionStates[status] : "conversion state " + status;
+                        if (status == 2 || status == 3 || status == 4 || status == 5) state.Conversion += " " + conversion["EncryptionPercentage"] + "%";
                     }
                 }
-                string protectedText = protection == 1 ? "protected" : protection == 0 ? "not protected" : "protection unknown";
-                return "C: " + protectedText + (state.Length > 0 ? ", " + state : "");
+                return state;
             }
         }
 
@@ -1387,7 +1459,7 @@ namespace Layer8.Device
             return "Baseline evaluation started";
         }
 
-        private static bool HasProperty(ManagementBaseObject wmiObject, string name)
+        internal static bool HasProperty(ManagementBaseObject wmiObject, string name)
         {
             foreach (PropertyData property in wmiObject.Properties)
             {

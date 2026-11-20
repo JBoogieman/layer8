@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ActionDescription NamespaceGuid="530F6FC3-EB77-4EFD-8B92-20347CC5378D" Class="AssemblyType" SelectionMode="Both" DisplayName="Health Dashboard" MnemonicDisplayName="Health Dashboard" Description="Check the selected devices at once: offline, restart pending, low disk, BitLocker off, Defender, missing updates, client problems and long uptime, counted on tiles over a grid you can filter and export" InsertBefore="B7009279-2666-45EF-9935-1FB3D3ED2ABF">
+  <ShowOn>
+    <string>DefaultHomeTab</string>
+    <string>ContextMenu</string>
+  </ShowOn>
+  <ActionAssembly>
+    <Assembly>Layer8.Device.dll</Assembly>
+    <Type>Layer8.Device.HealthDashboard</Type>
+    <Method>Show</Method>
+  </ActionAssembly>
+</ActionDescription>

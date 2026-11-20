@@ -333,54 +333,8 @@ namespace Layer8.Device
             catch (Exception ex)
             {
                 Exception root = SafeAction.Unwrap(ex);
-                if (root is DeviceOfflineException)
-                {
-                    // An expected answer (no reply, not in DNS), not a fault.
-                    status = root.Message;
-                    Interlocked.Increment(ref offline);
-                }
-                else if (Utility.LocalAccessDeniedReason(item.Text, root) is string localDenied)
-                {
-                    status = localDenied;
-                    Interlocked.Increment(ref failed);
-                }
-                else if (root is ManagementException wmiError && ClientActions.IsNoClient(wmiError))
-                {
-                    // The ConfigMgr WMI namespace or class isn't there: no client, or a broken one.
-                    status = "No ConfigMgr client found";
-                    Interlocked.Increment(ref failed);
-                }
-                else if (root is ManagementException)
-                {
-                    status = "WMI error: " + root.Message;
-                    Interlocked.Increment(ref failed);
-                }
-                else if (root is COMException rpc && rpc.ErrorCode == RpcServerUnavailable)
-                {
-                    // Nothing answered on WMI's ports: the device is off, or its firewall blocks WMI. Windows
-                    // blocks ping by default, so a firewalled device can look just like an off one; one that
-                    // answers anything at all is on.
-                    if (ClientActions.AnswersAtAll(item.Text))
-                    {
-                        status = "Online, but WMI is blocked (RPC server unavailable): check the device's firewall";
-                        Interlocked.Increment(ref failed);
-                    }
-                    else
-                    {
-                        status = "Offline, or its firewall blocks WMI (RPC server unavailable)";
-                        Interlocked.Increment(ref offline);
-                    }
-                }
-                else if (root is COMException)
-                {
-                    status = "Error: " + root.Message;
-                    Interlocked.Increment(ref failed);
-                }
-                else
-                {
-                    status = "Error: " + root.Message;
-                    Interlocked.Increment(ref failed);
-                }
+                status = DescribeFailure(item.Text, root, out bool isOffline);
+                if (isOffline) Interlocked.Increment(ref offline); else Interlocked.Increment(ref failed);
                 Interlocked.Increment(ref other);
                 lock (retryable) retryable.Add(item);
                 log.Warn(string.Format("{0} on {1}: {2}", actionName, item.Text, status), root);
@@ -388,6 +342,35 @@ namespace Layer8.Device
 
             SetStatus(item, status);
             OnUiThread(UpdateProgress);
+        }
+
+        /// <summary>
+        /// What a failure on a device means, in the words the list shows, and whether it counts as offline rather
+        /// than failed. Every tool that runs across devices says it the same way; the Health Dashboard asks here too.
+        /// </summary>
+        internal static string DescribeFailure(string host, Exception root, out bool offline)
+        {
+            offline = false;
+            if (root is DeviceOfflineException)
+            {
+                // An expected answer (no reply, not in DNS), not a fault.
+                offline = true;
+                return root.Message;
+            }
+            if (Utility.LocalAccessDeniedReason(host, root) is string localDenied) return localDenied;
+            // The ConfigMgr WMI namespace or class isn't there: no client, or a broken one.
+            if (root is ManagementException wmiError && ClientActions.IsNoClient(wmiError)) return "No ConfigMgr client found";
+            if (root is ManagementException) return "WMI error: " + root.Message;
+            if (root is COMException rpc && rpc.ErrorCode == RpcServerUnavailable)
+            {
+                // Nothing answered on WMI's ports: the device is off, or its firewall blocks WMI. Windows
+                // blocks ping by default, so a firewalled device can look just like an off one; one that
+                // answers anything at all is on.
+                if (ClientActions.AnswersAtAll(host)) return "Online, but WMI is blocked (RPC server unavailable): check the device's firewall";
+                offline = true;
+                return "Offline, or its firewall blocks WMI (RPC server unavailable)";
+            }
+            return "Error: " + root.Message;
         }
 
         // The work runs on background threads. Anything that touches the window goes back to the

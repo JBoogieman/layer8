@@ -25,10 +25,20 @@ namespace Layer8
         public const int MinReachableSeconds = 1;
         public const int MaxReachableSeconds = 30;
 
+        public const int DefaultLowDiskGB = 10;
+        public const int MinLowDiskGB = 1;
+        public const int MaxLowDiskGB = 1000;
+
+        public const int DefaultLongUptimeDays = 14;
+        public const int MinLongUptimeDays = 1;
+        public const int MaxLongUptimeDays = 365;
+
         private const string DevicesAtOnceValue = "DevicesAtOnce";
         private const string ConfirmAboveValue = "ConfirmAbove";
         private const string CheckReachableValue = "CheckReachable";
         private const string ReachableSecondsValue = "ReachableSeconds";
+        private const string LowDiskGBValue = "LowDiskGB";
+        private const string LongUptimeDaysValue = "LongUptimeDays";
 
         /// <summary>How many devices an action on many devices contacts at the same time.</summary>
         public static int DevicesAtOnce
@@ -63,6 +73,20 @@ namespace Layer8
         {
             get { return ReadInt(ReachableSecondsValue, DefaultReachableSeconds, MinReachableSeconds, MaxReachableSeconds); }
             set { WriteInt(ReachableSecondsValue, Clamp(value, MinReachableSeconds, MaxReachableSeconds)); }
+        }
+
+        /// <summary>Health Dashboard: a device with less free space than this on C: (in GB) counts as low on disk.</summary>
+        public static int LowDiskGB
+        {
+            get { return ReadInt(LowDiskGBValue, DefaultLowDiskGB, MinLowDiskGB, MaxLowDiskGB); }
+            set { WriteInt(LowDiskGBValue, Clamp(value, MinLowDiskGB, MaxLowDiskGB)); }
+        }
+
+        /// <summary>Health Dashboard: a device up this many days or more without a restart counts as up too long.</summary>
+        public static int LongUptimeDays
+        {
+            get { return ReadInt(LongUptimeDaysValue, DefaultLongUptimeDays, MinLongUptimeDays, MaxLongUptimeDays); }
+            set { WriteInt(LongUptimeDaysValue, Clamp(value, MinLongUptimeDays, MaxLongUptimeDays)); }
         }
 
         /// <summary>The log level. Layer8Log reads the same value and picks a change up within a few seconds.</summary>

@@ -46,6 +46,7 @@ Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (conso
 | Customize-Layer8Cab.ps1 on a released cab | The one-file release copy, run from a downloads folder with a space in its name: 0.3.0 without LAPS, BitLockerKeys and RestartComputer, signed in the same step | 4 menu files dropped, 3 changed. Imported signed; on the console no LAPS Password, BitLocker Recovery Key, Restart Computer or Cancel Restart, and everything else there |
 | Leaving features out of a build (`-Exclude`) | A signed 0.2.2 cab built without LAPS, RemoteControl and DriverManager | Its description says so in Console Extensions. On the console: no LAPS Password, Driver Grabber, Remote Desktop, Remote Assistance or PowerShell Session; Remote Tools' separators tidy; the rest works. The MSI build with `-Exclude` built but wasn't installed |
 | Approved console extension | Signed with a lab certificate: 0.1.2 to 0.1.4 by the build script, 0.2.0 by `Sign-Layer8Cab.ps1` (now `Customize-Layer8Cab.ps1`) from the unsigned release cab | Import, approve, enable notifications, install on the console, upgrade over the previous version. Menus, icons, Layer8 Settings, Client Cache, Driver Grabber, Add Resources and the device properties tabs all work |
+| Health Dashboard (1.0.0) | Layer8 Dev; All Systems (the two clients, the site server and the four placeholder records); the site server and both clients selected under Devices (Layer8 menu) | Layer8 Dev: both checked in 3 seconds, each with BitLocker off (the console's computer "Suspended (encrypted)", the second client "Off", as BitLocker Status reads them: not protected, fully encrypted and fully decrypted), everything else clean. All Systems: 7 in 6 seconds, the placeholders skipped by name, the site server under Client ("Not installed": its management point runs CcmExec without a client, which a test build called broken), its BitLocker "Not available" and not counted, updates "No client". Clicking a tile filters the grid and works with the filter box (BitLocker off and "dev02": one row); Devices shows them all again; tiles show their rule on hover. C: free sorts by size both ways. Double-click opens System Information with the same uptime, free space and client version. Check Again re-checks just the selected device. Export writes the shown rows in their sort order (UTF-8 with a byte order mark). After sharing their code with the dashboard, Check Pending Restart, BitLocker Status, Defender Status and Turn Off Provisioning Mode read exactly as before |
 
 Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, nothing changed): the device properties tabs, Client Cache, Driver Grabber, Incremental Collections, Remove Retired Content, Clean Software Update Groups, the driver package importers, and the Dell and HP driver packs. Driver Manager options was opened again for 0.7.0's Lenovo fields.
 
@@ -64,6 +65,7 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 - Send Message to a collection, and to a device with several people signed in
 - LAPS: legacy Microsoft LAPS (the lab forest doesn't have its schema), and passwords Windows LAPS backs up to Microsoft Entra ID (Layer8 reads Active Directory only)
 - A collection run on 50 or more devices
+- Health Dashboard: the Offline, Restart pending, Low disk, Defender, Missing updates, Long uptime and Couldn't check tiles with devices on them (nothing in the lab trips them yet), and Stop part way through a run
 - Layer8.msi: an MECM deployment running as SYSTEM with a console open (3010)
 - Approved console extension: Require Extension, Revoke Approval, a console uninstalling it by itself after Delete, another console picking it up from a notification
 
@@ -81,7 +83,7 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 
 ## Next up
 
-Nothing queued. AD cleanup is parked under Ideas.
+Layer8 1.0: the Health Dashboard is in and tested (see above). Next, README screenshots, then the release. AD cleanup is parked under Ideas.
 
 ## Ideas
 
