@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Management;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace Layer8.Device
@@ -15,6 +16,8 @@ namespace Layer8.Device
         LowDisk,
         BitLockerOff,
         Defender,
+        /// <summary>Windows wrote a crash dump lately: read from the minidump folder, not the event log.</summary>
+        BlueScreen,
         MissingUpdates,
         Client,
         /// <summary>The site hasn't heard from its client lately. Read from the site (SiteContact), not the device.</summary>
@@ -30,7 +33,7 @@ namespace Layer8.Device
         public readonly HashSet<HealthIssue> Issues = new HashSet<HealthIssue>();
         /// <summary>The checks that couldn't be read, as "BitLocker (access denied)".</summary>
         public readonly List<string> Unread = new List<string>();
-        public InfoCell SignedIn, Uptime, DiskFree, Restart, BitLocker, Defender, Updates, Client;
+        public InfoCell SignedIn, Uptime, DiskFree, Restart, BitLocker, Defender, BlueScreen, Updates, Client;
 
         /// <summary>"Couldn't check: BitLocker (access denied)", as the Issues column shows it.</summary>
         public string UnreadText => HealthCheck.Name(HealthIssue.CouldNotCheck) + ": " + string.Join(", ", Unread);
@@ -93,6 +96,7 @@ namespace Layer8.Device
                 case HealthIssue.LowDisk: return "Low disk";
                 case HealthIssue.BitLockerOff: return "BitLocker off";
                 case HealthIssue.Defender: return "Defender";
+                case HealthIssue.BlueScreen: return "Blue screen";
                 case HealthIssue.MissingUpdates: return "Missing updates";
                 case HealthIssue.Client: return "Client";
                 case HealthIssue.NotReporting: return "Not reporting";
@@ -107,7 +111,7 @@ namespace Layer8.Device
         /// check stands alone: one that can't be read shows "?", is named in the Issues column, and the rest still
         /// answer.
         /// </summary>
-        public static HealthReport Check(string host, int lowDiskGB, int longUptimeDays)
+        public static HealthReport Check(string host, int lowDiskGB, int longUptimeDays, int blueScreenDays)
         {
             HealthReport report = new HealthReport();
             ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
@@ -143,6 +147,17 @@ namespace Layer8.Device
                     string text = Utility.FormatBytes(free, "0.#") + (size > 0 ? " of " + Utility.FormatBytes(size, "0") : string.Empty);
                     return new InfoCell(text, free);
                 }
+            });
+
+            report.BlueScreen = Read(report, host, "Blue screen", () =>
+            {
+                List<DateTime> dumps = RecentCrashDumps(cimv2, blueScreenDays);
+                if (dumps.Count == 0) return new InfoCell("None", DateTime.MinValue);
+                report.Issues.Add(HealthIssue.BlueScreen);
+                DateTime newest = dumps.Max();
+                string code = StopCode(cimv2, newest);
+                string text = (dumps.Count == 1 ? string.Empty : dumps.Count + ", last ") + newest.ToString("g") + (code == null ? string.Empty : " (" + code + ")");
+                return new InfoCell(text, newest);
             });
 
             report.Client = Read(report, host, "Client", () =>
@@ -276,6 +291,62 @@ namespace Layer8.Device
             });
 
             return report;
+        }
+
+        /// <summary>
+        /// When the crash dumps in C:\Windows\Minidump written in the last days were written: one for each blue screen.
+        /// Listing the folder takes milliseconds, where searching the System event log for crashes takes seconds and
+        /// grows with the log. Windows keeps the dumps until Disk Cleanup or Storage Sense removes them, and writes
+        /// none if crash dumps are turned off, so a blue screen can go unseen here.
+        /// </summary>
+        internal static List<DateTime> RecentCrashDumps(ManagementScope cimv2, int days)
+        {
+            DateTime since = DateTime.Now.AddDays(-days);
+            List<DateTime> written = new List<DateTime>();
+            foreach (ManagementObject file in Utility.SearchWMIToList(cimv2,
+                @"SELECT LastModified FROM CIM_DataFile WHERE Drive = 'C:' AND Path = '\\Windows\\Minidump\\' AND Extension = 'dmp'"))
+            {
+                using (file)
+                {
+                    if (!(file["LastModified"] is string stamp)) continue;
+                    DateTime when = ManagementDateTimeConverter.ToDateTime(stamp);
+                    if (when >= since) written.Add(when);
+                }
+            }
+            return written;
+        }
+
+        /// <summary>
+        /// The stop code of the blue screen whose dump was written at the given time, as 0x000000D1, from the event
+        /// Windows writes after restarting from it (WER-SystemErrorReporting 1001: "The computer has rebooted from a
+        /// bugcheck. The bugcheck was: 0x000000d1 (...)"). Asked only of devices with a recent dump, since it searches
+        /// the event log. Null when the event isn't there or can't be read: the dump's date stands on its own.
+        /// </summary>
+        internal static string StopCode(ManagementScope cimv2, DateTime dumpWritten)
+        {
+            try
+            {
+                string from = ManagementDateTimeConverter.ToDmtfDateTime(dumpWritten.AddMinutes(-10));
+                foreach (ManagementObject entry in Utility.SearchWMIToList(cimv2,
+                    "SELECT InsertionStrings FROM Win32_NTLogEvent WHERE Logfile = 'System' AND EventCode = 1001 AND TimeGenerated >= '" + from + "'"))
+                {
+                    using (entry)
+                    {
+                        string first = (entry["InsertionStrings"] as string[])?.FirstOrDefault();
+                        Match match = first == null ? Match.Empty : Regex.Match(first, @"^\s*0x([0-9A-Fa-f]{1,8})\b");
+                        if (match.Success) return "0x" + match.Groups[1].Value.ToUpperInvariant().PadLeft(8, '0');
+                    }
+                }
+            }
+            catch (ManagementException ex)
+            {
+                log.DebugFormat("No stop code for the dump written {0}: {1}", dumpWritten, ex.Message);
+            }
+            catch (COMException ex)
+            {
+                log.DebugFormat("No stop code for the dump written {0}: {1}", dumpWritten, ex.Message);
+            }
+            return null;
         }
 
         private const int IdsPerQuery = 300;

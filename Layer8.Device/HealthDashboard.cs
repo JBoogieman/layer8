@@ -207,11 +207,11 @@ namespace Layer8.Device
             },
         };
 
-        private static readonly string[] Columns = { "Device", "Status", "Issues", "Signed in", "Up", "C: free", "Restart", "BitLocker", "Defender", "Updates missing", "Client", "Policy request" };
-        private static readonly int[] StartWidths = { 120, 90, 220, 130, 60, 110, 110, 90, 90, 130, 110, 100 };
+        private static readonly string[] Columns = { "Device", "Status", "Issues", "Signed in", "Up", "C: free", "Restart", "BitLocker", "Defender", "Blue screen", "Updates missing", "Client", "Policy request" };
+        private static readonly int[] StartWidths = { 120, 90, 220, 130, 60, 110, 110, 90, 90, 110, 130, 110, 100 };
         private const int StatusColumn = 1;
         private const int IssuesColumn = 2;
-        private const int PolicyColumn = 11;
+        private const int PolicyColumn = 12;
 
         private readonly ActionDescription action;
         private readonly ConnectionManagerBase connection;
@@ -222,6 +222,7 @@ namespace Layer8.Device
         private readonly int lowDiskGB = Layer8Settings.LowDiskGB;
         private readonly int longUptimeDays = Layer8Settings.LongUptimeDays;
         private readonly int notReportingDays = Layer8Settings.NotReportingDays;
+        private readonly int blueScreenDays = Layer8Settings.BlueScreenDays;
         // Why the site's side couldn't be read this pass, for the status line; null when it could.
         private string siteNote;
 
@@ -287,6 +288,8 @@ namespace Layer8.Device
             AddIssueTile(HealthIssue.Defender, string.Format(
                 "Microsoft Defender antivirus or real-time protection is off, or its signatures are more than {0} days old. Not counted when Defender is passive behind another antivirus",
                 HealthCheck.DefenderSignatureDays));
+            AddIssueTile(HealthIssue.BlueScreen, string.Format(
+                "Windows wrote a crash dump (a blue screen) in the last {0} days. Read from C:\\Windows\\Minidump: a blue screen whose dump was turned off or cleaned up doesn't show", blueScreenDays));
             AddIssueTile(HealthIssue.MissingUpdates, "Deployed software updates the client reports as missing");
             AddIssueTile(HealthIssue.Client, "No ConfigMgr client, its service (CcmExec) isn't running, or it's in provisioning mode");
             AddIssueTile(HealthIssue.NotReporting, string.Format(
@@ -583,7 +586,7 @@ namespace Layer8.Device
                         ClientActions.EnsureReachable(row.Host, reachableMs);
                     }
                     Progress(row, "Checking");
-                    report = HealthCheck.Check(row.Host, lowDiskGB, longUptimeDays);
+                    report = HealthCheck.Check(row.Host, lowDiskGB, longUptimeDays, blueScreenDays);
                     int issues = report.Issues.Count;
                     state = RowState.Checked;
                     text = issues == 0 ? "Healthy" : issues + (issues == 1 ? " issue" : " issues");
@@ -646,8 +649,9 @@ namespace Layer8.Device
             SetCell(item, 6, report?.Restart);
             SetCell(item, 7, report?.BitLocker);
             SetCell(item, 8, report?.Defender);
-            SetCell(item, 9, report?.Updates);
-            SetCell(item, 10, report?.Client);
+            SetCell(item, 9, report?.BlueScreen);
+            SetCell(item, 10, report?.Updates);
+            SetCell(item, 11, report?.Client);
             ShowIssues(row);
             item.ForeColor = row.State == RowState.Offline || row.State == RowState.Skipped || row.State == RowState.Canceled
                 ? SystemColors.GrayText

@@ -37,6 +37,10 @@ namespace Layer8
         public const int MinNotReportingDays = 1;
         public const int MaxNotReportingDays = 365;
 
+        public const int DefaultBlueScreenDays = 14;
+        public const int MinBlueScreenDays = 1;
+        public const int MaxBlueScreenDays = 365;
+
         private const string DevicesAtOnceValue = "DevicesAtOnce";
         private const string ConfirmAboveValue = "ConfirmAbove";
         private const string CheckReachableValue = "CheckReachable";
@@ -44,6 +48,7 @@ namespace Layer8
         private const string LowDiskGBValue = "LowDiskGB";
         private const string LongUptimeDaysValue = "LongUptimeDays";
         private const string NotReportingDaysValue = "NotReportingDays";
+        private const string BlueScreenDaysValue = "BlueScreenDays";
 
         /// <summary>How many devices an action on many devices contacts at the same time.</summary>
         public static int DevicesAtOnce
@@ -102,6 +107,13 @@ namespace Layer8
         {
             get { return ReadInt(NotReportingDaysValue, DefaultNotReportingDays, MinNotReportingDays, MaxNotReportingDays); }
             set { WriteInt(NotReportingDaysValue, Clamp(value, MinNotReportingDays, MaxNotReportingDays)); }
+        }
+
+        /// <summary>Health Dashboard: a crash dump written in this many days counts as a recent blue screen.</summary>
+        public static int BlueScreenDays
+        {
+            get { return ReadInt(BlueScreenDaysValue, DefaultBlueScreenDays, MinBlueScreenDays, MaxBlueScreenDays); }
+            set { WriteInt(BlueScreenDaysValue, Clamp(value, MinBlueScreenDays, MaxBlueScreenDays)); }
         }
 
         /// <summary>The log level. Layer8Log reads the same value and picks a change up within a few seconds.</summary>
