@@ -659,7 +659,13 @@ namespace Layer8.Device
         /// <summary>A key value inside a WMI object path: backslashes and quotes escaped.</summary>
         private static string PathText(string value) => (value ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"");
 
-        /// <summary>A registry value read through WMI's registry provider, or null if it isn't there.</summary>
+        /// <summary>
+        /// A registry value read through WMI's registry provider, or null if it isn't there. Read in the 64-bit view,
+        /// where Windows keeps its keys. The console is 32-bit, and without the context the provider answered from the
+        /// 32-bit view: on the lab's clients and site server, Windows Advanced Threat Protection's key wasn't there at
+        /// all, so Defender for Endpoint always read as not onboarded. The Windows version values (UBR, DisplayVersion)
+        /// read the same in both views.
+        /// </summary>
         internal static object RegistryValue(string host, string method, string key, string name)
         {
             ManagementScope registryScope;
@@ -679,13 +685,14 @@ namespace Layer8.Device
         {
             try
             {
+                InvokeMethodOptions options = new InvokeMethodOptions { Context = Utility.Provider64Context() };
                 using (ManagementClass registry = new ManagementClass(registryScope, new ManagementPath("StdRegProv"), null))
                 using (ManagementBaseObject input = registry.GetMethodParameters(method))
                 {
                     input["hDefKey"] = HKEY_LOCAL_MACHINE;
                     input["sSubKeyName"] = key;
                     input["sValueName"] = name;
-                    using (ManagementBaseObject output = registry.InvokeMethod(method, input, null))
+                    using (ManagementBaseObject output = registry.InvokeMethod(method, input, options))
                     {
                         if (Convert.ToUInt32(output?["ReturnValue"] ?? 1u) != 0) return null;
                         return method == "GetDWORDValue" ? output["uValue"] : output["sValue"];

@@ -924,7 +924,7 @@ namespace Layer8.Device
 
         /// <summary>
         /// Windows' own restart flags ("Windows servicing", "Windows Update"): the same registry keys Windows itself
-        /// uses, read through WMI's registry provider (root\default). Empty when neither is set.
+        /// uses, read through WMI's registry provider (root\default) in the 64-bit view. Empty when neither is set.
         /// </summary>
         internal static List<string> WindowsRestartReasons(ManagementScope registryScope)
         {
@@ -1017,15 +1017,27 @@ namespace Layer8.Device
         /// </summary>
         internal static bool ProvisioningModeOn(ManagementScope registryScope)
         {
+            return string.Equals(ProvisioningModeValue(registryScope), "true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// The client's ProvisioningMode value ("true" or "false"), or null when it has none. Read in the 64-bit view,
+        /// where the client keeps it. The console is 32-bit, and without the context WMI's registry provider answered
+        /// from the 32-bit view, which on both lab clients and the site server had no ProvisioningMode value: a client
+        /// in provisioning mode read as out of it.
+        /// </summary>
+        internal static string ProvisioningModeValue(ManagementScope registryScope)
+        {
+            InvokeMethodOptions options = new InvokeMethodOptions { Context = Utility.Provider64Context() };
             using (ManagementClass registry = new ManagementClass(registryScope, new ManagementPath("StdRegProv"), null))
             using (ManagementBaseObject inParams = registry.GetMethodParameters("GetStringValue"))
             {
                 inParams["hDefKey"] = 0x80000002u;   // HKEY_LOCAL_MACHINE
                 inParams["sSubKeyName"] = @"SOFTWARE\Microsoft\CCM\CcmExec";
                 inParams["sValueName"] = "ProvisioningMode";
-                using (ManagementBaseObject outParams = registry.InvokeMethod("GetStringValue", inParams, null))
+                using (ManagementBaseObject outParams = registry.InvokeMethod("GetStringValue", inParams, options))
                 {
-                    return string.Equals(outParams["sValue"] as string, "true", StringComparison.OrdinalIgnoreCase);
+                    return outParams["sValue"] as string;
                 }
             }
         }
@@ -1153,14 +1165,19 @@ namespace Layer8.Device
             }
         }
 
+        // In the 64-bit view, where Windows keeps these keys. The console is 32-bit, and without the context WMI's
+        // registry provider answered from the 32-bit view (WOW6432Node): on the lab's Windows 11 clients and the site
+        // server, Component Based Servicing had 2 of its 14 subkeys there and WindowsUpdate\Auto Update wasn't there at
+        // all, so neither restart flag could ever be found.
         private static bool HasSubKey(ManagementClass registry, string keyPath, string subKey)
         {
             const uint HKEY_LOCAL_MACHINE = 0x80000002;
+            InvokeMethodOptions options = new InvokeMethodOptions { Context = Utility.Provider64Context() };
             using (ManagementBaseObject inParams = registry.GetMethodParameters("EnumKey"))
             {
                 inParams["hDefKey"] = HKEY_LOCAL_MACHINE;
                 inParams["sSubKeyName"] = keyPath;
-                using (ManagementBaseObject outParams = registry.InvokeMethod("EnumKey", inParams, null))
+                using (ManagementBaseObject outParams = registry.InvokeMethod("EnumKey", inParams, options))
                 {
                     // A missing key returns an error code and no names: that just means "not pending".
                     string[] names = outParams["sNames"] as string[];
@@ -1395,7 +1412,18 @@ namespace Layer8.Device
         /// <summary>Is C: protected, and is it still encrypting? Read-only; never touches recovery passwords.</summary>
         public static string BitLockerStatus(IResultObject resultObject)
         {
-            BitLockerState state = ReadBitLocker(resultObject["Name"].StringValue);
+            BitLockerState state;
+            try
+            {
+                state = ReadBitLocker(resultObject["Name"].StringValue);
+            }
+            catch (ManagementException ex) when (ex.ErrorCode == ManagementStatus.InvalidNamespace)
+            {
+                // No BitLocker on this edition, or a server without the BitLocker feature: the dashboard's "Not
+                // available". Left to the progress window, any missing namespace reads as "No ConfigMgr client found",
+                // which on the lab's site server wasn't what was missing.
+                return "Not available (no BitLocker WMI namespace)";
+            }
             if (state == null) return "C: isn't an encryptable volume";
             string protectedText = state.Protection == 1 ? "protected" : state.Protection == 0 ? "not protected" : "protection unknown";
             return "C: " + protectedText + (state.Conversion.Length > 0 ? ", " + state.Conversion : "");
