@@ -37,7 +37,7 @@ Written for the lab STATUS.md describes: a site server, the client the console r
 
 ### A. Health Dashboard
 
-Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Layer8.Device/ListViewSorter.cs`, `Extensions/Actions/*/Layer8*Health.xml`
+Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Layer8.Device/HealthRun.cs`, `Layer8.Device/ListViewSorter.cs`, `Extensions/Actions/*/Layer8*Health.xml`
 
 - [ ] **Layer8 Dev:** both clients checked in a few seconds. BitLocker reads as BitLocker Status reads it ("Suspended (encrypted)" when not protected but fully encrypted, "Off" when fully decrypted).
 - [ ] **All Systems:** the placeholders are skipped by name. The site server shows Client "Not installed" (its management point runs CcmExec without a client), BitLocker "Not available" and not counted, and Updates "No client".
@@ -51,6 +51,12 @@ Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Laye
 - [ ] **Blue screen:** a dump inside the window shows its time and stop code, as the script lists it.
 - [ ] **Windows:** reads version and build ("26H2, 26300.x"), and the site server "Server 2025, 26100.x".
 - [ ] **Update scan:** reads how long ago each client's last software update scan finished, as the script lists it, and "No client" for the site server. It sorts oldest or newest first.
+- [ ] **Since last run:** change a threshold so one device gains an issue (Not scanning set between the two clients' last scans), and run the dashboard again in a new window.
+  - The Changed tile counts that device, and its Since last run cell says "New: <issue>".
+  - That tile shows "+1" beside its count once the run ends, and its hover text gives the last run's count and time.
+  - The status line says how many changed since the run at what time.
+  - Refresh straight after shows nothing changed. Set the threshold back, and the next run says "Gone: <issue>" and "-1".
+  - Check Again on one device logs what changed but isn't kept. With no earlier run of a collection, Changed's hover text says so.
 - [ ] **Double-click a row:** System Information opens with the same uptime, free space and client version.
 - [ ] **Check Again:** re-checks just the selected device.
 - [ ] **Export:** writes the shown rows in their sort order, UTF-8 with a byte order mark.

@@ -16,9 +16,12 @@ Right-click a device, **Layer8**: the tools for that one device. Its own Client 
 
 Right-click a device collection, **Health Dashboard** (or select devices, **Layer8** > **Health Dashboard**): one live pass over every device. The tiles fill in as devices answer. Click one to show just those devices; click it again, or **Devices**, for all of them. Hover over a tile for its rule. The grid sorts on any column, filters as you type, and Copy and Export take what's shown. Double-click a device for System Information. Right-click selected devices to check them again, or to run a client action on them: the console's own (policy and inventory cycles, update scans and installs, Send Message, restarts, client health and repair, Defender quick scan, Find Software), with the same questions before anything that changes a device and the same progress window. The check itself only reads.
 
+Each full run on a collection is kept for your Windows account (in `%LOCALAPPDATA%\Layer8\Dashboard`, one small file per collection), so the next run shows what changed: the **Since last run** column says what's new and what's gone on each device, the **Changed** tile counts those devices, and once a run ends each tile shows how its count moved ("+1"), with the last run's count in its hover text. Check Again on a few devices, and a run stopped early, aren't kept. Selected devices, rather than a collection, aren't compared.
+
 | Tile | Counts a device when |
 |---|---|
 | Offline | it doesn't answer: ports 135 and 445 closed, or WMI's RPC server unreachable |
+| Changed | its issues aren't the ones the collection's last full run found, or it wasn't in that run |
 | Restart pending | ConfigMgr, Windows servicing or Windows Update is waiting on a restart |
 | Low disk | C: has less than 10 GB free |
 | BitLocker off | C: isn't protected: BitLocker off, or protection suspended |

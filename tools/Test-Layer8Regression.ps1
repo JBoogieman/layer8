@@ -1159,6 +1159,19 @@ function Get-IssueText($Row) {
     @($parts) -join ', '
 }
 
+# A device's issues as a kept dashboard run holds them (Row.IssueKeys): Offline or Couldn't check, then each issue by tile name.
+function Get-IssueKeys($Row) {
+    $health = Get-HealthIssues
+    $keys = New-Object System.Collections.Generic.List[string]
+    if ($Row.State -eq 'Offline') { $keys.Add('Offline') }
+    elseif ($Row.State -eq 'Failed') { $keys.Add($health.Names['CouldNotCheck']) }
+    foreach ($issue in $health.Order) {
+        $name = $health.Names[$issue]
+        if ((Test-RowHas $Row $issue) -and -not $keys.Contains($name)) { $keys.Add($name) }
+    }
+    $keys
+}
+
 # Row.Has: the site's Not reporting, or one of the device's own issues.
 function Test-RowHas($Row, [string]$Issue) {
     if ($Issue -eq 'NotReporting') { return [bool]$Row.NotReporting }
@@ -1266,6 +1279,7 @@ function Test-Devices {
     Add-Result INFO 'Tiles' "$($rows.Count) devices; $tileText"
 
     $script:expected = [pscustomobject]@{
+        CollectionId = $collectionId
         Rows         = $rows
         Tiles        = $tiles
         TileText     = $tileText
@@ -1317,8 +1331,13 @@ function Test-Log {
 
     # The last Health Dashboard run on the collection: every build runs one, and the Devices section says what it should find.
     $scope = [regex]::Escape("Health Dashboard on $Collection")
+    # The last full run: Check Again on a few devices logs a run on the same collection too.
     $startIndex = -1
-    for ($i = $entries.Count - 1; $i -ge 0; $i--) { if ($entries[$i].Text -match "^$scope`: checking (\d+) device\(s\)") { $startIndex = $i; break } }
+    $fullCount = $null
+    if ($script:expected) { $fullCount = $script:expected.Rows.Count }
+    for ($i = $entries.Count - 1; $i -ge 0; $i--) {
+        if ($entries[$i].Text -match "^$scope`: checking (\d+) device\(s\)" -and ($null -eq $fullCount -or [int]$Matches[1] -eq $fullCount)) { $startIndex = $i; break }
+    }
     if ($startIndex -lt 0) { Add-Result FAIL "A Health Dashboard run on $Collection" "none since $($Since.ToString('g')): every build runs one"; return }
     $null = $entries[$startIndex].Text -match "^$scope`: checking (\d+) device\(s\)"
     $checked = [int]$Matches[1]
@@ -1347,6 +1366,8 @@ function Test-Log {
     Test-Equal 'Devices checked' $script:expected.Rows.Count $checked
 
     foreach ($name in $loggedTiles.Keys) {
+        # Changed depends on the run before this one, which the dashboard has just replaced: checked further down.
+        if ($name -eq 'changed') { continue }
         if (-not $script:expected.Tiles.Contains($name)) { Add-Result WARN "Tile '$name'" "logged $($loggedTiles[$name]); this script doesn't know the tile"; continue }
         $want = $script:expected.Tiles[$name]
         if ("$want" -eq '?') { Add-Result SKIP "Tile '$name'" "logged $($loggedTiles[$name]); this script doesn't read it yet" }
@@ -1385,6 +1406,42 @@ function Test-Log {
         Test-Equal 'Not reporting, from the site' $script:expected.NotReporting $Matches[2]
     }
     else { Add-Result WARN 'Policy requests read from the site' 'no line for it in the run' }
+
+    # Since the last run: the Changed tile against the run's own list of what changed (the run before it is gone now:
+    # the dashboard has kept this one in its place).
+    $after = @($entries[$startIndex..($entries.Count - 1)])
+    if ($loggedTiles.Contains('changed')) {
+        $changes = $after | Where-Object { $_.Text -match "^$scope`: (since the run at .*?, (\d+) changed|no earlier run to compare with)" } | Select-Object -First 1
+        if (-not $changes) { Add-Result FAIL "Tile 'changed'" "logged $($loggedTiles['changed']), but no line says what changed" }
+        else {
+            $null = $changes.Text -match "^$scope`: (since the run at .*?, (\d+) changed|no earlier run to compare with)"
+            $count = '0'
+            if ($Matches[2]) { $count = $Matches[2] }
+            Test-Equal "Tile 'changed'" $count $loggedTiles['changed']
+            Add-Result INFO 'Since the last run' $changes.Text.Substring($changes.Text.IndexOf(': ') + 2)
+        }
+    }
+    else { Add-Result WARN "Tile 'changed'" 'not in the logged run: a build from before the since-last-run tile?' }
+
+    # The run the dashboard kept to compare the next one with: each device's issues, as the Devices section reads them.
+    $keptLine = $after | Where-Object { $_.Text -like "Health Dashboard on $Collection`: kept this run*" } | Select-Object -First 1
+    $keptPath = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) ('Layer8\Dashboard\{0}.txt' -f $script:expected.CollectionId)
+    if (-not $keptLine) { Add-Result FAIL 'Run kept to compare with' 'no "kept this run" line after the last run' }
+    elseif (-not (Test-Path -LiteralPath $keptPath)) { Add-Result FAIL 'Run kept to compare with' "$keptPath isn't there" }
+    else {
+        $kept = @{}
+        foreach ($line in Get-Content -LiteralPath $keptPath -Encoding UTF8) {
+            $fields = $line -split "`t"
+            if ($fields[0] -eq 'device' -and $fields.Count -ge 4) { $kept[$fields[2]] = @($fields[3] -split '\|' | Where-Object { $_ } | Sort-Object) -join '|' }
+        }
+        $wrong = @(foreach ($row in $script:expected.Rows | Where-Object State -ne 'Skipped') {
+            $want = @(Get-IssueKeys $row | Sort-Object) -join '|'
+            if (-not $kept.ContainsKey($row.Device)) { "$($row.Device) missing" }
+            elseif ($kept[$row.Device] -ne $want) { "$($row.Device): kept '$($kept[$row.Device])', expected '$want'" }
+        })
+        if ($wrong) { Add-Result FAIL 'Run kept to compare with' (($wrong | Select-Object -First 5) -join '; ') }
+        else { Add-Result PASS 'Run kept to compare with' "$($kept.Count) devices in $keptPath, each with the issues the Devices section reads" }
+    }
 }
 
 # --- Changes --------------------------------------------------------------------------------------------------------------

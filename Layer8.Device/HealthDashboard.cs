@@ -85,7 +85,9 @@ namespace Layer8.Device
                 return;
             }
 
-            using (HealthDashboardDialog dialog = new HealthDashboardDialog(action, title, scope, devices, selected.ConnectionManager))
+            // A collection's runs are kept to compare the next one with; a selection of devices has nothing to key them by.
+            string collectionId = isCollection ? selected["CollectionID"].StringValue : null;
+            using (HealthDashboardDialog dialog = new HealthDashboardDialog(action, title, scope, devices, selected.ConnectionManager, collectionId))
             {
                 dialog.ShowDialog();
             }
@@ -98,7 +100,7 @@ namespace Layer8.Device
 
         private enum RowState { Queued, Checking, Checked, Offline, Failed, Skipped, Canceled }
 
-        private enum Tone { Neutral, Good, Muted, Warn, Bad }
+        private enum Tone { Neutral, Good, Muted, Warn, Bad, Info }
 
         /// <summary>One device: its row in the grid (kept while a filter hides it), and what the last check found.</summary>
         private sealed class Row
@@ -119,6 +121,10 @@ namespace Layer8.Device
             public HealthReport Report;
             /// <summary>What the site last heard from it, read alongside the device's own check; null until then.</summary>
             public SiteContact Site;
+            /// <summary>Whether this run's read of the site has come back for it (it can come after the device answers).</summary>
+            public bool SiteRead;
+            /// <summary>What changed since the last run, for the Since last run column and the Changed tile; null when nothing did.</summary>
+            public string Change;
 
             public bool Has(HealthIssue issue) => issue == HealthIssue.NotReporting
                 ? Site != null && Site.NotReporting
@@ -139,6 +145,26 @@ namespace Layer8.Device
                 }
                 return names;
             }
+
+            /// <summary>
+            /// Its issues as a kept run holds them, by tile name: Couldn't check without its reasons, which follow the
+            /// wording of an error rather than what's wrong with the device.
+            /// </summary>
+            public List<string> IssueKeys()
+            {
+                List<string> keys = new List<string>();
+                if (State == RowState.Offline) keys.Add("Offline");
+                else if (State == RowState.Failed) keys.Add(HealthCheck.Name(HealthIssue.CouldNotCheck));
+                foreach (HealthIssue issue in Enum.GetValues(typeof(HealthIssue)))
+                {
+                    string name = HealthCheck.Name(issue);
+                    if (Has(issue) && !keys.Contains(name)) keys.Add(name);
+                }
+                return keys;
+            }
+
+            /// <summary>Checked, offline or couldn't be checked: a device a run says something about (not queued, skipped or canceled).</summary>
+            public bool Answered => State == RowState.Checked || State == RowState.Offline || State == RowState.Failed;
         }
 
         /// <summary>A client action the dashboard runs on selected devices, named as the console's Client Actions menu names it.</summary>
@@ -207,11 +233,12 @@ namespace Layer8.Device
             },
         };
 
-        private static readonly string[] Columns = { "Device", "Status", "Issues", "Signed in", "Up", "C: free", "Restart", "BitLocker", "Defender", "Blue screen", "Windows", "Updates missing", "Update scan", "Client", "Policy request" };
-        private static readonly int[] StartWidths = { 120, 90, 220, 130, 60, 110, 110, 90, 90, 110, 120, 130, 90, 110, 100 };
+        private static readonly string[] Columns = { "Device", "Status", "Issues", "Since last run", "Signed in", "Up", "C: free", "Restart", "BitLocker", "Defender", "Blue screen", "Windows", "Updates missing", "Update scan", "Client", "Policy request" };
+        private static readonly int[] StartWidths = { 120, 90, 220, 150, 130, 60, 110, 110, 90, 90, 110, 120, 130, 90, 110, 100 };
         private const int StatusColumn = 1;
         private const int IssuesColumn = 2;
-        private const int PolicyColumn = 14;
+        private const int ChangeColumn = 3;
+        private const int PolicyColumn = 15;
 
         private readonly ActionDescription action;
         private readonly ConnectionManagerBase connection;
@@ -228,6 +255,17 @@ namespace Layer8.Device
         private readonly Version windowsBuild;
         // Why the site's side couldn't be read this pass, for the status line; null when it could.
         private string siteNote;
+        // Whether this pass's read of the site has come back, and whether it was read.
+        private bool siteDone, siteOk;
+
+        // The collection's last full run, kept to compare with: where it's kept (null for selected devices), the run
+        // the grid compares with now, and one this window has just kept, which the next pass compares with.
+        private readonly string server;
+        private readonly string historyPath;
+        private HealthRun previous;
+        private HealthRun kept;
+        private bool fullRun, keepWhenSiteDone;
+        private readonly Tile changedTile;
 
         private readonly ToolTip tips = new ToolTip();
         private readonly FlowLayoutPanel tilePanel;
@@ -251,7 +289,7 @@ namespace Layer8.Device
         private int sortColumn;
         private bool descending;
 
-        public HealthDashboardDialog(ActionDescription action, string title, string scope, IEnumerable<KeyValuePair<string, int>> devices, ConnectionManagerBase connection)
+        public HealthDashboardDialog(ActionDescription action, string title, string scope, IEnumerable<KeyValuePair<string, int>> devices, ConnectionManagerBase connection, string collectionId)
         {
             this.action = action;
             this.connection = connection;
@@ -259,6 +297,18 @@ namespace Layer8.Device
             this.scope = scope;
             Layer8Settings.TryParseWindowsBuild(windowsBuildText, out windowsBuild);
             rows = devices.Select(device => new Row(device.Key, device.Value, Columns.Length)).ToList();
+            if (collectionId != null)
+            {
+                try
+                {
+                    server = connection.NamedValueDictionary["ServerName"]?.ToString();
+                }
+                catch (KeyNotFoundException)
+                {
+                }
+                historyPath = HealthRun.PathFor(collectionId);
+                previous = HealthRun.Load(historyPath, server);
+            }
 
             SuspendLayout();
             AutoScaleDimensions = new SizeF(6F, 13F);
@@ -286,6 +336,7 @@ namespace Layer8.Device
                 row => row.State == RowState.Checked && row.IssueNames().Count == 0);
             AddTile("Offline", "Didn't answer: ports 135 and 445 closed, or WMI's RPC server unreachable", Tone.Muted,
                 row => row.State == RowState.Offline);
+            changedTile = AddTile("Changed", string.Empty, Tone.Info, row => row.Change != null);
             AddIssueTile(HealthIssue.RestartPending, "ConfigMgr, Windows servicing or Windows Update is waiting on a restart");
             AddIssueTile(HealthIssue.LowDisk, string.Format("Less than {0} GB free on C:", lowDiskGB));
             AddIssueTile(HealthIssue.BitLockerOff, "C: isn't protected by BitLocker: off, or protection suspended");
@@ -306,6 +357,7 @@ namespace Layer8.Device
             AddTile(HealthCheck.Name(HealthIssue.CouldNotCheck),
                 "Answered, but couldn't be checked (access denied, a WMI error), or one check couldn't be read: the Issues column says which", Tone.Bad,
                 row => row.State == RowState.Failed || row.Has(HealthIssue.CouldNotCheck));
+            ShowPrevious();
 
             Panel filterBar = new Panel { Dock = DockStyle.Top, Height = 32 };
             Label filterLabel = new Label { Text = "Filter:", Location = new Point(12, 9), AutoSize = true };
@@ -430,12 +482,111 @@ namespace Layer8.Device
 
         private Tile AddTile(string caption, string tip, Tone tone, Func<Row, bool> match)
         {
-            Tile tile = new Tile(caption, tone, match);
+            Tile tile = new Tile(caption, tone, match) { Tip = tip };
             tile.Click += (s, e) => TileClicked(tile);
             tips.SetToolTip(tile, tip);
             tilePanel.Controls.Add(tile);
             tiles.Add(tile);
             return tile;
+        }
+
+        /// <summary>
+        /// The run the grid compares with: each tile's count then, beside its own once a pass ends and in its hover
+        /// text, and each device's change. Called when the window opens and when a pass starts on a newly kept run.
+        /// </summary>
+        private void ShowPrevious()
+        {
+            foreach (Tile tile in tiles)
+            {
+                tile.Previous = tile != changedTile && previous != null && previous.Tiles.TryGetValue(tile.Caption, out int count) ? count : (int?)null;
+                string tip = tile == changedTile ? ChangedTip() : tile.Tip;
+                if (tile.Previous.HasValue) tip += string.Format("\n\nThe last run, at {0:g}: {1:N0}", previous.Finished, tile.Previous.Value);
+                tips.SetToolTip(tile, tip);
+            }
+            foreach (Row row in rows) ShowIssues(row);
+        }
+
+        private string ChangedTip()
+        {
+            if (historyPath == null) return "Devices whose issues changed since the last run. Only a collection's runs are kept to compare with, not a selection of devices";
+            if (previous == null) return "Devices whose issues changed since the last full run of " + scope + ". There's none to compare with yet: this one is kept for the next";
+            return string.Format("Devices whose issues changed since the full run at {0:g}, or that weren't in it. The Since last run column says what changed", previous.Finished);
+        }
+
+        /// <summary>
+        /// What changed on a device since the run the grid compares with: "New: Not scanning; gone: Blue screen", or
+        /// "Not in the last run". Null when nothing did, while it's still being checked, or with nothing to compare
+        /// with. Not reporting comes from the site, which can answer after the device does: until it has, the last
+        /// run's word on it stands.
+        /// </summary>
+        private string ChangeText(Row row)
+        {
+            if (previous == null || !row.Answered) return null;
+            if (!previous.Devices.TryGetValue(row.ResourceId, out HealthRun.DeviceIssues before)) return "Not in the last run";
+            List<string> now = row.IssueKeys();
+            string notReporting = HealthCheck.Name(HealthIssue.NotReporting);
+            if (!row.SiteRead && before.Issues.Contains(notReporting) && !now.Contains(notReporting)) now.Add(notReporting);
+            List<string> added = now.Where(issue => !before.Issues.Contains(issue)).ToList();
+            List<string> gone = before.Issues.Where(issue => !now.Contains(issue)).ToList();
+            if (added.Count == 0 && gone.Count == 0) return null;
+            List<string> parts = new List<string>();
+            if (added.Count > 0) parts.Add("New: " + string.Join(", ", added));
+            if (gone.Count > 0) parts.Add((parts.Count == 0 ? "Gone: " : "gone: ") + string.Join(", ", gone));
+            return string.Join("; ", parts);
+        }
+
+        /// <summary>Devices in the run the grid compares with that aren't in the collection now.</summary>
+        private int LeftSincePrevious()
+        {
+            if (previous == null) return 0;
+            HashSet<int> now = new HashSet<int>(rows.Select(row => row.ResourceId));
+            return previous.Devices.Keys.Count(id => !now.Contains(id));
+        }
+
+        /// <summary>
+        /// Keeps a full pass for the next one to compare with, once the devices and the site have both answered, and
+        /// logs what changed since the run before. A pass whose site read failed isn't kept: its Not reporting is unknown.
+        /// </summary>
+        private void KeepRun()
+        {
+            keepWhenSiteDone = false;
+            if (!siteOk)
+            {
+                log.InfoFormat("{0} on {1}: this run isn't kept to compare with, since the site's policy requests couldn't be read", title, scope);
+                return;
+            }
+            foreach (Tile tile in tiles) tile.Count = rows.Count(tile.Match);
+            LogChanges();
+
+            HealthRun run = new HealthRun(server, finishedAt);
+            foreach (Row row in rows.Where(row => row.Answered)) run.Devices[row.ResourceId] = new HealthRun.DeviceIssues(row.Host, row.IssueKeys());
+            foreach (Tile tile in tiles.Where(tile => tile != changedTile)) run.Tiles[tile.Caption] = tile.Count;
+            try
+            {
+                run.Save(historyPath);
+                kept = run;
+                log.InfoFormat("{0} on {1}: kept this run to compare the next one with ({2})", title, scope, historyPath);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                log.Warn(string.Format("{0} on {1}: couldn't keep this run to compare the next one with", title, scope), ex);
+            }
+        }
+
+        /// <summary>What changed since the run the grid compares with, in one line: which devices, and how.</summary>
+        private void LogChanges()
+        {
+            if (previous == null)
+            {
+                log.InfoFormat("{0} on {1}: no earlier run to compare with", title, scope);
+                return;
+            }
+            List<Row> changed = rows.Where(row => row.Change != null).ToList();
+            string which = changed.Count == 0
+                ? string.Empty
+                : ": " + string.Join("; ", changed.Take(20).Select(row => row.Host + " (" + row.Change + ")")) + (changed.Count > 20 ? "; ..." : string.Empty);
+            log.InfoFormat("{0} on {1}: since the run at {2:g}, {3} changed{4}; {5} no longer in it",
+                title, scope, previous.Finished, changed.Count, which, LeftSincePrevious());
         }
 
         private void AddIssueTile(HealthIssue issue, string tip)
@@ -483,6 +634,17 @@ namespace Layer8.Device
             if (running || targets.Count == 0) return;
             running = true;
             stopping = false;
+            // After a pass this window kept, that pass is the last run: compare with it now.
+            if (kept != null)
+            {
+                previous = kept;
+                kept = null;
+                ShowPrevious();
+            }
+            fullRun = targets.Count == rows.Count;
+            keepWhenSiteDone = false;
+            siteDone = siteOk = false;
+            foreach (Tile tile in tiles) tile.ShowDelta = false;
             cancel = new CancellationTokenSource();
             CancellationToken token = cancel.Token;
             int devicesAtOnce = Layer8Settings.DevicesAtOnce;
@@ -497,6 +659,7 @@ namespace Layer8.Device
                 row.State = RowState.Queued;
                 row.Report = null;
                 row.Site = null;
+                row.SiteRead = false;
                 FillRow(row, "Queued");
             }
             list.EndUpdate();
@@ -533,6 +696,8 @@ namespace Layer8.Device
                     OnUi(() =>
                     {
                         siteNote = "couldn't read the site's policy requests: " + root.Message;
+                        siteDone = true;
+                        if (keepWhenSiteDone) KeepRun();
                         dirty = true;
                     });
                 }
@@ -646,22 +811,22 @@ namespace Layer8.Device
             });
         }
 
-        private static void FillRow(Row row, string text)
+        private void FillRow(Row row, string text)
         {
             HealthReport report = row.Report;
             ListViewItem item = row.Item;
             SetCell(item, StatusColumn, new InfoCell(text));
-            SetCell(item, 3, report?.SignedIn);
-            SetCell(item, 4, report?.Uptime);
-            SetCell(item, 5, report?.DiskFree);
-            SetCell(item, 6, report?.Restart);
-            SetCell(item, 7, report?.BitLocker);
-            SetCell(item, 8, report?.Defender);
-            SetCell(item, 9, report?.BlueScreen);
-            SetCell(item, 10, report?.Windows);
-            SetCell(item, 11, report?.Updates);
-            SetCell(item, 12, report?.UpdateScan);
-            SetCell(item, 13, report?.Client);
+            SetCell(item, 4, report?.SignedIn);
+            SetCell(item, 5, report?.Uptime);
+            SetCell(item, 6, report?.DiskFree);
+            SetCell(item, 7, report?.Restart);
+            SetCell(item, 8, report?.BitLocker);
+            SetCell(item, 9, report?.Defender);
+            SetCell(item, 10, report?.BlueScreen);
+            SetCell(item, 11, report?.Windows);
+            SetCell(item, 12, report?.Updates);
+            SetCell(item, 13, report?.UpdateScan);
+            SetCell(item, 14, report?.Client);
             ShowIssues(row);
             item.ForeColor = row.State == RowState.Offline || row.State == RowState.Skipped || row.State == RowState.Canceled
                 ? SystemColors.GrayText
@@ -671,13 +836,15 @@ namespace Layer8.Device
         /// <summary>
         /// What's wrong, for the Issues column: the issues found, or that the device didn't answer or couldn't be
         /// checked (one issue each). Sorted by how many, so sorting the column puts every device that needs a look
-        /// first, ahead of healthy and skipped ones, which leave it blank.
+        /// first, ahead of healthy and skipped ones, which leave it blank. What changed since the last run goes beside it.
         /// </summary>
-        private static void ShowIssues(Row row)
+        private void ShowIssues(Row row)
         {
             List<string> names = row.IssueNames();
             string issues = string.Join(", ", names);
             SetCell(row.Item, IssuesColumn, names.Count == 0 ? null : new InfoCell(issues, names.Count));
+            row.Change = ChangeText(row);
+            SetCell(row.Item, ChangeColumn, row.Change == null ? null : new InfoCell(row.Change));
             SetCell(row.Item, PolicyColumn, PolicyCell(row.Site));
             row.Item.ToolTipText = names.Count > 0 ? issues : row.Item.SubItems[StatusColumn].Text;
         }
@@ -701,6 +868,7 @@ namespace Layer8.Device
             foreach (Row row in targets)
             {
                 contact.TryGetValue(row.ResourceId, out row.Site);
+                row.SiteRead = true;
                 ShowIssues(row);
                 if (row.Item.ListView == null && Matches(row))
                 {
@@ -712,6 +880,8 @@ namespace Layer8.Device
             dirty = true;
             log.InfoFormat("{0} on {1}: the site's last policy request read for {2} device(s); {3} not reporting in {4} days",
                 title, scope, contact.Count, targets.Count(row => row.Has(HealthIssue.NotReporting)), notReportingDays);
+            siteDone = siteOk = true;
+            if (keepWhenSiteDone) KeepRun();
         }
 
         private static void SetCell(ListViewItem item, int column, InfoCell cell)
@@ -748,6 +918,19 @@ namespace Layer8.Device
             UpdateSummary();
             log.InfoFormat("{0} on {1} finished: {2} device(s) in {3}{4}; {5}", title, scope, runTotal, Elapsed(), stopping ? " (stopped early)" : string.Empty,
                 string.Join(", ", tiles.Skip(1).Select(tile => tile.Caption.ToLowerInvariant() + " " + tile.Count)));
+
+            foreach (Tile tile in tiles) tile.ShowDelta = true;
+            // Only a whole pass is kept: Check Again on a few devices, or a pass stopped early, would leave the rest
+            // looking unchanged next time.
+            if (fullRun && !stopping && historyPath != null)
+            {
+                if (siteDone) KeepRun();
+                else keepWhenSiteDone = true;
+            }
+            else if (previous != null)
+            {
+                LogChanges();
+            }
         }
 
         private void UpdateSummary()
@@ -765,6 +948,13 @@ namespace Layer8.Device
             else if (runTotal > 0)
             {
                 status.Text = string.Format("Checked {0} in {1}, at {2:t}{3}", Count(runTotal, "device"), Elapsed(), finishedAt, stopping ? " (stopped early)" : string.Empty);
+                if (previous != null)
+                {
+                    int left = LeftSincePrevious();
+                    status.Text += string.Format("; {0} changed since the run at {1}{2}", changedTile.Count,
+                        previous.Finished.ToString(previous.Finished.Date == DateTime.Today ? "t" : "g"),
+                        left > 0 ? string.Format(", {0} no longer in {1}", left, scope) : string.Empty);
+                }
             }
             if (siteNote != null) status.Text += "; " + siteNote;
 
@@ -798,7 +988,7 @@ namespace Layer8.Device
             {
                 list.AutoResizeColumn(i, ColumnHeaderAutoResizeStyle.ColumnContent);
                 int header = TextRenderer.MeasureText(Columns[i] + " ▼", list.Font).Width + LogicalToDeviceUnits(12);
-                int limit = LogicalToDeviceUnits(i == StatusColumn || i == IssuesColumn ? 320 : 240);
+                int limit = LogicalToDeviceUnits(i == StatusColumn || i == IssuesColumn || i == ChangeColumn ? 320 : 240);
                 list.Columns[i].Width = Math.Min(Math.Max(list.Columns[i].Width + LogicalToDeviceUnits(6), header), limit);
             }
             list.Items.AddRange(skipped);
@@ -974,6 +1164,8 @@ namespace Layer8.Device
             public string Caption { get; }
             public Tone Tone { get; }
             public Func<Row, bool> Match { get; }
+            /// <summary>Its rule, for the hover text; the window adds the last run's count to it.</summary>
+            public string Tip { get; set; }
 
             public int Count
             {
@@ -982,9 +1174,41 @@ namespace Layer8.Device
                 {
                     if (count == value) return;
                     count = value;
-                    AccessibleName = Caption + ": " + count;
+                    UpdateAccessibleName();
                     Invalidate();
                 }
+            }
+
+            private int? previous;
+            /// <summary>Its count in the run the window compares with; null with nothing to compare with.</summary>
+            public int? Previous
+            {
+                get { return previous; }
+                set
+                {
+                    if (previous == value) return;
+                    previous = value;
+                    UpdateAccessibleName();
+                    Invalidate();
+                }
+            }
+
+            private bool showDelta;
+            /// <summary>Show the change from Previous beside the count: once a pass has ended, not while counts climb.</summary>
+            public bool ShowDelta
+            {
+                get { return showDelta; }
+                set
+                {
+                    if (showDelta == value) return;
+                    showDelta = value;
+                    Invalidate();
+                }
+            }
+
+            private void UpdateAccessibleName()
+            {
+                AccessibleName = Caption + ": " + count + (previous.HasValue && previous.Value != count ? ", was " + previous.Value : string.Empty);
             }
 
             public bool Selected
@@ -1045,7 +1269,17 @@ namespace Layer8.Device
                 int top = LogicalToDeviceUnits(4);
                 int width = Width - left - edge - 2;
                 TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
-                TextRenderer.DrawText(g, count.ToString("N0"), numberFont, new Rectangle(left, top, width, numberFont.Height), number, flags);
+                string countText = count.ToString("N0");
+                TextRenderer.DrawText(g, countText, numberFont, new Rectangle(left, top, width, numberFont.Height), number, flags);
+                if (showDelta && previous.HasValue && previous.Value != count)
+                {
+                    // "+1" or "-2", small, after the count and level with its foot: up or down since the last run.
+                    int delta = count - previous.Value;
+                    string deltaText = (delta > 0 ? "+" : string.Empty) + delta.ToString("N0");
+                    int x = left + TextRenderer.MeasureText(g, countText, numberFont, Size.Empty, flags).Width + LogicalToDeviceUnits(4);
+                    int y = top + numberFont.Height - Font.Height - LogicalToDeviceUnits(2);
+                    TextRenderer.DrawText(g, deltaText, Font, new Rectangle(x, y, Math.Max(0, Width - x - edge - 2), Font.Height + 2), caption, flags);
+                }
                 TextRenderer.DrawText(g, Caption, Font, new Rectangle(left, top + numberFont.Height, width, Font.Height + 2), caption, flags);
                 if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(ClientRectangle, -edge - 2, -edge - 2));
             }
@@ -1085,6 +1319,11 @@ namespace Layer8.Device
                         back = Color.FromArgb(253, 236, 236);
                         border = Color.FromArgb(206, 58, 58);
                         number = Color.FromArgb(166, 32, 32);
+                        break;
+                    case Tone.Info:
+                        back = Color.FromArgb(232, 241, 251);
+                        border = Color.FromArgb(0, 103, 192);
+                        number = Color.FromArgb(0, 84, 166);
                         break;
                 }
             }
