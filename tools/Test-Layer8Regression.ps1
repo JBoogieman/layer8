@@ -1,0 +1,1479 @@
+<#
+.SYNOPSIS
+    Layer8's regression checks that don't need the console. docs\REGRESSION.md is the checklist around it: install
+    the test build, run this, do the console steps, then run it again with -Since.
+
+.DESCRIPTION
+    Read only: nothing changes on any device, on the site or in Active Directory. It writes its report to
+    Build\Regression and works in a temporary folder, deleted at the end. Loading Layer8's DLLs for the Library
+    checks writes a few lines to Layer8.log, as the console does when it loads them.
+
+    The sections, in the order they run:
+
+      Build      The DLLs carry SharedAssemblyInfo.cs's version and are newer than their code; the cab and the MSI
+                 are from that build; the cab's manifest matches its files; the cab and its DLLs are signed by one
+                 certificate; every XML file in the cab parses.
+      Installed  The console's newest copy of Layer8 is this build's cab, file for file; Layer8.msi's files aren't
+                 there as well; the console last loaded this version.
+      Customize  The one-file release copy of Customize-Layer8Cab.ps1, alone in a folder with a space in its name,
+                 leaves LAPS, BitLockerKeys and RestartComputer out of a copy of the cab: none of their menu items
+                 left, every other item kept, no stray separators, the manifest's hashes right.
+      Library    In 32-bit PowerShell, as the console runs: Error Lookup's parsing and its text from the console's
+                 catalog, the signature check on HP and Lenovo downloads, and the Lenovo catalog's signature check on
+                 a good copy and on changed ones.
+      Settings   Layer8 Settings at their defaults (HKCU\SOFTWARE\Layer8).
+      Devices    Every member of the collection, read from the same places the Health Dashboard reads: what each
+                 column should show, each device's issues and the tile counts.
+      Log        With -Since: the errors, warnings and slow steps Layer8 logged since then, and the last Health
+                 Dashboard run on the collection compared with the Devices section.
+      Changes    The files changed since the last commit that changed docs\STATUS.md (the last recorded run), and
+                 the sections of docs\REGRESSION.md whose Files lines name them.
+
+    Each check prints PASS, FAIL, WARN, SKIP or INFO. The exit code is the number of FAILs.
+
+    The Devices section reads the same WMI classes and registry values as the dashboard, but in 64-bit PowerShell,
+    so it reads the registry as Windows itself does. It's a second copy of the same reads: it catches the dashboard
+    drifting from what the device says, not a mistake made the same way in both.
+
+.PARAMETER Since
+    For the second run, after the console steps: adds the Log section from this time on, and skips Build, Customize
+    and Library (unless -Skip says otherwise). The first run prints the command to use.
+
+.PARAMETER Collection
+    The collection the Devices and Log sections look at. Default: All Systems.
+
+.PARAMETER SiteServer
+    The SMS Provider to read the collection from. Default: the server the console last connected to.
+
+.PARAMETER SiteCode
+    The site code. Default: the site the console last connected to.
+
+.PARAMETER LenovoCatalog
+    A copy of Lenovo's catalogv2.xml. Default: the copy the Lenovo Driver Pack wizard keeps in the temp folder.
+    Without one, the catalog checks are skipped.
+
+.PARAMETER Skip
+    Sections to leave out: Build, Installed, Customize, Library, Settings, Devices, Log, Changes.
+
+.EXAMPLE
+    .\tools\Test-Layer8Regression.ps1
+
+.EXAMPLE
+    .\tools\Test-Layer8Regression.ps1 -Since '2026-11-20 19:25:00'
+
+.EXAMPLE
+    .\tools\Test-Layer8Regression.ps1 -Skip Customize, Library
+#>
+[CmdletBinding()]
+param(
+    [datetime]$Since,
+    [string]$Collection = 'All Systems',
+    [string]$SiteServer,
+    [string]$SiteCode,
+    [string]$LenovoCatalog = (Join-Path ([IO.Path]::GetTempPath()) 'LenovoCatalogV2.xml'),
+    [ValidateSet('Build', 'Installed', 'Customize', 'Library', 'Settings', 'Devices', 'Log', 'Changes')]
+    [string[]]$Skip
+)
+
+$ErrorActionPreference = 'Stop'
+$started = Get-Date
+$repo = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'Layer8Features.ps1')
+Import-Module CimCmdlets
+Add-Type -AssemblyName System.Management
+
+$sinceGiven = $PSBoundParameters.ContainsKey('Since')
+# The second run comes after the console steps, which don't change the build, so by default it doesn't repeat those checks.
+if ($sinceGiven -and -not $PSBoundParameters.ContainsKey('Skip')) { $Skip = 'Build', 'Customize', 'Library' }
+
+# Layer8's permanent console extension ID, the same in every Layer8 cab (Build-Layer8Extension.ps1).
+$extensionId = '3b900076-0ea8-46a7-b3b3-57bc7336c50f'
+$dlls = 'Layer8.dll', 'Layer8.Device.dll', 'Layer8.DriverManager.dll', 'Layer8.IniFileParser.dll'
+# The code each DLL is built from, for "built after the last change". Directory.Build.* goes into every one of them,
+# and SharedAssemblyInfo.cs into Layer8's own three.
+$dllSources = @{
+    'Layer8.dll'               = 'Layer8', 'SharedAssemblyInfo.cs', 'Directory.Build.props', 'Directory.Build.targets'
+    'Layer8.Device.dll'        = 'Layer8.Device', 'SharedAssemblyInfo.cs', 'Directory.Build.props', 'Directory.Build.targets'
+    'Layer8.DriverManager.dll' = 'Layer8.DriverManager', 'SharedAssemblyInfo.cs', 'Directory.Build.props', 'Directory.Build.targets'
+    'Layer8.IniFileParser.dll' = 'IniFileParser', 'Directory.Build.props', 'Directory.Build.targets'
+}
+# The ini parser is a copy of a library with its own version (2.2.3, in its AssemblyInfo.cs), not SharedAssemblyInfo.cs's,
+# and msbuild doesn't rebuild it when only Layer8's version changes.
+$ownVersion = 'Layer8.IniFileParser.dll'
+
+$buildDir = Join-Path $repo 'Build\Release'
+$sharedInfo = Get-Content -LiteralPath (Join-Path $repo 'SharedAssemblyInfo.cs') -Raw
+$version = [version][regex]::Match($sharedInfo, 'AssemblyFileVersion\("([0-9.]+)"\)').Groups[1].Value
+$cabPath = Join-Path $repo ('Build\Extension\Layer8-{0}.cab' -f $version.ToString(3))
+$msiPath = Join-Path $repo 'Build\Installer\Release\Layer8.msi'
+
+# SMS_ADMIN_UI_PATH is the console's bin\i386 folder.
+$adminConsole = $null
+$consoleBin = $null
+if ($env:SMS_ADMIN_UI_PATH) {
+    $consoleBin = Split-Path $env:SMS_ADMIN_UI_PATH.TrimEnd('\')
+    $adminConsole = Split-Path $consoleBin
+}
+$logFolder = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Layer8\Logs'
+
+$work = Join-Path ([IO.Path]::GetTempPath()) ('Layer8 regression ' + $started.ToString('yyyyMMdd-HHmmss'))
+
+# --- Results ---------------------------------------------------------------------------------------------------
+
+$results = New-Object System.Collections.Generic.List[object]
+$resultColors = @{ PASS = 'Green'; FAIL = 'Red'; WARN = 'Yellow'; SKIP = 'DarkGray'; INFO = 'Gray' }
+$section = ''
+
+function Add-Result([string]$Result, [string]$Check, [string]$Detail = '') {
+    $results.Add([pscustomobject]@{ Section = $script:section; Result = $Result; Check = $Check; Detail = $Detail })
+    $line = '  {0}  {1}' -f $Result, $Check
+    if ($Detail) { $line += ': ' + $Detail }
+    Write-Host $line -ForegroundColor $resultColors[$Result]
+}
+
+function Test-Equal([string]$Check, $Expected, $Actual) {
+    if ("$Expected" -ceq "$Actual") { Add-Result PASS $Check "$Actual" }
+    else { Add-Result FAIL $Check "expected '$Expected', got '$Actual'" }
+}
+
+# --- Helpers -----------------------------------------------------------------------------------------------------
+
+function Get-Sha256([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash }
+
+function Get-NewestFile([string[]]$Paths) {
+    $names = @(& git -C $repo ls-files --cached --others --exclude-standard -- $Paths | Where-Object { $_ })
+    $names | ForEach-Object { Get-Item -LiteralPath (Join-Path $repo $_) -ErrorAction SilentlyContinue } |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+}
+
+function Expand-Cab([string]$Cab, [string]$Destination) {
+    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+    $output = & (Join-Path $env:SystemRoot 'System32\expand.exe') $Cab -F:* $Destination 2>&1
+    if ($LASTEXITCODE -or -not (Test-Path -LiteralPath (Join-Path $Destination 'manifest.xml'))) {
+        throw "Unpacking $Cab found no manifest.xml: $($output -join ' ')"
+    }
+}
+
+# This build's cab, unpacked once for every section that needs it.
+$builtCab = $null
+function Get-BuiltCab {
+    if ($script:builtCab) { return $script:builtCab }
+    if (-not (Test-Path -LiteralPath $cabPath)) { throw "$cabPath isn't there: run tools\Build-Layer8Extension.ps1" }
+    $folder = Join-Path $work 'built cab'
+    Expand-Cab $cabPath $folder
+    $manifest = New-Object Xml.XmlDocument
+    $manifest.Load((Join-Path $folder 'manifest.xml'))
+    $script:builtCab = [pscustomobject]@{ Path = $cabPath; Folder = $folder; Manifest = $manifest }
+    $script:builtCab
+}
+
+# Every file a cab's manifest lists: menu files by console node, then the dialogs and DLLs.
+function Get-ManifestFiles([Xml.XmlDocument]$Manifest) {
+    foreach ($deployment in @($Manifest.DocumentElement.SelectNodes('Deployments/*'))) {
+        $node = $deployment.GetAttribute('ParentNode')
+        foreach ($file in @($deployment.SelectNodes('FileList/File'))) {
+            $name = $file.GetAttribute('Name')
+            $kind = 'Dialog'
+            if ($deployment.LocalName -eq 'ActionExtensionDeployment') { $kind = 'Menu' }
+            elseif ($name -like '*.dll') { $kind = 'DLL' }
+            [pscustomobject]@{ Name = $name; Hash = $file.SelectSingleNode('Hash').InnerText; Kind = $kind; Node = $node }
+        }
+    }
+}
+
+# A manifest's files against the folder it was unpacked to: missing files, wrong hashes, a hash used twice.
+function Test-Manifest([string]$Label, [string]$Folder, [Xml.XmlDocument]$Manifest) {
+    $files = @(Get-ManifestFiles $Manifest)
+    $bad = @(foreach ($file in $files) {
+        $path = Join-Path $Folder $file.Name
+        if (-not (Test-Path -LiteralPath $path)) { "$($file.Name) missing" }
+        elseif ((Get-Sha256 $path) -ne $file.Hash) { "$($file.Name) has a different hash" }
+    })
+    $listed = @($files | ForEach-Object Name) + 'manifest.xml'
+    $extra = @(Get-ChildItem -LiteralPath $Folder -File | Where-Object { $listed -notcontains $_.Name } | ForEach-Object { "$($_.Name) not in the manifest" })
+    # The console rejects a manifest that lists the same hash twice.
+    $twice = @($files | Group-Object Hash | Where-Object Count -gt 1 | ForEach-Object { ($_.Group.Name -join ' = ') + ' share a hash' })
+    $problems = @($bad) + @($extra) + @($twice)
+    if ($problems) { Add-Result FAIL "$Label manifest" (($problems | Select-Object -First 5) -join '; ') }
+    else { Add-Result PASS "$Label manifest" "$($files.Count) files, each with its hash" }
+}
+
+# Reads a file that the console may be writing to.
+function Read-SharedText([string]$Path) {
+    $stream = New-Object IO.FileStream($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]'ReadWrite, Delete')
+    try {
+        $reader = New-Object IO.StreamReader($stream, [Text.Encoding]::UTF8, $true)
+        $reader.ReadToEnd()
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
+# Layer8.log's entries, oldest first: the rolled-over Layer8.lo_ (Layer8Log keeps one, 2 MB), then Layer8.log.
+$logEntries = $null
+function Get-LogEntries {
+    if ($null -ne $script:logEntries) { return $script:logEntries }
+    $entries = New-Object System.Collections.Generic.List[object]
+    # CMTrace format. A message can span lines (an exception's stack trace), so the whole file is matched at once.
+    $pattern = [regex]'(?s)<!\[LOG\[(.*?)\]LOG\]!><time="([0-9:.]+)[+-][0-9]+" date="([0-9-]+)" component="([^"]*)" context="[^"]*" type="([0-9])"'
+    foreach ($name in 'Layer8.lo_', 'Layer8.log') {
+        $path = Join-Path $logFolder $name
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        foreach ($match in $pattern.Matches((Read-SharedText $path))) {
+            $when = [datetime]::ParseExact($match.Groups[3].Value + ' ' + $match.Groups[2].Value, 'MM-dd-yyyy HH:mm:ss.fff', [Globalization.CultureInfo]::InvariantCulture)
+            $entries.Add([pscustomobject]@{ Time = $when; Text = $match.Groups[1].Value; Component = $match.Groups[4].Value; Type = [int]$match.Groups[5].Value })
+        }
+    }
+    $script:logEntries = $entries
+    $entries
+}
+
+function Get-FirstLine([string]$Text, [int]$Length = 220) {
+    $line = ($Text -split "`r?`n")[0].Trim()
+    if ($line.Length -gt $Length) { $line = $line.Substring(0, $Length) + '...' }
+    $line
+}
+
+# --- Build ---------------------------------------------------------------------------------------------------------
+
+function Test-Build {
+    Add-Result INFO 'Version' "$version (SharedAssemblyInfo.cs)"
+
+    foreach ($dll in $dlls) {
+        $path = Join-Path $buildDir $dll
+        if (-not (Test-Path -LiteralPath $path)) { Add-Result FAIL "$dll built" 'not in Build\Release: run tools\Build-Layer8Msi.ps1'; continue }
+        $item = Get-Item -LiteralPath $path
+        if ($dll -eq $ownVersion) { Add-Result INFO "$dll version" "$($item.VersionInfo.FileVersion), its own" }
+        else { Test-Equal "$dll version" $version $item.VersionInfo.FileVersion }
+        $newest = Get-NewestFile $dllSources[$dll]
+        if ($newest -and $newest.LastWriteTime -gt $item.LastWriteTime) {
+            Add-Result WARN "$dll newer than its code" ("{0} changed at {1:g}, after the build at {2:g}: build again" -f $newest.FullName.Substring($repo.Length + 1), $newest.LastWriteTime, $item.LastWriteTime)
+        }
+        else { Add-Result PASS "$dll newer than its code" ("built {0:g}" -f $item.LastWriteTime) }
+    }
+    $layer8Dll = Get-Item -LiteralPath (Join-Path $buildDir 'Layer8.dll') -ErrorAction SilentlyContinue
+
+    # The cab: from this build, and from the current menu XML.
+    if (-not (Test-Path -LiteralPath $cabPath)) { Add-Result FAIL 'Cab built' "$cabPath isn't there: run tools\Build-Layer8Extension.ps1"; return }
+    $cabItem = Get-Item -LiteralPath $cabPath
+    $newestXml = Get-NewestFile 'Extensions'
+    if ($layer8Dll -and $cabItem.LastWriteTime -lt $layer8Dll.LastWriteTime) {
+        Add-Result FAIL 'Cab newer than the DLLs' ("cab {0:g}, Layer8.dll {1:g}: run tools\Build-Layer8Extension.ps1" -f $cabItem.LastWriteTime, $layer8Dll.LastWriteTime)
+    }
+    elseif ($newestXml -and $cabItem.LastWriteTime -lt $newestXml.LastWriteTime) {
+        Add-Result WARN 'Cab newer than the menu XML' ("{0} changed at {1:g}, after the cab: build it again" -f $newestXml.FullName.Substring($repo.Length + 1), $newestXml.LastWriteTime)
+    }
+    else { Add-Result PASS 'Cab newer than the DLLs and the menu XML' ("{0} ({1:g})" -f $cabItem.Name, $cabItem.LastWriteTime) }
+
+    $cab = Get-BuiltCab
+    $root = $cab.Manifest.DocumentElement
+    Test-Equal 'Cab extension ID' $extensionId $root.GetAttribute('ExtensionID')
+    Test-Equal 'Cab version' $version $root.GetAttribute('Version')
+    if ($root.GetAttribute('Description') -match 'Built without: (.*)\.$') { Add-Result WARN 'Cab has every feature' "built without $($Matches[1])" }
+    else { Add-Result PASS 'Cab has every feature' 'nothing left out' }
+    Test-Manifest 'Cab' $cab.Folder $cab.Manifest
+    foreach ($dll in $dlls) {
+        $path = Join-Path $cab.Folder $dll
+        if ($dll -eq $ownVersion -or -not (Test-Path -LiteralPath $path)) { continue }
+        Test-Equal "$dll version in the cab" $version (Get-Item -LiteralPath $path).VersionInfo.FileVersion
+    }
+
+    # Signatures. A site checks the DLLs in a signed cab too: unsigned DLLs fail the import (Build-Layer8Extension.ps1).
+    $cabSignature = Get-AuthenticodeSignature -LiteralPath $cabPath
+    if ($cabSignature.Status -eq 'NotSigned') {
+        Add-Result WARN 'Cab signed' 'not signed: right for a release build, but a test build is signed (CertificateThumbprint)'
+    }
+    elseif ($cabSignature.Status -ne 'Valid') {
+        Add-Result FAIL 'Cab signed' "$($cabSignature.Status): $($cabSignature.StatusMessage)"
+    }
+    else {
+        $signer = $cabSignature.SignerCertificate
+        $stamped = 'no timestamp'
+        if ($cabSignature.TimeStamperCertificate) { $stamped = 'timestamped' }
+        Add-Result PASS 'Cab signed' "$($signer.Subject), $stamped"
+        foreach ($dll in $dlls) {
+            $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $cab.Folder $dll)
+            if ($signature.Status -eq 'Valid' -and $signature.SignerCertificate.Thumbprint -eq $signer.Thumbprint) { Add-Result PASS "$dll in the cab signed" 'same certificate as the cab' }
+            elseif ($signature.Status -eq 'NotSigned') { Add-Result FAIL "$dll in the cab signed" 'not signed, so the site refuses the signed cab' }
+            else { Add-Result FAIL "$dll in the cab signed" "$($signature.Status), $($signature.SignerCertificate.Subject)" }
+        }
+    }
+
+    # Every XML file parses: a menu file that doesn't is dropped by the console without a word.
+    $xmlFiles = @(Get-ChildItem -LiteralPath $cab.Folder -Filter *.xml -File)
+    $broken = @(foreach ($file in $xmlFiles) {
+        try { (New-Object Xml.XmlDocument).Load($file.FullName) } catch { "$($file.Name): $($_.Exception.InnerException.Message)" }
+    })
+    if ($broken) { Add-Result FAIL 'Cab XML parses' ($broken -join '; ') }
+    else {
+        $files = @(Get-ManifestFiles $cab.Manifest)
+        $menus = @($files | Where-Object Kind -eq 'Menu')
+        Add-Result PASS 'Cab XML parses' ("{0} menu files on {1} console nodes, {2} dialog files" -f $menus.Count, @($menus | Group-Object Node).Count, @($files | Where-Object Kind -eq 'Dialog').Count)
+    }
+
+    # The MSI from the same build.
+    if (-not (Test-Path -LiteralPath $msiPath)) { Add-Result FAIL 'MSI built' "$msiPath isn't there: run tools\Build-Layer8Msi.ps1"; return }
+    $msiItem = Get-Item -LiteralPath $msiPath
+    if ($layer8Dll -and $msiItem.LastWriteTime -lt $layer8Dll.LastWriteTime) { Add-Result FAIL 'MSI newer than the DLLs' ("MSI {0:g}, Layer8.dll {1:g}" -f $msiItem.LastWriteTime, $layer8Dll.LastWriteTime) }
+    else { Add-Result PASS 'MSI newer than the DLLs' ("{0:g}" -f $msiItem.LastWriteTime) }
+    Test-Equal 'MSI ProductVersion' $version (Get-MsiProperty $msiPath 'ProductVersion')
+}
+
+# One property from an MSI's Property table, opened read-only.
+function Get-MsiProperty([string]$Path, [string]$Property) {
+    $installer = New-Object -ComObject WindowsInstaller.Installer
+    $database = $null; $view = $null; $record = $null
+    try {
+        $database = $installer.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $installer, @($Path, 0))
+        $view = $database.GetType().InvokeMember('OpenView', 'InvokeMethod', $null, $database, @("SELECT Value FROM Property WHERE Property = '$Property'"))
+        [void]$view.GetType().InvokeMember('Execute', 'InvokeMethod', $null, $view, $null)
+        $record = $view.GetType().InvokeMember('Fetch', 'InvokeMethod', $null, $view, $null)
+        if ($record) { $record.GetType().InvokeMember('StringData', 'GetProperty', $null, $record, @(1)) }
+        [void]$view.GetType().InvokeMember('Close', 'InvokeMethod', $null, $view, $null)
+    }
+    finally {
+        # Released, or the MSI stays locked until PowerShell exits.
+        foreach ($comObject in $record, $view, $database, $installer) { if ($comObject) { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($comObject) } }
+    }
+}
+
+# --- Installed ------------------------------------------------------------------------------------------------------
+
+function Test-Installed {
+    if (-not $adminConsole) { Add-Result SKIP 'Console' 'no ConfigMgr console on this computer (SMS_ADMIN_UI_PATH)'; return }
+
+    # The console only loads approved extensions while this folder exists (docs\INSTALL.md).
+    $xmlStorageActions = Join-Path $adminConsole 'XmlStorage\Extensions\Actions'
+    if (Test-Path -LiteralPath $xmlStorageActions) { Add-Result PASS 'XmlStorage\Extensions\Actions exists' 'the console loads approved extensions' }
+    else { Add-Result FAIL 'XmlStorage\Extensions\Actions exists' 'missing, so the console loads no approved extension (docs\INSTALL.md)' }
+
+    # Never both: on a hierarchy that allows both, every Layer8 menu would show twice.
+    $msiFiles = @()
+    if (Test-Path -LiteralPath (Join-Path $consoleBin 'Layer8.dll')) { $msiFiles += 'bin\Layer8.dll' }
+    $msiMenus = @(Get-ChildItem -LiteralPath $xmlStorageActions -Recurse -Filter 'Layer8*.xml' -File -ErrorAction SilentlyContinue | Where-Object Name -ne 'Layer8Probe.xml')
+    if ($msiMenus) { $msiFiles += "$($msiMenus.Count) menu files in XmlStorage" }
+    if ($msiFiles) { Add-Result FAIL "Layer8.msi isn't installed as well" "$($msiFiles -join ', '): uninstall the MSI (tools\Uninstall-Layer8Dev.ps1 or msiexec /x)" }
+    else { Add-Result PASS "Layer8.msi isn't installed as well" 'no Layer8 files in the console''s own bin or XmlStorage' }
+    $probe = @(Get-ChildItem -LiteralPath $xmlStorageActions -Recurse -Filter 'Layer8Probe.xml' -File -ErrorAction SilentlyContinue)
+    if ($probe) { Add-Result INFO 'Developer items' "Probe Selection is on $($probe.Count) nodes (tools\Dev-Loop.ps1 -WithDevTools)" }
+
+    $installRoot = Join-Path $adminConsole "Extensions\$extensionId"
+    $installed = @(Get-ChildItem -LiteralPath $installRoot -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -as [version] } | Sort-Object { [version]$_.Name })
+    if (-not $installed) { Add-Result FAIL 'Installed as an approved extension' "nothing in $installRoot"; return }
+    $newest = $installed[-1]
+    if ($newest.Name -ne "$version") {
+        Add-Result FAIL 'Newest installed version' "the console has $($newest.Name), this build is $version`: import, approve and install the cab"
+    }
+    else {
+        Add-Result PASS 'Newest installed version' ("{0}, installed {1:g}" -f $newest.Name, $newest.CreationTime)
+        # Installed where the console puts each kind of file: Actions\<node>, Forms and bin.
+        $cab = Get-BuiltCab
+        $files = @(Get-ManifestFiles $cab.Manifest)
+        $different = @(foreach ($file in $files) {
+            $relative = switch ($file.Kind) { 'Menu' { "Actions\$($file.Node)\$($file.Name)" } 'Dialog' { "Forms\$($file.Name)" } default { "bin\$($file.Name)" } }
+            $path = Join-Path $newest.FullName $relative
+            if (-not (Test-Path -LiteralPath $path)) { "$relative missing" }
+            elseif ((Get-Sha256 $path) -ne (Get-Sha256 (Join-Path $cab.Folder $file.Name))) { "$relative differs" }
+        })
+        if ($different) { Add-Result FAIL 'Installed files match the cab' ("{0} of {1}: {2}. A cab with the same version was installed before this one: delete it on the site, import again" -f $different.Count, $files.Count, (($different | Select-Object -First 3) -join '; ')) }
+        else { Add-Result PASS 'Installed files match the cab' "all $($files.Count)" }
+    }
+
+    # What the console last loaded. Layer8Log writes this line whenever a process loads Layer8; only the console's
+    # have a 5.x version (the Library checks' 32-bit PowerShell writes one too).
+    $loaded = Get-LogEntries | Where-Object { $_.Text -match '^Layer8 (\S+) loaded in console (5\.\S+)' } | Select-Object -Last 1
+    if (-not $loaded) { Add-Result WARN 'Version the console loaded' 'Layer8.log has no line from the console loading Layer8'; return }
+    $null = $loaded.Text -match '^Layer8 (\S+) loaded in console (5\.\S+)'
+    $what = "Layer8 $($Matches[1]) in console $($Matches[2]) at $($loaded.Time.ToString('g'))"
+    if ($Matches[1] -ne "$version") { Add-Result FAIL 'Version the console loaded' "$what`: close the console and open it again" }
+    elseif ($newest.Name -eq "$version" -and $loaded.Time -lt $newest.CreationTime) { Add-Result WARN 'Version the console loaded' "$what, before this copy was installed: close the console and open it again" }
+    else { Add-Result PASS 'Version the console loaded' $what }
+}
+
+# --- Customize ------------------------------------------------------------------------------------------------------
+
+# A menu item's place: its name and the names of the menus it's in, "Remote Tools > Ping".
+function Get-MenuPath([Xml.XmlNode]$Node) {
+    $names = @()
+    while ($Node -is [Xml.XmlElement]) {
+        if ($Node.LocalName -eq 'ActionDescription') {
+            $name = $Node.GetAttribute('DisplayName')
+            if (-not $name) { $name = $Node.GetAttribute('MnemonicDisplayName') }
+            $names = @($name) + $names
+        }
+        $Node = $Node.ParentNode
+    }
+    $names -join ' > '
+}
+
+# Every menu item in a set of menu files, and every menu whose separators are out of place.
+function Get-MenuShape([string]$Folder, $MenuFiles) {
+    $items = New-Object System.Collections.Generic.List[object]
+    $strays = New-Object System.Collections.Generic.List[string]
+    foreach ($file in $MenuFiles) {
+        $xml = New-Object Xml.XmlDocument
+        $xml.Load((Join-Path $Folder $file.Name))
+        foreach ($action in @($xml.SelectNodes('//ActionDescription'))) {
+            if ($action.GetAttribute('Class') -in 'Separator', 'None') { continue }
+            $items.Add([pscustomobject]@{
+                Key   = $file.Name + '|' + (Get-MenuPath $action)
+                Names = @($action.GetAttribute('DisplayName'), $action.GetAttribute('MnemonicDisplayName')) | Where-Object { $_ }
+                Leaf  = $null -eq $action.SelectSingleNode('ActionGroups/ActionDescription')
+            })
+        }
+        foreach ($groups in @($xml.SelectNodes('//ActionGroups'))) {
+            $entries = @($groups.ChildNodes | Where-Object { $_ -is [Xml.XmlElement] -and $_.LocalName -eq 'ActionDescription' })
+            if (-not $entries) { continue }
+            $where = $file.Name + ': ' + (Get-MenuPath $groups.ParentNode)
+            $separator = @($entries | ForEach-Object { $_.GetAttribute('Class') -eq 'Separator' })
+            if ($separator[0]) { $strays.Add("$where starts with a separator") }
+            if ($separator[-1]) { $strays.Add("$where ends with a separator") }
+            for ($i = 1; $i -lt $separator.Count; $i++) {
+                if ($separator[$i] -and $separator[$i - 1]) { $strays.Add("$where has two separators together"); break }
+            }
+            if (-not @($entries | Where-Object { $_.GetAttribute('Class') -notin 'Separator', 'None' })) { $strays.Add("$where has nothing but separators") }
+        }
+    }
+    [pscustomobject]@{ Items = $items; Strays = $strays }
+}
+
+function Test-Customize {
+    $cab = Get-BuiltCab
+    # The release copy: Layer8Features.ps1 built in, so it runs with nothing next to it.
+    $releaseCopy = Join-Path $repo 'Build\Extension\Customize-Layer8Cab.ps1'
+    if (-not (Test-Path -LiteralPath $releaseCopy)) { Add-Result FAIL 'Release copy of Customize-Layer8Cab.ps1' "not in Build\Extension: run tools\Build-Layer8Extension.ps1"; return }
+
+    $exclude = 'LAPS', 'BitLockerKeys', 'RestartComputer'
+    $excludedItems = @($exclude | ForEach-Object { $Layer8Features[$_] })
+    # A downloads folder with a space in its name, as a release's users have.
+    $downloads = Join-Path $work 'My Downloads'
+    New-Item -ItemType Directory -Path $downloads | Out-Null
+    Copy-Item -LiteralPath $releaseCopy, $cab.Path -Destination $downloads
+    $copy = Join-Path $downloads (Split-Path $cab.Path -Leaf)
+    $output = & (Join-Path $downloads 'Customize-Layer8Cab.ps1') -Path $copy -Exclude $exclude *>&1 | Out-String
+    $counts = [regex]::Match($output, '\((\d+) menu files dropped, (\d+) changed\)')
+    if ($counts.Success) { Add-Result INFO 'Customize-Layer8Cab.ps1 ran' "without $($exclude -join ', '): $($counts.Groups[1].Value) menu files dropped, $($counts.Groups[2].Value) changed" }
+    else { Add-Result WARN 'Customize-Layer8Cab.ps1 ran' "its summary line wasn't there: $(Get-FirstLine $output)" }
+
+    $customCab = Join-Path $downloads ('{0}-custom.cab' -f [IO.Path]::GetFileNameWithoutExtension($copy))
+    if (-not (Test-Path -LiteralPath $customCab)) { Add-Result FAIL 'Customized cab' "no $(Split-Path $customCab -Leaf)"; return }
+    $customFolder = Join-Path $work 'custom cab'
+    Expand-Cab $customCab $customFolder
+    $customManifest = New-Object Xml.XmlDocument
+    $customManifest.Load((Join-Path $customFolder 'manifest.xml'))
+    Test-Manifest 'Customized cab' $customFolder $customManifest
+
+    $description = $customManifest.DocumentElement.GetAttribute('Description')
+    if ($description -like "* Built without: $($exclude -join ', ').") { Add-Result PASS 'Customized cab says what it left out' "Built without: $($exclude -join ', ')." }
+    else { Add-Result FAIL 'Customized cab says what it left out' "its description: $description" }
+
+    $before = Get-MenuShape $cab.Folder @(Get-ManifestFiles $cab.Manifest | Where-Object Kind -eq 'Menu')
+    $after = Get-MenuShape $customFolder @(Get-ManifestFiles $customManifest | Where-Object Kind -eq 'Menu')
+    $isExcluded = { param($item) @($item.Names | Where-Object { $excludedItems -contains $_ }).Count -gt 0 }
+
+    $hadThem = @($before.Items | Where-Object { & $isExcluded $_ })
+    if (-not $hadThem) { Add-Result WARN 'Left-out items were in the cab' 'the built cab has none of them, so this proves little' }
+    $left = @($after.Items | Where-Object { & $isExcluded $_ } | ForEach-Object Key)
+    if ($left) { Add-Result FAIL 'Left-out items are gone' (($left | Select-Object -First 5) -join '; ') }
+    else { Add-Result PASS 'Left-out items are gone' "$($hadThem.Count) items, among them $(($excludedItems | Select-Object -First 3) -join ', ')" }
+
+    $afterKeys = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+    foreach ($item in $after.Items) { [void]$afterKeys.Add($item.Key) }
+    $kept = @($before.Items | Where-Object { $_.Leaf -and -not (& $isExcluded $_) })
+    $lost = @($kept | Where-Object { -not $afterKeys.Contains($_.Key) } | ForEach-Object Key)
+    if ($lost) { Add-Result FAIL 'Every other item kept' ("{0} lost: {1}" -f $lost.Count, (($lost | Select-Object -First 5) -join '; ')) }
+    else { Add-Result PASS 'Every other item kept' "all $($kept.Count) menu items" }
+
+    $newStrays = @($after.Strays | Where-Object { $before.Strays -notcontains $_ })
+    if ($newStrays) { Add-Result FAIL 'No stray separators' (($newStrays | Select-Object -First 5) -join '; ') }
+    else { Add-Result PASS 'No stray separators' 'none at the start or end of a menu, none together' }
+
+    # Leaving features out only changes menu files; the DLLs go through untouched.
+    $changedDlls = @(foreach ($dll in $dlls) { if ((Get-Sha256 (Join-Path $customFolder $dll)) -ne (Get-Sha256 (Join-Path $cab.Folder $dll))) { $dll } })
+    if ($changedDlls) { Add-Result FAIL 'DLLs untouched' ($changedDlls -join ', ') }
+    else { Add-Result PASS 'DLLs untouched' 'same hashes as the built cab' }
+}
+
+# --- Library --------------------------------------------------------------------------------------------------------
+
+# Runs in a 32-bit PowerShell job: Layer8's DLLs are built for x86, like the console. It returns its checks as objects.
+$libraryChecks = {
+    param([string]$BuildDir, [string]$ConsoleBin, [string]$Catalog, [string]$Work)
+    $ErrorActionPreference = 'Stop'
+    $out = New-Object System.Collections.Generic.List[object]
+    function Add-Check([string]$Result, [string]$Check, [string]$Detail = '') { $out.Add([pscustomobject]@{ Result = $Result; Check = $Check; Detail = $Detail }) }
+    # What a method called by reflection threw, without the wrappers reflection and PowerShell put round it.
+    function Get-Message($Exception) {
+        while ($Exception.InnerException -and ($Exception -is [Management.Automation.MethodInvocationException] -or $Exception -is [Reflection.TargetInvocationException])) { $Exception = $Exception.InnerException }
+        $Exception.Message
+    }
+    function Test-Text([string]$Check, [string]$Actual, [string]$Expected) {
+        if (-not $Actual) { Add-Check FAIL $Check "expected '$Expected', got nothing (for a refusal: it was accepted)" }
+        elseif ($Actual -like "*$Expected*") { Add-Check PASS $Check $Actual }
+        else { Add-Check FAIL $Check "expected '$Expected', got '$Actual'" }
+    }
+
+    try {
+        if ([IntPtr]::Size -ne 4) { throw 'this has to run in 32-bit PowerShell' }
+        # The console's own DLLs (the wizard pages' base classes) are in its bin folder, not next to Layer8's.
+        Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Reflection;
+public static class Layer8RegressionResolver
+{
+    static string[] folders;
+    public static void Register(string[] searchFolders)
+    {
+        folders = searchFolders;
+        AppDomain.CurrentDomain.AssemblyResolve += Resolve;
+    }
+    static Assembly Resolve(object sender, ResolveEventArgs e)
+    {
+        string name = new AssemblyName(e.Name).Name;
+        foreach (string folder in folders)
+        {
+            string path = Path.Combine(folder, name + ".dll");
+            if (File.Exists(path)) return Assembly.LoadFrom(path);
+        }
+        return null;
+    }
+}
+'@
+        [Layer8RegressionResolver]::Register([string[]]@($BuildDir, $ConsoleBin))
+        $flags = [Reflection.BindingFlags]'Static, Public, NonPublic'
+        $device = [Reflection.Assembly]::LoadFrom((Join-Path $BuildDir 'Layer8.Device.dll'))
+        $driver = [Reflection.Assembly]::LoadFrom((Join-Path $BuildDir 'Layer8.DriverManager.dll'))
+        function Get-Method($Type, [string]$Name) {
+            $method = $Type.GetMethod($Name, $flags)
+            if (-not $method) { throw "$($Type.FullName).$Name isn't there (renamed?)" }
+            $method
+        }
+
+        # Error Lookup: a code however it was copied (the Error Lookup row in STATUS.md).
+        $codes = $device.GetType('Layer8.Device.ErrorCodes', $true)
+        $tryParse = Get-Method $codes 'TryParse'
+        $describe = Get-Method $codes 'Describe'
+        $formatAndDescribe = Get-Method $codes 'FormatAndDescribe'
+        $code = [Convert]::ToUInt32('87D00668', 16)
+        $signed = [BitConverter]::ToInt32([BitConverter]::GetBytes($code), 0)
+        $cases = @(
+            @('0x87D00668', $code, 'hex'),
+            @('87D00668', $code, 'bare hex'),
+            @([string]$signed, $code, 'a signed HRESULT'),
+            @([string]$code, $code, 'decimal'),
+            @('1603', [uint32]1603, 'an installer code'),
+            @(' 0x643 ', [uint32]1603, 'hex with spaces round it'),
+            @('not a code', $null, 'junk text'),
+            @('', $null, 'nothing')
+        )
+        foreach ($case in $cases) {
+            [object[]]$arguments = @($case[0], [uint32]0)
+            $parsed = $tryParse.Invoke($null, $arguments)
+            $label = "Error Lookup reads $($case[2]) ('$($case[0])')"
+            if ($null -eq $case[1]) {
+                if ($parsed) { Add-Check FAIL $label ('took it as 0x{0:X8}' -f $arguments[1]) } else { Add-Check PASS $label 'not a code' }
+            }
+            elseif ($parsed -and [uint32]$arguments[1] -eq $case[1]) { Add-Check PASS $label ('0x{0:X8}' -f $arguments[1]) }
+            else {
+                $got = 'not a code'
+                if ($parsed) { $got = '0x{0:X8}' -f $arguments[1] }
+                Add-Check FAIL $label ('expected 0x{0:X8}, got {1}' -f $case[1], $got)
+            }
+        }
+        # 0x87D00668's text is only in the console's catalog (not in Layer8's own list, and Windows has none).
+        Test-Text 'Error text from the console''s catalog (0x87D00668)' ($describe.Invoke($null, @([Convert]::ToUInt32('87D00668', 16)))) 'still detected as actionable after apply'
+        Test-Text 'Error text for a Windows Update code (0x80240022)' ($describe.Invoke($null, @([Convert]::ToUInt32('80240022', 16)))) 'Operation failed for all the updates'
+        Test-Text 'Error text for an application code (0x87D00324)' ($describe.Invoke($null, @([Convert]::ToUInt32('87D00324', 16)))) 'not detected after installation completed'
+        # As Copy Failed Devices and Install Application show it.
+        $copied = $formatAndDescribe.Invoke($null, @([uint32]1603))
+        if ($copied -eq '1603 (0x643): Fatal error during installation') { Add-Check PASS 'An installer code as the lists show it' $copied }
+        else { Add-Check FAIL 'An installer code as the lists show it' "expected '1603 (0x643): Fatal error during installation', got '$copied'" }
+
+        # The signature check on downloaded HP SoftPaqs and Lenovo packs, on a file Microsoft signed.
+        $authenticode = $driver.GetType('Layer8.DriverManager.Authenticode', $true)
+        $require = Get-Method $authenticode 'RequireSignedBy'
+        $lenovoSigner = $authenticode.GetField('LenovoSigner', $flags).GetValue($null)
+        $hpSigner = $authenticode.GetField('HPSigner', $flags).GetValue($null)
+        function Test-Signed([string]$Path, $Signer, [string]$Vendor) {
+            try { [void]$require.Invoke($null, @($Path, $Signer, $Vendor)); $null } catch { Get-Message $_.Exception }
+        }
+        $signedFile = Join-Path $ConsoleBin 'Microsoft.ConfigurationManagement.exe'
+        $signature = Get-AuthenticodeSignature -LiteralPath $signedFile
+        if ($signature.Status -ne 'Valid' -or $signature.SignatureType -ne 'Authenticode') {
+            Add-Check SKIP 'Download signature check' "$signedFile has no signature of its own to test with"
+        }
+        else {
+            $problem = Test-Signed $signedFile ([regex]'^Microsoft Corporation$') 'Microsoft'
+            if ($null -eq $problem) { Add-Check PASS 'Download signature check: the right signer passes' 'Microsoft.ConfigurationManagement.exe, signed by Microsoft' }
+            else { Add-Check FAIL 'Download signature check: the right signer passes' $problem }
+            Test-Text 'Download signature check: another signer is refused (Lenovo)' (Test-Signed $signedFile $lenovoSigner 'Lenovo') 'is signed by "Microsoft Corporation", not Lenovo'
+            Test-Text 'Download signature check: another signer is refused (HP)' (Test-Signed $signedFile $hpSigner 'HP') 'not HP'
+            # One byte changed in the middle, well clear of the signature at the end of the file.
+            $bytes = [IO.File]::ReadAllBytes($signedFile)
+            $middle = [int]($bytes.Length / 2)
+            $bytes[$middle] = [byte]($bytes[$middle] -bxor 0xFF)
+            $changed = Join-Path $Work 'changed.exe'
+            [IO.File]::WriteAllBytes($changed, $bytes)
+            Test-Text 'Download signature check: a changed file is refused' (Test-Signed $changed $lenovoSigner 'Lenovo') "isn't validly signed (WinVerifyTrust 0x"
+            Test-Text 'Download signature check: an unsigned file is refused' (Test-Signed (Join-Path $BuildDir 'Layer8.IniFileParser.dll') $lenovoSigner 'Lenovo') "isn't validly signed"
+        }
+
+        # Lenovo's catalog: signed by Lenovo as a whole, or not used (the Lenovo row in STATUS.md).
+        if (-not $Catalog -or -not (Test-Path -LiteralPath $Catalog)) {
+            Add-Check SKIP 'Lenovo catalog checks' "no copy at $Catalog`: open the Lenovo Driver Pack wizard once, or pass -LenovoCatalog"
+        }
+        else {
+            $page = $driver.GetType('Layer8.DriverManager.LenovoDriverPackGeneralPage', $true)
+            $load = Get-Method $page 'LoadCatalog'
+            function Test-Catalog([string]$Path) { try { [void]$load.Invoke($null, @($Path)); $null } catch { Get-Message $_.Exception } }
+
+            $raw = [IO.File]::ReadAllBytes($Catalog)
+            $bom = $raw.Length -ge 3 -and $raw[0] -eq 0xEF -and $raw[1] -eq 0xBB -and $raw[2] -eq 0xBF
+            $skip = 0
+            if ($bom) { $skip = 3 }
+            $text = [Text.Encoding]::UTF8.GetString($raw, $skip, $raw.Length - $skip)
+            $encoding = New-Object Text.UTF8Encoding($bom)
+            function Save-Variant([string]$Name, [string]$Content) { $path = Join-Path $Work $Name; [IO.File]::WriteAllText($path, $Content, $encoding); $path }
+            function Test-Refused([string]$Check, [string]$Content, [string]$Expected) {
+                if ($Content -ceq $text) { Add-Check SKIP $Check 'couldn''t make the change: the catalog''s layout is different'; return }
+                Test-Text $Check (Test-Catalog (Save-Variant (($Check -replace '\W', '') + '.xml') $Content)) $Expected
+            }
+
+            $problem = Test-Catalog $Catalog
+            $copyDate = (Get-Item -LiteralPath $Catalog).LastWriteTime.ToString('g')
+            if ($null -eq $problem) { Add-Check PASS 'Lenovo catalog: Lenovo''s copy passes' "downloaded $copyDate" }
+            else { Add-Check FAIL 'Lenovo catalog: Lenovo''s copy passes' "$problem (downloaded $copyDate)" }
+
+            $link = ([regex]'(<SCCM\b[^>]*>)https://download\.lenovo\.com/').Replace($text, '${1}https://download.example.com/', 1)
+            Test-Refused 'Lenovo catalog: a changed download link is refused' $link 'has been changed since Lenovo signed it'
+            $hash = ([regex]'(<SCCM\b[^>]*\bcrc=")([0-9a-fA-F])').Replace($text, [Text.RegularExpressions.MatchEvaluator]{
+                param($match)
+                $digit = '0'
+                if ($match.Groups[2].Value -eq '0') { $digit = '1' }
+                $match.Groups[1].Value + $digit
+            }, 1)
+            Test-Refused 'Lenovo catalog: a changed hash is refused' $hash 'has been changed since Lenovo signed it'
+            $spaced = $text
+            $firstModel = $text.IndexOf('<Model ')
+            if ($firstModel -ge 0) { $spaced = $text.Insert($firstModel, ' ') }
+            Test-Refused 'Lenovo catalog: extra white space is refused' $spaced 'has been changed since Lenovo signed it'
+            $unsigned = ([regex]'<Signature\b[\s\S]*?</Signature>').Replace($text, '', 1)
+            Test-Refused 'Lenovo catalog: no signature is refused' $unsigned "isn't signed"
+
+            # Signed again with a certificate made here and kept in memory only: one named Lenovo that Windows doesn't
+            # trust, and one from another company.
+            function Save-Resigned([string]$Name, [string]$Subject) {
+                Add-Type -AssemblyName System.Security
+                $document = New-Object Xml.XmlDocument
+                $document.PreserveWhitespace = $true
+                $document.LoadXml($unsigned)
+                $key = [Security.Cryptography.RSACng]::new(2048)
+                $request = [Security.Cryptography.X509Certificates.CertificateRequest]::new($Subject, $key, [Security.Cryptography.HashAlgorithmName]::SHA256, [Security.Cryptography.RSASignaturePadding]::Pkcs1)
+                $usage = New-Object Security.Cryptography.OidCollection
+                [void]$usage.Add([Security.Cryptography.Oid]::new('1.3.6.1.5.5.7.3.3'))
+                $request.CertificateExtensions.Add([Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]::new($usage, $false))
+                $certificate = $request.CreateSelfSigned([DateTimeOffset]::Now.AddDays(-1), [DateTimeOffset]::Now.AddDays(1))
+                $signedXml = [Security.Cryptography.Xml.SignedXml]::new($document)
+                $signedXml.SigningKey = $key
+                $signedXml.SignedInfo.SignatureMethod = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256'
+                $reference = [Security.Cryptography.Xml.Reference]::new('')
+                $reference.DigestMethod = 'http://www.w3.org/2001/04/xmlenc#sha256'
+                $reference.AddTransform([Security.Cryptography.Xml.XmlDsigEnvelopedSignatureTransform]::new())
+                $signedXml.AddReference($reference)
+                $keyInfo = [Security.Cryptography.Xml.KeyInfo]::new()
+                $keyInfo.AddClause([Security.Cryptography.Xml.KeyInfoX509Data]::new([Security.Cryptography.X509Certificates.X509Certificate]$certificate))
+                $signedXml.KeyInfo = $keyInfo
+                $signedXml.ComputeSignature()
+                [void]$document.DocumentElement.AppendChild($document.ImportNode($signedXml.GetXml(), $true))
+                $path = Join-Path $Work $Name
+                $document.Save($path)
+                $path
+            }
+            foreach ($resign in @(
+                    @('Lenovo catalog: a forged Lenovo certificate is refused', 'CN=Lenovo', "certificate Windows doesn't trust"),
+                    @('Lenovo catalog: another company''s signature is refused', 'CN=Contoso Ltd', 'is signed by "Contoso Ltd", not Lenovo'))) {
+                # Without Lenovo's signature taken off first, the copy would carry two and fail for that instead.
+                if ($unsigned -ceq $text) { Add-Check SKIP $resign[0] 'couldn''t take Lenovo''s signature off: the catalog''s layout is different'; continue }
+                try { $path = Save-Resigned (($resign[0] -replace '\W', '') + '.xml') $resign[1] }
+                catch { Add-Check SKIP $resign[0] "couldn't sign the test copy: $(Get-Message $_.Exception)"; continue }
+                Test-Text $resign[0] (Test-Catalog $path) $resign[2]
+            }
+        }
+    }
+    catch {
+        Add-Check FAIL 'The library checks stopped' "script error: $(Get-Message $_.Exception)"
+    }
+    $out
+}
+
+function Test-Library {
+    if (-not $consoleBin) { Add-Result SKIP 'Library' 'no ConfigMgr console on this computer (SMS_ADMIN_UI_PATH)'; return }
+    foreach ($dll in $dlls) { if (-not (Test-Path -LiteralPath (Join-Path $buildDir $dll))) { Add-Result FAIL 'Library' "$dll isn't in Build\Release: run tools\Build-Layer8Msi.ps1"; return } }
+    $libraryWork = Join-Path $work 'library'
+    New-Item -ItemType Directory -Path $libraryWork | Out-Null
+    # A job's PowerShell process is a fresh one: -RunAs32 makes it 32-bit, and it loads no profile.
+    $job = Start-Job -RunAs32 -ScriptBlock $libraryChecks -ArgumentList $buildDir, $consoleBin, $LenovoCatalog, $libraryWork
+    foreach ($check in @(Receive-Job -Job $job -Wait -AutoRemoveJob)) { Add-Result $check.Result $check.Check $check.Detail }
+}
+
+# --- Settings ---------------------------------------------------------------------------------------------------------
+
+# Layer8 Settings as Layer8 reads them: its defaults and limits from Layer8Settings.cs, its values from HKCU.
+function Get-Layer8Settings {
+    $source = Get-Content -LiteralPath (Join-Path $repo 'Layer8\Layer8Settings.cs') -Raw
+    $const = @{}
+    foreach ($match in [regex]::Matches($source, 'public const int (\w+) = (\d+);')) { $const[$match.Groups[1].Value] = [int]$match.Groups[2].Value }
+    $defaultBuild = [regex]::Match($source, 'DefaultWindowsBuild = "([0-9.]+)"').Groups[1].Value
+    $defaultReachable = [regex]::Match($source, 'DefaultCheckReachable = (true|false)').Groups[1].Value -eq 'true'
+    $key = Get-ItemProperty -LiteralPath 'HKCU:\SOFTWARE\Layer8' -ErrorAction SilentlyContinue
+
+    $readInt = {
+        param([string]$Name, [int]$Fallback, [int]$Min, [int]$Max)
+        $value = $null
+        if ($key) { $value = $key.$Name }
+        $number = 0
+        if ($value -is [int]) { $number = $value }
+        elseif (-not ($value -is [string] -and [int]::TryParse($value.Trim(), [ref]$number))) { return $Fallback }
+        [Math]::Max($Min, [Math]::Min($Max, $number))
+    }
+    $settings = [ordered]@{}
+    foreach ($name in 'LowDiskGB', 'LongUptimeDays', 'NotReportingDays', 'BlueScreenDays', 'DevicesAtOnce', 'ConfirmAbove', 'ReachableSeconds') {
+        $settings[$name] = & $readInt $name $const["Default$name"] $const["Min$name"] $const["Max$name"]
+        $settings["Default$name"] = $const["Default$name"]
+    }
+    $reachableDefault = 0
+    if ($defaultReachable) { $reachableDefault = 1 }
+    $settings['CheckReachable'] = (& $readInt 'CheckReachable' $reachableDefault 0 1) -eq 1
+
+    # A build alone or a build and revision ("26100", "26300.9999"), as Layer8Settings.TryParseWindowsBuild takes it.
+    $buildText = $null
+    if ($key) { $buildText = $key.WindowsBuild }
+    $buildMatch = [regex]::Match([string]$buildText, '^\s*(\d{5})(?:\.(\d{1,6}))?\s*$')
+    if (-not $buildMatch.Success -or [int]$buildMatch.Groups[1].Value -lt $const['MinWindowsBuild']) { $buildText = $defaultBuild; $buildMatch = [regex]::Match($defaultBuild, '^(\d{5})(?:\.(\d{1,6}))?$') }
+    $revision = 0
+    if ($buildMatch.Groups[2].Success) { $revision = [int]$buildMatch.Groups[2].Value }
+    $settings['WindowsBuildText'] = $buildText.Trim()
+    $settings['DefaultWindowsBuild'] = $defaultBuild
+    $settings['WindowsBuild'] = New-Object Version([int]$buildMatch.Groups[1].Value, $revision)
+
+    $level = 'Info'
+    if ($key -and $key.LogLevel -and $key.LogLevel.Trim() -in 'Debug', 'Info', 'Warn', 'Error') { $level = $key.LogLevel.Trim() }
+    $settings['LogLevel'] = $level
+    [pscustomobject]$settings
+}
+
+function Test-Settings {
+    $settings = Get-Layer8Settings
+    $labels = [ordered]@{
+        LowDiskGB        = 'Low disk under (GB)'
+        LongUptimeDays   = 'Long uptime (days)'
+        NotReportingDays = 'Not reporting after (days)'
+        BlueScreenDays   = 'Blue screens in the last (days)'
+    }
+    # Several tested rows end "set back to ..."; a value left changed would skew the next dashboard run.
+    foreach ($name in $labels.Keys) {
+        $value = $settings.$name
+        $default = $settings."Default$name"
+        if ($value -eq $default) { Add-Result PASS $labels[$name] "$value (the default)" }
+        else { Add-Result WARN $labels[$name] "$value, not the default $default`: set it back if a test changed it" }
+    }
+    if ($settings.WindowsBuildText -eq $settings.DefaultWindowsBuild) { Add-Result PASS 'Windows older than build' "$($settings.WindowsBuildText) (the default)" }
+    else { Add-Result WARN 'Windows older than build' "$($settings.WindowsBuildText), not the default $($settings.DefaultWindowsBuild): set it back if a test changed it" }
+    $reachable = 'off'
+    if ($settings.CheckReachable) { $reachable = "on, $($settings.ReachableSeconds) s" }
+    Add-Result INFO 'General' "$($settings.DevicesAtOnce) devices at once, ask above $($settings.ConfirmAbove), offline check $reachable, log level $($settings.LogLevel)"
+}
+
+# --- Devices -----------------------------------------------------------------------------------------------------------
+
+$healthIssues = $null
+# The dashboard's issues, in its order, and their names, from HealthCheck.cs: a tile added there shows up here.
+function Get-HealthIssues {
+    if ($script:healthIssues) { return $script:healthIssues }
+    $source = Get-Content -LiteralPath (Join-Path $repo 'Layer8.Device\HealthCheck.cs') -Raw
+    $body = [regex]::Match($source, '(?s)internal enum HealthIssue\s*\{(.*?)\}').Groups[1].Value
+    $body = [regex]::Replace($body, '(?m)^\s*///.*$', '')
+    $order = @($body -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^\w+$' })
+    $names = @{}
+    foreach ($match in [regex]::Matches($source, 'case HealthIssue\.(\w+): return "([^"]+)";')) { $names[$match.Groups[1].Value] = $match.Groups[2].Value }
+    $otherwise = [regex]::Match($source, 'default: return "([^"]+)";').Groups[1].Value
+    foreach ($issue in $order) { if (-not $names.ContainsKey($issue)) { $names[$issue] = $otherwise } }
+    $script:healthIssues = [pscustomobject]@{
+        Order                 = $order
+        Names                 = $names
+        DefenderSignatureDays = [int][regex]::Match($source, 'DefenderSignatureDays = (\d+);').Groups[1].Value
+    }
+    $script:healthIssues
+}
+# The issues this script knows how to read. One the dashboard has and this doesn't gets "?" instead of a count.
+$readableIssues = 'RestartPending', 'LowDisk', 'BitLockerOff', 'Defender', 'BlueScreen', 'MissingUpdates', 'WindowsBehind', 'Client', 'NotReporting', 'LongUptime', 'CouldNotCheck'
+
+# RemoteTools.IsComputerName: placeholder records ("x64 Unknown Computer (x64 Unknown Computer)") aren't machines.
+$computerName = '^[A-Za-z0-9][A-Za-z0-9.\-_]{0,254}$'
+$currentVersionKey = 'SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+$conversionStates = 'fully decrypted', 'fully encrypted', 'encrypting', 'decrypting', 'encryption paused', 'decryption paused'
+
+function Format-Bytes([double]$Bytes, [string]$Format) {
+    $units = 'B', 'KB', 'MB', 'GB', 'TB', 'PB'
+    $value = $Bytes
+    $unit = 0
+    while ([Math]::Abs($value) -ge 1024 -and $unit -lt $units.Count - 1) { $value /= 1024; $unit++ }
+    $value.ToString($Format, [Globalization.CultureInfo]::CurrentCulture) + ' ' + $units[$unit]
+}
+
+# ClientActions.FormatUptime. [int] in PowerShell rounds where C# cuts off, so Floor.
+function Format-Uptime([TimeSpan]$Uptime) {
+    if ($Uptime.TotalDays -ge 1) { return '{0}d {1}h' -f [Math]::Floor($Uptime.TotalDays), $Uptime.Hours }
+    if ($Uptime.TotalHours -ge 1) { return '{0}h {1}m' -f [Math]::Floor($Uptime.TotalHours), $Uptime.Minutes }
+    '{0}m' -f [Math]::Max(0, [Math]::Floor($Uptime.TotalMinutes))
+}
+
+# HealthCheck.FormatAge.
+function Format-Age([TimeSpan]$Age) {
+    if ($Age -lt [TimeSpan]::Zero) { $Age = [TimeSpan]::Zero }
+    if ($Age.TotalMinutes -lt 1) { return 'just now' }
+    if ($Age.TotalHours -lt 1) { return '{0}m ago' -f [Math]::Floor($Age.TotalMinutes) }
+    if ($Age.TotalHours -lt 48) { return '{0}h ago' -f [Math]::Floor($Age.TotalHours) }
+    '{0}d ago' -f [Math]::Floor($Age.TotalDays)
+}
+
+# A site date: WMI text in UTC with no offset ("20261120155812.000000+***"). Null when blank (year 1 or 1970).
+function ConvertFrom-SiteTime([string]$Text) {
+    if (-not $Text -or $Text.Length -lt 14) { return $null }
+    $styles = [Globalization.DateTimeStyles]'AssumeUniversal, AdjustToUniversal'
+    $utc = [datetime]::MinValue
+    if (-not [datetime]::TryParseExact($Text.Substring(0, 14), 'yyyyMMddHHmmss', [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$utc)) { return $null }
+    if ($utc.Year -lt 2000) { return $null }
+    $utc
+}
+
+function Test-AnyPort($Address, [int[]]$Ports, [int]$TimeoutMs) {
+    foreach ($port in $Ports) {
+        $client = New-Object Net.Sockets.TcpClient
+        try { if ($client.ConnectAsync($Address, $port).Wait($TimeoutMs) -and $client.Connected) { return $true } }
+        catch { }
+        finally { $client.Dispose() }
+    }
+    $false
+}
+
+# Online Status (Ping) as Layer8 words it: two pings, then port 445 when ping is blocked.
+function Get-OnlineStatus([string]$Name) {
+    try { $address = [Net.Dns]::GetHostAddresses($Name) | Sort-Object { $_.AddressFamily -ne 'InterNetwork' } | Select-Object -First 1 }
+    catch { return 'Not found in DNS' }
+    if (-not $address) { return 'Not found in DNS' }
+    $ping = New-Object Net.NetworkInformation.Ping
+    try {
+        for ($attempt = 0; $attempt -lt 2; $attempt++) {
+            try {
+                $reply = $ping.Send($address, 1000)
+                if ($reply.Status -eq 'Success') { return "Online: ping $($reply.RoundtripTime) ms ($address)" }
+            }
+            catch { }
+        }
+    }
+    finally { $ping.Dispose() }
+    if (Test-AnyPort $address @(445) 1000) { return "Online: ping blocked, port 445 answers ($address)" }
+    "Offline: no ping reply, port 445 closed ($address)"
+}
+
+function Get-RegistryValue($Session, [string]$Method, [string]$Key, [string]$Value) {
+    $result = Invoke-CimMethod -CimSession $Session -Namespace 'root\default' -ClassName StdRegProv -MethodName $Method -Arguments @{ hDefKey = [uint32]2147483650; sSubKeyName = $Key; sValueName = $Value }
+    if ($result.ReturnValue -ne 0) { return $null }
+    if ($Method -eq 'GetDWORDValue') { return $result.uValue }
+    $result.sValue
+}
+
+function Test-SubKey($Session, [string]$Key, [string]$SubKey) {
+    $result = Invoke-CimMethod -CimSession $Session -Namespace 'root\default' -ClassName StdRegProv -MethodName EnumKey -Arguments @{ hDefKey = [uint32]2147483650; sSubKeyName = $Key }
+    @($result.sNames) -contains $SubKey
+}
+
+function Test-CimError($ErrorRecord, [string[]]$Codes) {
+    $ErrorRecord.Exception -is [Microsoft.Management.Infrastructure.CimException] -and "$($ErrorRecord.Exception.NativeErrorCode)" -in $Codes
+}
+
+# HealthCheck.StopCode: the stop code from the System log's BugCheck event (1001) after the dump.
+function Get-StopCode($Session, [datetime]$Written) {
+    try {
+        $from = [Management.ManagementDateTimeConverter]::ToDmtfDateTime($Written.AddMinutes(-10))
+        foreach ($entry in Get-CimInstance -CimSession $Session -Query "SELECT InsertionStrings FROM Win32_NTLogEvent WHERE Logfile = 'System' AND EventCode = 1001 AND TimeGenerated >= '$from'") {
+            $first = @($entry.InsertionStrings)[0]
+            if ($first -match '^\s*0x([0-9A-Fa-f]{1,8})\b') { return '0x' + $Matches[1].ToUpperInvariant().PadLeft(8, '0') }
+        }
+    }
+    catch { }
+    $null
+}
+
+# One check, as HealthCheck.Read runs it: a check that can't be read shows "?" and is named under Couldn't check.
+function Invoke-Check([string]$CheckName, $IssueSet, $UnreadList, [scriptblock]$Reader) {
+    try { & $Reader }
+    catch {
+        $exception = $_.Exception
+        $why = $exception.Message.Trim().TrimEnd('.').ToLowerInvariant()
+        if ($exception -is [UnauthorizedAccessException] -or ($exception -is [Microsoft.Management.Infrastructure.CimException] -and "$($exception.NativeErrorCode)" -eq 'AccessDenied')) { $why = 'access denied' }
+        $UnreadList.Add("$CheckName ($why)")
+        [void]$IssueSet.Add('CouldNotCheck')
+        '?'
+    }
+}
+
+# One device, read the way HealthCheck.Check reads it, in the same order.
+function Read-Device([string]$Name, $Settings) {
+    $issues = New-Object 'System.Collections.Generic.HashSet[string]'
+    $unread = New-Object System.Collections.Generic.List[string]
+    $row = [ordered]@{
+        Device = $Name; State = 'Checked'; Status = ''; Online = (Get-OnlineStatus $Name)
+        'Signed in' = ''; Up = ''; 'C: free' = ''; 'Blue screen' = ''; Windows = ''; Client = ''
+        Restart = ''; BitLocker = ''; Defender = ''; Updates = ''; 'Policy request' = ''; Issues = ''
+        IssueSet = $issues; Unread = $unread; NotReporting = $false
+    }
+    $done = { [pscustomobject]$row }
+
+    # The quick offline check Layer8 Settings turns on: port 135 or 445 within the set time.
+    if ($Settings.CheckReachable -and -not (Test-AnyPort $Name @(135, 445) ($Settings.ReachableSeconds * 1000))) {
+        $row.State = 'Offline'; $row.Status = "Offline: ports 135 and 445 don't answer"
+        return & $done
+    }
+    try {
+        $session = New-CimSession -ComputerName $Name -SessionOption (New-CimSessionOption -Protocol Dcom) -OperationTimeoutSec 60
+        [void](Get-CimInstance -CimSession $session -ClassName Win32_OperatingSystem -Property BuildNumber)
+    }
+    catch {
+        $row.State = 'Failed'; $row.Status = "Error: $($_.Exception.Message.Trim())"
+        return & $done
+    }
+
+    try {
+        $state = @{ ClientSdk = $false }
+        $row['Signed in'] = Invoke-Check 'Signed in' $issues $unread {
+            $users = New-Object System.Collections.Generic.List[string]
+            foreach ($explorer in Get-CimInstance -CimSession $session -ClassName Win32_Process -Filter "Name = 'explorer.exe'") {
+                $owner = Invoke-CimMethod -CimSession $session -InputObject $explorer -MethodName GetOwner
+                if (-not $owner.User) { continue }
+                $who = $owner.User
+                if ($owner.Domain) { $who = "$($owner.Domain)\$($owner.User)" }
+                if (-not ($users -contains $who)) { $users.Add($who) }
+            }
+            if ($users.Count -eq 0) { 'No one' } else { $users -join ', ' }
+        }
+
+        $row.Up = Invoke-Check 'Uptime' $issues $unread {
+            # The boot time first, as the dashboard reads it: the uptime counter's first read took 43 seconds on a server.
+            $os = Get-CimInstance -CimSession $session -ClassName Win32_OperatingSystem -Property LastBootUpTime, LocalDateTime
+            $uptime = $null
+            if ($os.LastBootUpTime -and $os.LocalDateTime -and $os.LocalDateTime -ge $os.LastBootUpTime) { $uptime = $os.LocalDateTime - $os.LastBootUpTime }
+            else {
+                $counter = Get-CimInstance -CimSession $session -ClassName Win32_PerfFormattedData_PerfOS_System -Property SystemUpTime
+                if ($counter.SystemUpTime -gt 0) { $uptime = [TimeSpan]::FromSeconds($counter.SystemUpTime) }
+            }
+            if ($null -eq $uptime) { throw 'no uptime counter or boot time' }
+            if ($uptime.TotalDays -ge $Settings.LongUptimeDays) { [void]$issues.Add('LongUptime') }
+            Format-Uptime $uptime
+        }
+
+        $row['C: free'] = Invoke-Check 'Disk' $issues $unread {
+            $disk = Get-CimInstance -CimSession $session -ClassName Win32_LogicalDisk -Filter "DeviceID = 'C:'" -Property FreeSpace, Size
+            if (-not $disk) { return 'No C: drive' }
+            $free = [double]$disk.FreeSpace
+            $size = [double]$disk.Size
+            if ($free -lt $Settings.LowDiskGB * 1GB) { [void]$issues.Add('LowDisk') }
+            $text = Format-Bytes $free '0.#'
+            if ($size -gt 0) { $text += ' of ' + (Format-Bytes $size '0') }
+            $text
+        }
+
+        $row['Blue screen'] = Invoke-Check 'Blue screen' $issues $unread {
+            $window = (Get-Date).AddDays(-$Settings.BlueScreenDays)
+            $dumps = @(Get-CimInstance -CimSession $session -Query "SELECT LastModified FROM CIM_DataFile WHERE Drive = 'C:' AND Path = '\\Windows\\Minidump\\' AND Extension = 'dmp'" |
+                ForEach-Object LastModified | Where-Object { $_ -ge $window })
+            if ($dumps.Count -eq 0) { return 'None' }
+            [void]$issues.Add('BlueScreen')
+            $newest = $dumps | Sort-Object -Descending | Select-Object -First 1
+            $code = Get-StopCode $session $newest
+            $text = ''
+            if ($dumps.Count -gt 1) { $text = "$($dumps.Count), last " }
+            $text += $newest.ToString('g')
+            if ($code) { $text += " ($code)" }
+            $text
+        }
+
+        $row.Windows = Invoke-Check 'Windows' $issues $unread {
+            $os = Get-CimInstance -CimSession $session -ClassName Win32_OperatingSystem -Property Caption, BuildNumber, ProductType
+            $build = 0
+            if (-not $os -or -not [int]::TryParse([string]$os.BuildNumber, [ref]$build)) { throw 'no Windows build number' }
+            $revision = Get-RegistryValue $session 'GetDWORDValue' $currentVersionKey 'UBR'
+            $revisionNumber = 0
+            if ($null -ne $revision) { $revisionNumber = [int][uint32]$revision }
+            $windows = New-Object Version($build, $revisionNumber)
+            $buildText = "$build"
+            if ($null -ne $revision) { $buildText = $windows.ToString() }
+            $productType = 1
+            if ($null -ne $os.ProductType) { $productType = [int]$os.ProductType }
+            # Servers and domain controllers follow their own build line and aren't held to a workstation build.
+            if ($productType -ne 1) {
+                $server = [regex]::Match([string]$os.Caption, 'Server \d{4}( R2)?')
+                $serverName = 'Server'
+                if ($server.Success) { $serverName = $server.Value }
+                return (@($serverName, $buildText) | Where-Object { $_ }) -join ', '
+            }
+            $release = Get-RegistryValue $session 'GetStringValue' $currentVersionKey 'DisplayVersion'
+            if (-not $release) { $release = Get-RegistryValue $session 'GetStringValue' $currentVersionKey 'ReleaseId' }
+            if ($windows -lt $Settings.WindowsBuild) { [void]$issues.Add('WindowsBehind') }
+            (@($release, $buildText) | Where-Object { $_ }) -join ', '
+        }
+
+        $row.Client = Invoke-Check 'Client' $issues $unread {
+            $service = Get-CimInstance -CimSession $session -ClassName Win32_Service -Filter "Name = 'CcmExec'" -Property State
+            if (-not $service) { [void]$issues.Add('Client'); return 'Not installed' }
+            $serviceState = 'in an unknown state'
+            if ($service.State) { $serviceState = $service.State }
+            if ($serviceState -ne 'Running') { [void]$issues.Add('Client'); return 'Service ' + $serviceState.ToLowerInvariant() }
+            try { $client = Get-CimInstance -CimSession $session -Namespace 'root\ccm' -ClassName SMS_Client -Property ClientVersion }
+            catch {
+                # A site server's management point runs CcmExec too, with no client.
+                if (Test-CimError $_ 'InvalidNamespace', 'InvalidClass') { [void]$issues.Add('Client'); return 'Not installed' }
+                throw
+            }
+            $state.ClientSdk = $true
+            if ((Get-RegistryValue $session 'GetStringValue' 'SOFTWARE\Microsoft\CCM\CcmExec' 'ProvisioningMode') -eq 'true') { [void]$issues.Add('Client'); return 'Provisioning mode' }
+            if ($client.ClientVersion) { $client.ClientVersion } else { 'Running' }
+        }
+
+        $row.Restart = Invoke-Check 'Restart' $issues $unread {
+            $reasons = New-Object System.Collections.Generic.List[string]
+            if ($state.ClientSdk) {
+                $pending = Invoke-CimMethod -CimSession $session -Namespace 'root\ccm\ClientSDK' -ClassName CCM_ClientUtilities -MethodName DetermineIfRebootPending
+                if ($pending.RebootPending -or $pending.IsHardRebootPending) {
+                    $reason = 'ConfigMgr'
+                    if ($pending.IsHardRebootPending) { $reason = 'ConfigMgr (hard restart)' }
+                    if ($pending.RebootDeadline -is [datetime] -and $pending.RebootDeadline.Year -gt 2000) { $reason += ', deadline ' + $pending.RebootDeadline.ToString('g') }
+                    $reasons.Add($reason)
+                }
+            }
+            if (Test-SubKey $session 'SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing' 'RebootPending') { $reasons.Add('Windows servicing') }
+            if (Test-SubKey $session 'SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update' 'RebootRequired') { $reasons.Add('Windows Update') }
+            if ($reasons.Count -eq 0) { return 'No' }
+            [void]$issues.Add('RestartPending')
+            $reasons -join '; '
+        }
+
+        $row.BitLocker = Invoke-Check 'BitLocker' $issues $unread {
+            # Read only, like BitLocker Status: protection and conversion, never a recovery password.
+            try { $volume = Get-CimInstance -CimSession $session -Namespace 'root\cimv2\Security\MicrosoftVolumeEncryption' -ClassName Win32_EncryptableVolume -Filter "DriveLetter = 'C:'" }
+            catch { if (Test-CimError $_ 'InvalidNamespace') { return 'Not available' }; throw }
+            if (-not $volume) { return 'C: not encryptable' }
+            $protection = 2
+            if ($null -ne $volume.ProtectionStatus) { $protection = [int]$volume.ProtectionStatus }
+            $conversion = ''
+            $status = Invoke-CimMethod -CimSession $session -InputObject $volume -MethodName GetConversionStatus
+            if ($status -and $status.ReturnValue -eq 0) {
+                $number = [int]$status.ConversionStatus
+                $conversion = "conversion state $number"
+                if ($number -lt $conversionStates.Count) { $conversion = $conversionStates[$number] }
+                if ($number -ge 2 -and $number -le 5) { $conversion += " $($status.EncryptionPercentage)%" }
+            }
+            if ($protection -eq 0) {
+                [void]$issues.Add('BitLockerOff')
+                if ($conversion -eq 'fully encrypted') { return 'Suspended (encrypted)' }
+                if ($conversion -eq '' -or $conversion -eq 'fully decrypted') { return 'Off' }
+                return "Off, $conversion"
+            }
+            if ($protection -eq 1) {
+                if ($conversion -eq '' -or $conversion -eq 'fully encrypted') { return 'On' }
+                return "On, $conversion"
+            }
+            'Unknown (locked)'
+        }
+
+        $row.Defender = Invoke-Check 'Defender' $issues $unread {
+            try { $status = Get-CimInstance -CimSession $session -Namespace 'root\Microsoft\Windows\Defender' -ClassName MSFT_MpComputerStatus }
+            catch { if (Test-CimError $_ 'InvalidNamespace') { return 'Not installed' }; throw }
+            if (-not $status) { return 'No status' }
+            # Another antivirus is in charge and Defender stands back on purpose.
+            if ($status.CimInstanceProperties['AMRunningMode'] -and "$($status.AMRunningMode)" -like '*Passive*') { return 'Passive' }
+            $problems = New-Object System.Collections.Generic.List[string]
+            if (-not $status.AntivirusEnabled) { $problems.Add('antivirus off') }
+            if (-not $status.RealTimeProtectionEnabled) { $problems.Add('real-time off') }
+            $days = (Get-HealthIssues).DefenderSignatureDays
+            if ($null -ne $status.AntivirusSignatureAge -and $status.AntivirusSignatureAge -gt $days) { $problems.Add("signatures $($status.AntivirusSignatureAge) days old") }
+            if ($problems.Count -eq 0) { return 'OK' }
+            [void]$issues.Add('Defender')
+            $text = $problems -join ', '
+            $text.Substring(0, 1).ToUpperInvariant() + $text.Substring(1)
+        }
+
+        $row.Updates = Invoke-Check 'Updates' $issues $unread {
+            if (-not $state.ClientSdk) { return 'No client' }
+            # Counted by KB, as List Missing Updates counts them (a client's store can list one KB twice).
+            $missing = New-Object System.Collections.Generic.List[string]
+            foreach ($update in Get-CimInstance -CimSession $session -Namespace 'root\ccm\ClientSDK' -Query 'SELECT ArticleID, Name FROM CCM_SoftwareUpdate WHERE ComplianceState = 0') {
+                $updateKey = '(unnamed update)'
+                if ($update.ArticleID) { $updateKey = 'KB' + $update.ArticleID } elseif ($update.Name) { $updateKey = $update.Name }
+                if (-not ($missing -contains $updateKey)) { $missing.Add($updateKey) }
+            }
+            if ($missing.Count -eq 0) { return 'None' }
+            [void]$issues.Add('MissingUpdates')
+            $text = "$($missing.Count): " + (($missing | Select-Object -First 3) -join ', ')
+            if ($missing.Count -gt 3) { $text += ', ...' }
+            $text
+        }
+    }
+    finally {
+        Remove-CimSession -CimSession $session -ErrorAction SilentlyContinue
+    }
+    & $done
+}
+
+# Each device's issues as HealthReport.IssueText words them, the text the dashboard logs for it.
+function Get-IssueText($Row) {
+    $health = Get-HealthIssues
+    $parts = foreach ($issue in $health.Order) {
+        if (-not $Row.IssueSet.Contains($issue)) { continue }
+        if ($issue -eq 'CouldNotCheck') { $health.Names[$issue] + ': ' + ($Row.Unread -join ', ') } else { $health.Names[$issue] }
+    }
+    @($parts) -join ', '
+}
+
+# Row.Has: the site's Not reporting, or one of the device's own issues.
+function Test-RowHas($Row, [string]$Issue) {
+    if ($Issue -eq 'NotReporting') { return [bool]$Row.NotReporting }
+    $Row.IssueSet.Contains($Issue)
+}
+
+$expected = $null
+function Test-Devices {
+    $settings = Get-Layer8Settings
+    $health = Get-HealthIssues
+    $unknown = @($health.Order | Where-Object { $readableIssues -notcontains $_ })
+    foreach ($issue in $unknown) { Add-Result WARN "The $($health.Names[$issue]) tile" "this script doesn't read it yet, so its count shows ?" }
+
+    # The site: the console's last connection unless told otherwise.
+    $server = $SiteServer
+    $code = $SiteCode
+    if (-not $server -or -not $code) {
+        $last = Get-ChildItem 'HKCU:\Software\Microsoft\ConfigMgr10\AdminUI\MRU' -ErrorAction SilentlyContinue | Sort-Object { [int]($_.PSChildName -replace '\D', '') } |
+            ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath } | Where-Object { $_.ServerName } | Select-Object -First 1
+        if (-not $server -and $last) { $server = $last.ServerName }
+        if (-not $code -and $last) { $code = $last.SiteCode }
+    }
+    if (-not $server -or -not $code) { Add-Result FAIL 'Site' 'no -SiteServer and -SiteCode, and the console has no last connection'; return }
+    $namespace = "root\sms\site_$code"
+    # Get-WmiObject, not CIM: it hands the site's dates over as the provider's own text, which is UTC with no offset.
+    $quoted = $Collection.Replace('\', '\\').Replace("'", "\'")
+    $record = @(Get-WmiObject -ComputerName $server -Namespace $namespace -Query "SELECT CollectionID, Name FROM SMS_Collection WHERE Name = '$quoted'")
+    if ($record.Count -ne 1) { Add-Result FAIL "Collection $Collection" "not found on $server"; return }
+    $collectionId = $record[0].CollectionID
+    $members = @(Get-WmiObject -ComputerName $server -Namespace $namespace -Query "SELECT Name, ResourceID FROM SMS_FullCollectionMembership WHERE CollectionID = '$collectionId'" | Sort-Object Name)
+    Add-Result INFO 'Collection' "$Collection ($collectionId): $($members.Count) members, from site $code on $server"
+
+    # When the site last heard from each client: SMS_CombinedDeviceResources, 300 at a time, as HealthCheck.ReadSiteContact.
+    $contact = @{}
+    $nowUtc = [datetime]::UtcNow
+    for ($start = 0; $start -lt $members.Count; $start += 300) {
+        $ids = ($members[$start..([Math]::Min($start + 299, $members.Count - 1))] | ForEach-Object ResourceID) -join ','
+        foreach ($device in Get-WmiObject -ComputerName $server -Namespace $namespace -Query "SELECT ResourceID, IsClient, LastPolicyRequest FROM SMS_CombinedDeviceResources WHERE ResourceID IN ($ids)") {
+            $lastRequest = ConvertFrom-SiteTime $device.LastPolicyRequest
+            $isClient = [bool]$device.IsClient
+            $contact[[int]$device.ResourceID] = [pscustomobject]@{
+                LastPolicyRequest = $lastRequest
+                NotReporting      = $isClient -and ($null -eq $lastRequest -or ($nowUtc - $lastRequest).TotalDays -ge $settings.NotReportingDays)
+            }
+        }
+    }
+
+    $rows = foreach ($member in $members) {
+        if ($member.Name -notmatch $computerName) {
+            $row = [pscustomobject]@{ Device = $member.Name; State = 'Skipped'; Status = 'Skipped: not a computer name'; IssueSet = (New-Object 'System.Collections.Generic.HashSet[string]'); Unread = @(); NotReporting = $false; 'Policy request' = ''; Issues = '' }
+        }
+        else {
+            Write-Host "  ...  reading $($member.Name)" -ForegroundColor DarkGray
+            $row = Read-Device $member.Name $settings
+        }
+        $site = $contact[[int]$member.ResourceID]
+        if ($site) {
+            $row.NotReporting = $site.NotReporting
+            if ($site.LastPolicyRequest) { $row.'Policy request' = Format-Age ($nowUtc - $site.LastPolicyRequest) }
+        }
+        # The Issues column: Offline or Couldn't check first, then each issue in the tiles' order.
+        $names = New-Object System.Collections.Generic.List[string]
+        if ($row.State -eq 'Offline') { $names.Add('Offline') }
+        elseif ($row.State -eq 'Failed') { $names.Add($health.Names['CouldNotCheck']) }
+        foreach ($issue in $health.Order) {
+            if (-not (Test-RowHas $row $issue)) { continue }
+            if ($issue -eq 'CouldNotCheck') { $names.Add($health.Names[$issue] + ': ' + ($row.Unread -join ', ')) } else { $names.Add($health.Names[$issue]) }
+        }
+        $row.Issues = $names -join ', '
+        if ($row.State -eq 'Checked' -and -not $row.Status) {
+            $row.Status = 'Healthy'
+            if ($names.Count -gt 0) { $row.Status = "$($names.Count) issue" + $(if ($names.Count -gt 1) { 's' }) }
+        }
+        $row
+    }
+    $rows = @($rows)
+
+    foreach ($row in $rows) {
+        $detail = $row.Status
+        if ($row.Issues) { $detail += ": $($row.Issues)" }
+        Add-Result INFO $row.Device $detail
+    }
+    $shown = $rows | Where-Object State -ne 'Skipped'
+    if ($shown) {
+        Write-Host ''
+        Write-Host '  What the dashboard should show (Up and Policy request move on with the clock):' -ForegroundColor Gray
+        $shown | Format-List Device, Online, 'Signed in', Up, 'C: free', 'Blue screen', Windows, Client, Restart, BitLocker, Defender, Updates, 'Policy request', Issues |
+            Out-String -Width 160 | ForEach-Object { $_.TrimEnd() } | Write-Host
+    }
+
+    # The tiles, as HealthDashboardDialog counts them.
+    $tiles = [ordered]@{}
+    $healthy = @($rows | Where-Object { $candidate = $_; $candidate.State -eq 'Checked' -and -not @($health.Order | Where-Object { Test-RowHas $candidate $_ }) }).Count
+    if ($unknown) { $healthy = '?' }
+    $tiles['healthy'] = $healthy
+    $tiles['offline'] = @($rows | Where-Object State -eq 'Offline').Count
+    foreach ($issue in $health.Order) {
+        if ($issue -eq 'CouldNotCheck') { continue }
+        $count = '?'
+        if ($readableIssues -contains $issue) { $count = @($rows | Where-Object { Test-RowHas $_ $issue }).Count }
+        $tiles[$health.Names[$issue].ToLowerInvariant()] = $count
+    }
+    $tiles[$health.Names['CouldNotCheck'].ToLowerInvariant()] = @($rows | Where-Object { $_.State -eq 'Failed' -or (Test-RowHas $_ 'CouldNotCheck') }).Count
+    $tileText = ($tiles.Keys | ForEach-Object { "$_ $($tiles[$_])" }) -join ', '
+    Add-Result INFO 'Tiles' "$($rows.Count) devices; $tileText"
+
+    $script:expected = [pscustomobject]@{
+        Rows         = $rows
+        Tiles        = $tiles
+        TileText     = $tileText
+        Contacted    = $contact.Count
+        NotReporting = @($rows | Where-Object NotReporting).Count
+        Settings     = $settings
+    }
+}
+
+# --- Log ------------------------------------------------------------------------------------------------------------------
+
+function Test-Log {
+    $entries = @(Get-LogEntries | Where-Object { $_.Time -ge $Since })
+    Add-Result INFO 'Entries' ("{0} since {1:g}, in {2}" -f $entries.Count, $Since, $logFolder)
+    if (-not $entries) { Add-Result FAIL 'Log' "nothing logged since $($Since.ToString('g')): was the console used?"; return }
+
+    # An entry from before the console loaded this build belongs to the build before: worth seeing, not this one's failure.
+    $loadedLine = $entries | Where-Object { $_.Text -match ('^Layer8 ' + [regex]::Escape("$version") + ' loaded in console 5\.') } | Select-Object -First 1
+    $loadedAt = $null
+    $earlier = ''
+    if ($loadedLine) { $loadedAt = $loadedLine.Time; $earlier = " (before Layer8 $version loaded at $($loadedAt.ToString('T')))" }
+    elseif (Get-LogEntries | Where-Object { $_.Text -match ('^Layer8 ' + [regex]::Escape("$version") + ' loaded in console 5\.') }) { $loadedAt = $Since }
+
+    $errors = @($entries | Where-Object Type -eq 3)
+    foreach ($entry in $errors | Select-Object -First 15) {
+        $result = 'FAIL'
+        $note = ''
+        if ($null -eq $loadedAt -or $entry.Time -lt $loadedAt) { $result = 'WARN'; $note = $earlier }
+        if ($null -eq $loadedAt) { $note = " (the console hasn't loaded Layer8 $version)" }
+        Add-Result $result ("Error at {0:T}{1}" -f $entry.Time, $note) "$($entry.Component): $(Get-FirstLine $entry.Text)"
+    }
+    if (-not $errors) { Add-Result PASS 'No errors logged' '' }
+    if ($errors.Count -gt 15) { Add-Result INFO 'More errors' "$($errors.Count - 15) more in the log" }
+
+    $warnings = @($entries | Where-Object Type -eq 2)
+    foreach ($entry in $warnings | Select-Object -First 15) {
+        $note = ''
+        if ($loadedAt -and $entry.Time -lt $loadedAt) { $note = $earlier }
+        Add-Result WARN ("Warning at {0:T}{1}" -f $entry.Time, $note) "$($entry.Component): $(Get-FirstLine $entry.Text)"
+    }
+    if ($warnings.Count -gt 15) { Add-Result INFO 'More warnings' "$($warnings.Count - 15) more in the log" }
+
+    # A step over 10 seconds is logged at Info with its time, whatever the log level.
+    $slow = @($entries | Where-Object { $_.Text -match ' took [0-9.]+ seconds$' })
+    if ($slow) { foreach ($entry in $slow) { Add-Result WARN ("Slow step at {0:T}" -f $entry.Time) $entry.Text } }
+    else { Add-Result PASS 'No step took 10 seconds or more' '' }
+
+    foreach ($entry in $entries | Where-Object { $_.Text -like '*settings saved*' }) { Add-Result INFO ("Settings saved at {0:T}" -f $entry.Time) $entry.Text }
+
+    # The last Health Dashboard run on the collection: every build runs one, and the Devices section says what it should find.
+    $scope = [regex]::Escape("Health Dashboard on $Collection")
+    $startIndex = -1
+    for ($i = $entries.Count - 1; $i -ge 0; $i--) { if ($entries[$i].Text -match "^$scope`: checking (\d+) device\(s\)") { $startIndex = $i; break } }
+    if ($startIndex -lt 0) { Add-Result FAIL "A Health Dashboard run on $Collection" "none since $($Since.ToString('g')): every build runs one"; return }
+    $null = $entries[$startIndex].Text -match "^$scope`: checking (\d+) device\(s\)"
+    $checked = [int]$Matches[1]
+    $finishIndex = -1
+    for ($i = $startIndex + 1; $i -lt $entries.Count; $i++) { if ($entries[$i].Text -match "^$scope finished: ") { $finishIndex = $i; break } }
+    if ($finishIndex -lt 0) { Add-Result FAIL "The Health Dashboard run at $($entries[$startIndex].Time.ToString('T'))" "it didn't finish (closed or stopped before the end?)"; return }
+    $finished = $entries[$finishIndex]
+    $null = $finished.Text -match "^$scope finished: (\d+) device\(s\) in ([^;]+); (.*)$"
+    Add-Result INFO 'Last dashboard run' ("{0:T}: {1} devices in {2}" -f $entries[$startIndex].Time, $Matches[1], $Matches[2])
+    $loggedTiles = [ordered]@{}
+    foreach ($pair in $Matches[3] -split ', ') { if ($pair -match '^(.*) (\d+)$') { $loggedTiles[$Matches[1]] = $Matches[2] } }
+
+    if (-not $script:expected) { Add-Result SKIP 'Against the Devices section' 'the Devices section didn''t run'; return }
+
+    # The Devices section reads with the current settings. A run made with others (a threshold being tested, not yet
+    # set back) can't match it, so say so before the mismatches. HealthDashboardOptionsControl logs every save this way.
+    $current = $script:expected.Settings
+    $currentText = 'Health Dashboard settings saved: low disk under {0} GB; long uptime {1} days or more; not reporting after {2} days; blue screens in the last {3} days; Windows older than build {4}' -f
+        $current.LowDiskGB, $current.LongUptimeDays, $current.NotReportingDays, $current.BlueScreenDays, $current.WindowsBuildText
+    $usedLine = Get-LogEntries | Where-Object { $_.Text -like 'Health Dashboard settings saved:*' -and $_.Time -le $entries[$startIndex].Time } | Select-Object -Last 1
+    if ($usedLine -and $usedLine.Text -ne $currentText) {
+        Add-Result WARN 'Settings the run used' ("other than the current ones, saved {0:T}: {1}. Run the dashboard again at the current settings" -f $usedLine.Time, $usedLine.Text.Substring('Health Dashboard settings saved: '.Length))
+    }
+    else { Add-Result PASS 'Settings the run used' 'the current ones' }
+
+    Test-Equal 'Devices checked' $script:expected.Rows.Count $checked
+
+    foreach ($name in $loggedTiles.Keys) {
+        if (-not $script:expected.Tiles.Contains($name)) { Add-Result WARN "Tile '$name'" "logged $($loggedTiles[$name]); this script doesn't know the tile"; continue }
+        $want = $script:expected.Tiles[$name]
+        if ("$want" -eq '?') { Add-Result SKIP "Tile '$name'" "logged $($loggedTiles[$name]); this script doesn't read it yet" }
+        else { Test-Equal "Tile '$name'" $want $loggedTiles[$name] }
+    }
+    foreach ($name in $script:expected.Tiles.Keys) { if (-not $loggedTiles.Contains($name)) { Add-Result FAIL "Tile '$name'" 'not in the logged run' } }
+
+    # Each device's line: its issues as HealthReport.IssueText words them, "healthy", or the reason it's offline.
+    $run = @($entries[$startIndex..$finishIndex])
+    foreach ($row in $script:expected.Rows) {
+        if ($row.State -eq 'Skipped') { continue }
+        $pattern = '^' + [regex]::Escape("Health Dashboard on $($row.Device): ")
+        $line = $run | Where-Object { $_.Text -match $pattern } | Select-Object -Last 1
+        if (-not $line) { Add-Result FAIL "$($row.Device) in the run" 'no line for it'; continue }
+        $logged = $line.Text.Substring($line.Text.IndexOf(': ') + 2)
+        switch ($row.State) {
+            'Offline' { if ($logged -like 'Offline*') { Add-Result PASS "$($row.Device) in the run" $logged } else { Add-Result FAIL "$($row.Device) in the run" "expected it offline, got '$logged'" } }
+            'Failed' { Add-Result INFO "$($row.Device) in the run" "logged '$logged'; this script couldn't connect: $($row.Status)" }
+            default {
+                $want = Get-IssueText $row
+                if (-not $want) { $want = 'healthy' }
+                if ($row.IssueSet.Contains('CouldNotCheck')) {
+                    # Why a check couldn't be read is worded by WMI in the console and by CIM here: the names have to match, not the reasons.
+                    $cut = { param($text) [regex]::Replace($text, ' \([^)]*\)', '') }
+                    if ((& $cut $want) -eq (& $cut $logged)) { Add-Result PASS "$($row.Device) in the run" $logged } else { Add-Result FAIL "$($row.Device) in the run" "expected '$want', got '$logged'" }
+                }
+                else { Test-Equal "$($row.Device) in the run" $want $logged }
+            }
+        }
+    }
+
+    $policy = $run | Where-Object { $_.Text -match "^$scope`: the site's last policy request read for (\d+) device\(s\); (\d+) not reporting" } | Select-Object -Last 1
+    if ($policy) {
+        $null = $policy.Text -match "read for (\d+) device\(s\); (\d+) not reporting"
+        Test-Equal 'Policy requests read from the site' $script:expected.Contacted $Matches[1]
+        Test-Equal 'Not reporting, from the site' $script:expected.NotReporting $Matches[2]
+    }
+    else { Add-Result WARN 'Policy requests read from the site' 'no line for it in the run' }
+}
+
+# --- Changes --------------------------------------------------------------------------------------------------------------
+
+function Test-Changes {
+    $checklist = Join-Path $repo 'docs\REGRESSION.md'
+    if (-not (Test-Path -LiteralPath $checklist)) { Add-Result FAIL 'Checklist' 'docs\REGRESSION.md is missing'; return }
+
+    # docs\STATUS.md gets each run's results before its commit, so the last commit that changed it is the last tested code.
+    $base = @(& git -C $repo log -1 --format=%h -- docs/STATUS.md)[0]
+    if (-not $base) { Add-Result WARN 'Changes' 'no commit has changed docs/STATUS.md'; return }
+    $changed = @(@(& git -C $repo -c core.safecrlf=false diff --name-only $base) + @(& git -C $repo ls-files --others --exclude-standard) | Where-Object { $_ } | Sort-Object -Unique)
+    Add-Result INFO 'Changed files' "$($changed.Count) since $base, the last commit that changed docs/STATUS.md (uncommitted work included)"
+    if (-not $changed) { Add-Result INFO 'Checklist sections' 'nothing changed: the every-build steps only'; return }
+
+    # Sections are "### X. Title" headings with a "Files:" line of backquoted patterns (* matches across folders).
+    $sections = New-Object System.Collections.Generic.List[object]
+    $current = $null
+    foreach ($line in Get-Content -LiteralPath $checklist) {
+        if ($line -match '^### ([A-Z][0-9]*)\. (.+)$') {
+            $current = [pscustomobject]@{ Id = $Matches[1]; Title = $Matches[2]; Patterns = @(); Files = New-Object System.Collections.Generic.List[string] }
+            $sections.Add($current)
+        }
+        elseif ($line -match '^## ') { $current = $null }
+        elseif ($current -and $line -match '^Files: ') { $current.Patterns = @([regex]::Matches($line, '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value }) }
+    }
+
+    foreach ($file in $changed) {
+        $hit = @($sections | Where-Object { $candidate = $_; @($candidate.Patterns | Where-Object { $file -like $_ }).Count -gt 0 })
+        if (-not $hit) { Add-Result WARN $file 'no checklist section names it: add it to a Files line in docs\REGRESSION.md' }
+        foreach ($entry in $hit) { $entry.Files.Add($file) }
+    }
+    foreach ($entry in $sections | Where-Object { $_.Files.Count -gt 0 }) {
+        Add-Result INFO "Run $($entry.Id). $($entry.Title)" (($entry.Files | Select-Object -First 6) -join ', ')
+    }
+}
+
+# --- The report ------------------------------------------------------------------------------------------------------------
+
+function Write-Report {
+    $folder = Join-Path $repo 'Build\Regression'
+    New-Item -ItemType Directory -Force -Path $folder | Out-Null
+    $kind = 'before'
+    if ($sinceGiven) { $kind = 'after' }
+    $file = Join-Path $folder ('Layer8-{0}-{1:yyyyMMdd-HHmmss}-{2}.md' -f $version, $started, $kind)
+    $cell = { param($text) ([string]$text).Replace('|', '\|').Replace("`r", ' ').Replace("`n", ' ') }
+
+    $commit = (& git -C $repo rev-parse --short HEAD)
+    $branch = (& git -C $repo rev-parse --abbrev-ref HEAD)
+    $dirty = @(& git -C $repo status --porcelain).Count
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add("# Layer8 $version regression run ($kind the console steps)")
+    $lines.Add('')
+    $lines.Add(("{0:yyyy-MM-dd HH:mm} on {1}. Commit {2} on {3}, {4} uncommitted change(s)." -f $started, $env:COMPUTERNAME, $commit, $branch, $dirty))
+    if ($sinceGiven) { $lines.Add(("Log checked from {0:yyyy-MM-dd HH:mm:ss}." -f $Since)) }
+    $lines.Add('')
+    $counts = ($results | Group-Object Result | Sort-Object Name | ForEach-Object { "$($_.Count) $($_.Name)" }) -join ', '
+    $lines.Add("Results: $counts.")
+    $lines.Add('')
+    $lines.Add('| Section | Result | Check | Detail |')
+    $lines.Add('|---|---|---|---|')
+    foreach ($result in $results) { $lines.Add(('| {0} | {1} | {2} | {3} |' -f $result.Section, $result.Result, (& $cell $result.Check), (& $cell $result.Detail))) }
+
+    if ($script:expected) {
+        $columns = 'Device', 'Status', 'Online', 'Signed in', 'Up', 'C: free', 'Blue screen', 'Windows', 'Client', 'Restart', 'BitLocker', 'Defender', 'Updates', 'Policy request', 'Issues'
+        $lines.Add('')
+        $lines.Add("## What the Health Dashboard should show on $Collection")
+        $lines.Add('')
+        $lines.Add('Tiles: ' + $script:expected.TileText)
+        $lines.Add('')
+        $lines.Add('| ' + ($columns -join ' | ') + ' |')
+        $lines.Add('|' + (($columns | ForEach-Object { '---' }) -join '|') + '|')
+        foreach ($row in $script:expected.Rows) {
+            $values = foreach ($column in $columns) { & $cell $row.$column }
+            $lines.Add('| ' + ($values -join ' | ') + ' |')
+        }
+    }
+    [IO.File]::WriteAllLines($file, $lines, (New-Object Text.UTF8Encoding($false)))
+    $file
+}
+
+# --- Run ------------------------------------------------------------------------------------------------------------------
+
+Write-Host "Layer8 $version regression checks, $($started.ToString('g'))" -ForegroundColor Cyan
+New-Item -ItemType Directory -Path $work | Out-Null
+$report = $null
+try {
+    foreach ($name in 'Build', 'Installed', 'Customize', 'Library', 'Settings', 'Devices', 'Log', 'Changes') {
+        $section = $name
+        Write-Host ''
+        Write-Host $name -ForegroundColor Cyan
+        if ($name -eq 'Log' -and -not $sinceGiven) { Add-Result SKIP 'Log' 'runs with -Since, after the console steps'; continue }
+        if ($Skip -contains $name) { Add-Result SKIP $name 'skipped'; continue }
+        try { & "Test-$name" }
+        catch { Add-Result FAIL 'The section stopped' ("script error at line {0}: {1}" -f $_.InvocationInfo.ScriptLineNumber, $_.Exception.Message) }
+    }
+}
+finally {
+    Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    $section = 'Run'
+    $report = Write-Report
+}
+
+$failures = @($results | Where-Object Result -eq 'FAIL').Count
+Write-Host ''
+Write-Host (($results | Group-Object Result | Sort-Object Name | ForEach-Object { "$($_.Count) $($_.Name)" }) -join ', ') -ForegroundColor Cyan
+Write-Host "Report: $report"
+if (-not $sinceGiven) {
+    Write-Host ''
+    Write-Host 'After the console steps in docs\REGRESSION.md, run:'
+    Write-Host ("  .\tools\Test-Layer8Regression.ps1 -Since '{0:yyyy-MM-dd HH:mm:ss}'" -f $started)
+}
+exit $failures
