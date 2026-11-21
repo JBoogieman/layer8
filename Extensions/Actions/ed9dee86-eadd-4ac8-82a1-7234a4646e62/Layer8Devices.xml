@@ -14,11 +14,18 @@
   <MatchPattern>[^2]</MatchPattern>
   <MatchValueToTest>##SUB:ResourceType##</MatchValueToTest>
   <ActionGroups>
-    <ActionDescription NamespaceGuid="530F6FC3-EB77-4EFD-8B92-20347CC5378D" Class="AssemblyType" SelectionMode="Both" DisplayName="Health Dashboard" MnemonicDisplayName="Health Dashboard" Description="Check the selected devices at once: offline, restart pending, low disk, BitLocker off, Defender, missing updates, client problems and long uptime, counted on tiles over a grid you can filter and export">
+    <ActionDescription NamespaceGuid="530F6FC3-EB77-4EFD-8B92-20347CC5378D" Class="AssemblyType" SelectionMode="Both" DisplayName="Health Dashboard" MnemonicDisplayName="Health Dashboard" Description="Check the selected devices at once: offline, restart pending, low disk, BitLocker off, Defender, missing updates, client problems and long uptime, counted on tiles over a grid you can filter and export" NodeInConsole="ed9dee86-eadd-4ac8-82a1-7234a4646e62" RibbonDisplayType="TextAndSmallImage">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>
       </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
       <ActionAssembly>
         <Assembly>Layer8.Device.dll</Assembly>
         <Type>Layer8.Device.HealthDashboard</Type>
@@ -706,62 +713,104 @@
         <string>ContextMenu</string>
       </ShowOn>
     </ActionDescription>
-    <ActionDescription NamespaceGuid="9D4F1D1A-FAD0-478C-B441-D5A6CD05FCD0" Class="AssemblyType" SelectionMode="Both" DisplayName="Client Cache" MnemonicDisplayName="Client Cache" Description="Client cache settings for one device, or set the cache size on several">
+    <ActionDescription NamespaceGuid="9D4F1D1A-FAD0-478C-B441-D5A6CD05FCD0" Class="AssemblyType" SelectionMode="Both" DisplayName="Client Cache" MnemonicDisplayName="Client Cache" Description="Client cache settings for one device, or set the cache size on several" NodeInConsole="ed9dee86-eadd-4ac8-82a1-7234a4646e62" RibbonDisplayType="TextAndSmallImage">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>
       </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
       <ActionAssembly>
         <Assembly>Layer8.Device.dll</Assembly>
         <Type>Layer8.Device.ClientCache</Type>
         <Method>ChangeClientCache</Method>
       </ActionAssembly>
     </ActionDescription>
-    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Copy Device Info" MnemonicDisplayName="Copy Device Info" Description="Copy name, client, last online, users, OS and AD site of the selected devices, from site data">
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Copy Device Info" MnemonicDisplayName="Copy Device Info" Description="Copy name, client, last online, users, OS and AD site of the selected devices, from site data" NodeInConsole="ed9dee86-eadd-4ac8-82a1-7234a4646e62" RibbonDisplayType="TextAndSmallImage">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>
       </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
       <ActionAssembly>
         <Assembly>Layer8.Device.dll</Assembly>
         <Type>Layer8.Device.Device</Type>
         <Method>CopyDeviceInfo</Method>
       </ActionAssembly>
     </ActionDescription>
-    <ActionDescription NamespaceGuid="EB5DD4AB-5760-4BDF-9D10-DC1399582E6F" Class="AssemblyType" SelectionMode="Both" DisplayName="Copy Names" MnemonicDisplayName="Copy Names" Description="Copy the selected device names to the clipboard, one per line">
+    <ActionDescription NamespaceGuid="EB5DD4AB-5760-4BDF-9D10-DC1399582E6F" Class="AssemblyType" SelectionMode="Both" DisplayName="Copy Names" MnemonicDisplayName="Copy Names" Description="Copy the selected device names to the clipboard, one per line" NodeInConsole="ed9dee86-eadd-4ac8-82a1-7234a4646e62" RibbonDisplayType="TextAndSmallImage">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>
       </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
       <ActionAssembly>
         <Assembly>Layer8.Device.dll</Assembly>
         <Type>Layer8.Device.Device</Type>
         <Method>CopyNames</Method>
       </ActionAssembly>
     </ActionDescription>
-    <ActionDescription NamespaceGuid="915FA5D4-D0B2-4C56-A8AE-235D4C84C37D" Class="ShowDialog" DisplayName="Driver Grabber" MnemonicDisplayName="Driver Grabber" Description="Grab drivers from selected device">
+    <ActionDescription NamespaceGuid="915FA5D4-D0B2-4C56-A8AE-235D4C84C37D" Class="ShowDialog" DisplayName="Driver Grabber" MnemonicDisplayName="Driver Grabber" Description="Grab drivers from selected device" NodeInConsole="ed9dee86-eadd-4ac8-82a1-7234a4646e62" RibbonDisplayType="TextAndSmallImage">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>
       </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
       <DialogId>Layer8DriverGrabberWizard</DialogId>
     </ActionDescription>
-    <ActionDescription NamespaceGuid="D24FAF31-0199-44A9-A2B6-CF44175053D5" Class="AssemblyType" SelectionMode="Both" DisplayName="Error Lookup..." MnemonicDisplayName="Error Lookup" Description="What an error code means: ConfigMgr, Windows Update, Windows and installer codes">
+    <ActionDescription NamespaceGuid="D24FAF31-0199-44A9-A2B6-CF44175053D5" Class="AssemblyType" SelectionMode="Both" DisplayName="Error Lookup..." MnemonicDisplayName="Error Lookup" Description="What an error code means: ConfigMgr, Windows Update, Windows and installer codes" NodeInConsole="ed9dee86-eadd-4ac8-82a1-7234a4646e62" RibbonDisplayType="TextAndSmallImage">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>
       </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
       <ActionAssembly>
         <Assembly>Layer8.Device.dll</Assembly>
         <Type>Layer8.Device.Device</Type>
         <Method>OpenErrorLookup</Method>
       </ActionAssembly>
     </ActionDescription>
-    <ActionDescription NamespaceGuid="D13816C5-4C70-483D-B92E-C10933AEF1F6" Class="AssemblyType" SelectionMode="Single" DisplayName="System Information..." MnemonicDisplayName="System Information" Description="Model, serial, Windows build, disks and battery, installed programs and updates, services, drivers, user profiles and local administrators of this device">
+    <ActionDescription NamespaceGuid="D13816C5-4C70-483D-B92E-C10933AEF1F6" Class="AssemblyType" SelectionMode="Single" DisplayName="System Information..." MnemonicDisplayName="System Information" Description="Model, serial, Windows build, disks and battery, installed programs and updates, services, drivers, user profiles and local administrators of this device" NodeInConsole="ed9dee86-eadd-4ac8-82a1-7234a4646e62" RibbonDisplayType="TextAndSmallImage">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>
       </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
       <ActionAssembly>
         <Assembly>Layer8.Device.dll</Assembly>
         <Type>Layer8.Device.SystemInfo</Type>
@@ -773,11 +822,18 @@
         <string>ContextMenu</string>
       </ShowOn>
     </ActionDescription>
-    <ActionDescription NamespaceGuid="D24FAF31-0199-44A9-A2B6-CF44175053D5" Class="AssemblyType" SelectionMode="Both" DisplayName="Layer8 Settings..." MnemonicDisplayName="Layer8 Settings" Description="Devices contacted at once, the quick offline check and the log level">
+    <ActionDescription NamespaceGuid="D24FAF31-0199-44A9-A2B6-CF44175053D5" Class="AssemblyType" SelectionMode="Both" DisplayName="Layer8 Settings..." MnemonicDisplayName="Layer8 Settings" Description="Devices contacted at once, the quick offline check and the log level" NodeInConsole="ed9dee86-eadd-4ac8-82a1-7234a4646e62" RibbonDisplayType="TextAndSmallImage">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>
       </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
       <ActionAssembly>
         <Assembly>Layer8.Device.dll</Assembly>
         <Type>Layer8.Device.Device</Type>
