@@ -662,9 +662,24 @@ namespace Layer8.Device
         /// <summary>A registry value read through WMI's registry provider, or null if it isn't there.</summary>
         internal static object RegistryValue(string host, string method, string key, string name)
         {
+            ManagementScope registryScope;
             try
             {
-                using (ManagementClass registry = new ManagementClass(Utility.GetWMIScope(host, "default"), new ManagementPath("StdRegProv"), null))
+                registryScope = Utility.GetWMIScope(host, "default");
+            }
+            catch (ManagementException)
+            {
+                return null;
+            }
+            return RegistryValue(registryScope, method, key, name);
+        }
+
+        /// <summary>The same, through a connection to root\default already open.</summary>
+        internal static object RegistryValue(ManagementScope registryScope, string method, string key, string name)
+        {
+            try
+            {
+                using (ManagementClass registry = new ManagementClass(registryScope, new ManagementPath("StdRegProv"), null))
                 using (ManagementBaseObject input = registry.GetMethodParameters(method))
                 {
                     input["hDefKey"] = HKEY_LOCAL_MACHINE;

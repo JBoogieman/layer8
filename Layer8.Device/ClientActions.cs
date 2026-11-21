@@ -832,13 +832,33 @@ namespace Layer8.Device
         }
 
         /// <summary>
-        /// How long the device has been up. Windows' uptime counter comes first: it survives the clock being set
-        /// after boot. LastBootUpTime doesn't, because Windows records it once: a VM that booted with its clock two
-        /// hours fast and then synced with the domain reported a boot time two hours late. It's the fallback for a
-        /// device whose performance counters don't answer, measured against the device's own clock so the
-        /// console's clock doesn't come into it. Null if neither answers.
+        /// How long the device has been up. Windows' uptime counter survives the clock being set after boot, where
+        /// LastBootUpTime doesn't, because Windows records it once: a VM that booted with its clock two hours fast
+        /// and then synced with the domain reported a boot time two hours late. The boot time is measured against the
+        /// device's own clock, so the console's clock doesn't come into it. Null if neither answers.
+        ///
+        /// The counter can be slow to read the first time on a device: 2 and 5 seconds on the lab's workstations,
+        /// 43 on the site server. A tool looking at one device asks it first (counterFirst); the Health Dashboard,
+        /// which reads every device in a collection, asks the boot time first and the counter only when the boot
+        /// time is missing or in the future.
         /// </summary>
-        internal static TimeSpan? Uptime(ManagementScope cimv2)
+        internal static TimeSpan? Uptime(ManagementScope cimv2, bool counterFirst = true)
+        {
+            if (counterFirst)
+            {
+                TimeSpan? counted = UptimeCounter(cimv2);
+                if (counted.HasValue) return counted;
+            }
+
+            ManagementObject os = Utility.GetFirstWMIInstance(cimv2, "SELECT LastBootUpTime, LocalDateTime FROM Win32_OperatingSystem");
+            DateTime? lastBoot = ToDateTime(os?["LastBootUpTime"]);
+            DateTime? now = ToDateTime(os?["LocalDateTime"]);
+            if (lastBoot.HasValue && now.HasValue && now.Value >= lastBoot.Value) return now.Value - lastBoot.Value;
+            return counterFirst ? null : UptimeCounter(cimv2);
+        }
+
+        /// <summary>Windows' uptime counter, or null if the device's performance counters don't answer.</summary>
+        private static TimeSpan? UptimeCounter(ManagementScope cimv2)
         {
             try
             {
@@ -848,13 +868,8 @@ namespace Layer8.Device
             }
             catch (ManagementException ex)
             {
-                log.Debug("No uptime counter, using LastBootUpTime: " + ex.Message);
+                log.Debug("No uptime counter: " + ex.Message);
             }
-
-            ManagementObject os = Utility.GetFirstWMIInstance(cimv2, "SELECT LastBootUpTime, LocalDateTime FROM Win32_OperatingSystem");
-            DateTime? lastBoot = ToDateTime(os?["LastBootUpTime"]);
-            DateTime? now = ToDateTime(os?["LocalDateTime"]);
-            if (lastBoot.HasValue && now.HasValue && now.Value >= lastBoot.Value) return now.Value - lastBoot.Value;
             return null;
         }
 

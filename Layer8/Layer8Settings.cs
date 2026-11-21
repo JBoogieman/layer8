@@ -1,6 +1,7 @@
 ﻿using Microsoft.Win32;
 using System;
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace Layer8
 {
@@ -41,6 +42,11 @@ namespace Layer8
         public const int MinBlueScreenDays = 1;
         public const int MaxBlueScreenDays = 365;
 
+        /// <summary>Windows 11 24H2. A build alone, or a build and update revision ("26100.4652").</summary>
+        public const string DefaultWindowsBuild = "26100";
+        /// <summary>Windows 10's first release: nothing older reports a build this dashboard can compare.</summary>
+        public const int MinWindowsBuild = 10240;
+
         private const string DevicesAtOnceValue = "DevicesAtOnce";
         private const string ConfirmAboveValue = "ConfirmAbove";
         private const string CheckReachableValue = "CheckReachable";
@@ -49,6 +55,7 @@ namespace Layer8
         private const string LongUptimeDaysValue = "LongUptimeDays";
         private const string NotReportingDaysValue = "NotReportingDays";
         private const string BlueScreenDaysValue = "BlueScreenDays";
+        private const string WindowsBuildValue = "WindowsBuild";
 
         /// <summary>How many devices an action on many devices contacts at the same time.</summary>
         public static int DevicesAtOnce
@@ -116,6 +123,44 @@ namespace Layer8
             set { WriteInt(BlueScreenDaysValue, Clamp(value, MinBlueScreenDays, MaxBlueScreenDays)); }
         }
 
+        /// <summary>
+        /// Health Dashboard: a workstation on a Windows build older than this counts as behind. Written the way
+        /// winver shows it: a build ("26100") or a build and update revision ("26100.4652"). One that doesn't read
+        /// as a build gives the default.
+        /// </summary>
+        public static string WindowsBuild
+        {
+            get
+            {
+                string text = ReadValue(WindowsBuildValue) as string;
+                return TryParseWindowsBuild(text, out _) ? text.Trim() : DefaultWindowsBuild;
+            }
+            set
+            {
+                if (!TryParseWindowsBuild(value, out _)) throw new ArgumentException("Not a Windows build: " + value, nameof(value));
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(Layer8Log.RegistryKeyPath))
+                {
+                    key.SetValue(WindowsBuildValue, value.Trim(), RegistryValueKind.String);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Reads "26100" or "26100.4652" as a build and update revision (26100.0 for a build alone), so builds
+        /// compare in order. False for anything else, or a build older than Windows 10's first.
+        /// </summary>
+        public static bool TryParseWindowsBuild(string text, out Version build)
+        {
+            build = null;
+            Match match = Regex.Match(text ?? string.Empty, @"^\s*(\d{5})(?:\.(\d{1,6}))?\s*$");
+            if (!match.Success) return false;
+            int number = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+            if (number < MinWindowsBuild) return false;
+            int revision = match.Groups[2].Success ? int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) : 0;
+            build = new Version(number, revision);
+            return true;
+        }
+
         /// <summary>The log level. Layer8Log reads the same value and picks a change up within a few seconds.</summary>
         public static LogLevel LogLevel
         {
@@ -129,20 +174,26 @@ namespace Layer8
             }
         }
 
-        private static int ReadInt(string name, int fallback, int min, int max)
+        /// <summary>A value in the settings key, or null if it's missing or the key can't be read.</summary>
+        private static object ReadValue(string name)
         {
-            object value = null;
             try
             {
                 using (RegistryKey key = Registry.CurrentUser.OpenSubKey(Layer8Log.RegistryKeyPath))
                 {
-                    value = key?.GetValue(name);
+                    return key?.GetValue(name);
                 }
             }
             catch (Exception)
             {
                 // No access to the key: use the default.
+                return null;
             }
+        }
+
+        private static int ReadInt(string name, int fallback, int min, int max)
+        {
+            object value = ReadValue(name);
 
             int number;
             if (value is int dword)

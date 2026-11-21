@@ -30,6 +30,9 @@ namespace Layer8
         {
             base.InitializePageControl();
 
+            // A failed save names this control to the console's property sheet, which only knows controls added here.
+            ControlsInspector.AddControl(numericDevicesAtOnce, new ControlDataStateEvaluator(() => ControlDataState.Valid), "Layer8 couldn't save its settings");
+
             loading = true;
 
             numericDevicesAtOnce.Minimum = Layer8Settings.MinDevicesAtOnce;

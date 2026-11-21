@@ -10,7 +10,7 @@ Layer8 starts from [ConfigMgr Quick Tools](https://github.com/Flowman/ConfigMgr-
 
 Organized by where you right-click in the console. [The tour](docs/TOUR.md) has a screenshot of each.
 
-**Health Dashboard** (right-click a device collection, or select devices): one live pass over every device, with tiles counting what needs attention: offline, restart pending, low disk (under 10 GB free on C:), BitLocker off, Defender off or out of date, blue screens in the last two weeks (with the stop code), missing updates, client problems, clients the site hasn't heard from in a week, and up 14 days or more. Click a tile to see just those devices, then fix them from the same window: select devices and right-click for the console's client actions (policy and inventory cycles, update scans and installs, restarts, client repair, Defender scans). The grid sorts, filters as you type, copies and exports; double-click a device for System Information. The check itself only reads.
+**Health Dashboard** (right-click a device collection, or select devices): one live pass over every device, with tiles counting what needs attention: offline, restart pending, low disk (under 10 GB free on C:), BitLocker off, Defender off or out of date, blue screens in the last two weeks (with the stop code), missing updates, workstations on a Windows build older than 26100 (24H2), client problems, clients the site hasn't heard from in a week, and up 14 days or more. Click a tile to see just those devices, then fix them from the same window: select devices and right-click for the console's client actions (policy and inventory cycles, update scans and installs, restarts, client repair, Defender scans). The grid sorts, filters as you type, copies and exports; double-click a device for System Information. The check itself only reads.
 
 ![Health Dashboard on All Systems: tiles counting offline, BitLocker off and client problems over one row per device](docs/images/tour/health-dashboard.png)
 
@@ -94,7 +94,7 @@ reg add HKCU\SOFTWARE\Layer8 /v LogLevel /d Debug /f
 
 Use `Debug`, `Info` (the default), `Warn` or `Error`.
 
-The Health Dashboard's thresholds, low disk (10 GB), long uptime (14 days), not reporting (7 days) and blue screens (14 days), are on the settings' Health Dashboard page, and in the same key as `LowDiskGB`, `LongUptimeDays`, `NotReportingDays` and `BlueScreenDays`.
+The Health Dashboard's thresholds, low disk (10 GB), long uptime (14 days), not reporting (7 days), blue screens (14 days) and the Windows build (26100, or a build and update such as 26100.4652), are on the settings' Health Dashboard page, and in the same key as `LowDiskGB`, `LongUptimeDays`, `NotReportingDays`, `BlueScreenDays` and `WindowsBuild`.
 
 The log rolls over to `Layer8.lo_` at 2 MB, the same way ConfigMgr's own logs do.
 

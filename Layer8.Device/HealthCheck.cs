@@ -1,6 +1,8 @@
 ﻿using Microsoft.ConfigurationManagement.ManagementProvider;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Management;
 using System.Runtime.InteropServices;
@@ -19,6 +21,8 @@ namespace Layer8.Device
         /// <summary>Windows wrote a crash dump lately: read from the minidump folder, not the event log.</summary>
         BlueScreen,
         MissingUpdates,
+        /// <summary>A workstation on a Windows build older than the one chosen in Layer8 Settings. Servers don't count.</summary>
+        WindowsBehind,
         Client,
         /// <summary>The site hasn't heard from its client lately. Read from the site (SiteContact), not the device.</summary>
         NotReporting,
@@ -33,7 +37,7 @@ namespace Layer8.Device
         public readonly HashSet<HealthIssue> Issues = new HashSet<HealthIssue>();
         /// <summary>The checks that couldn't be read, as "BitLocker (access denied)".</summary>
         public readonly List<string> Unread = new List<string>();
-        public InfoCell SignedIn, Uptime, DiskFree, Restart, BitLocker, Defender, BlueScreen, Updates, Client;
+        public InfoCell SignedIn, Uptime, DiskFree, Restart, BitLocker, Defender, BlueScreen, Windows, Updates, Client;
 
         /// <summary>"Couldn't check: BitLocker (access denied)", as the Issues column shows it.</summary>
         public string UnreadText => HealthCheck.Name(HealthIssue.CouldNotCheck) + ": " + string.Join(", ", Unread);
@@ -68,8 +72,9 @@ namespace Layer8.Device
     }
 
     /// <summary>
-    /// Reads one device's health for the Health Dashboard: who's signed in, uptime, free space on C:, the ConfigMgr
-    /// client, a pending restart, BitLocker on C:, Microsoft Defender and deployed updates that are missing. Read
+    /// Reads one device's health for the Health Dashboard: who's signed in, uptime, free space on C:, recent blue
+    /// screens, the Windows build, the ConfigMgr client, a pending restart, BitLocker on C:, Microsoft Defender and
+    /// deployed updates that are missing. Read
     /// only: nothing on the device changes, and BitLocker recovery passwords are never read.
     ///
     /// The checks ask the same code the single-purpose tools use (Check Pending Restart, BitLocker Status, Defender
@@ -80,6 +85,9 @@ namespace Layer8.Device
         private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(typeof(HealthCheck));
         private const double GB = 1024d * 1024 * 1024;
         private const int RpcServerUnavailable = unchecked((int)0x800706BA);
+        private const string CurrentVersionKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
+        /// <summary>A step slower than this is logged with its time at Info, so a slow check shows without Debug logging.</summary>
+        private static readonly TimeSpan SlowStep = TimeSpan.FromSeconds(10);
 
         /// <summary>
         /// Signatures older than this many days count as out of date: Windows' own default for when Defender
@@ -98,6 +106,7 @@ namespace Layer8.Device
                 case HealthIssue.Defender: return "Defender";
                 case HealthIssue.BlueScreen: return "Blue screen";
                 case HealthIssue.MissingUpdates: return "Missing updates";
+                case HealthIssue.WindowsBehind: return "Windows behind";
                 case HealthIssue.Client: return "Client";
                 case HealthIssue.NotReporting: return "Not reporting";
                 case HealthIssue.LongUptime: return "Long uptime";
@@ -111,10 +120,12 @@ namespace Layer8.Device
         /// check stands alone: one that can't be read shows "?", is named in the Issues column, and the rest still
         /// answer.
         /// </summary>
-        public static HealthReport Check(string host, int lowDiskGB, int longUptimeDays, int blueScreenDays)
+        public static HealthReport Check(string host, int lowDiskGB, int longUptimeDays, int blueScreenDays, Version windowsBuild)
         {
             HealthReport report = new HealthReport();
+            Stopwatch connecting = Stopwatch.StartNew();
             ManagementScope cimv2 = Utility.GetWMIScope(host, "cimv2");
+            LogTime(host, "Connecting", connecting.Elapsed);
 
             // The registry provider answers both the restart flags and provisioning mode: connect once, when first needed.
             ManagementScope registry = null;
@@ -130,7 +141,8 @@ namespace Layer8.Device
 
             report.Uptime = Read(report, host, "Uptime", () =>
             {
-                TimeSpan? uptime = ClientActions.Uptime(cimv2);
+                // The boot time first: the uptime counter's first read on a device took 43 seconds on the site server.
+                TimeSpan? uptime = ClientActions.Uptime(cimv2, counterFirst: false);
                 if (!uptime.HasValue) throw new InvalidOperationException("no uptime counter or boot time");
                 if (uptime.Value.TotalDays >= longUptimeDays) report.Issues.Add(HealthIssue.LongUptime);
                 return new InfoCell(ClientActions.FormatUptime(uptime.Value), uptime.Value);
@@ -158,6 +170,30 @@ namespace Layer8.Device
                 string code = StopCode(cimv2, newest);
                 string text = (dumps.Count == 1 ? string.Empty : dumps.Count + ", last ") + newest.ToString("g") + (code == null ? string.Empty : " (" + code + ")");
                 return new InfoCell(text, newest);
+            });
+
+            report.Windows = Read(report, host, "Windows", () =>
+            {
+                using (ManagementObject os = Utility.GetFirstWMIInstance(cimv2, "SELECT Caption, BuildNumber, ProductType FROM Win32_OperatingSystem"))
+                {
+                    if (os == null || !int.TryParse(os["BuildNumber"] as string, NumberStyles.None, CultureInfo.InvariantCulture, out int build))
+                        throw new InvalidOperationException("no Windows build number");
+                    // The update revision (the .4652 in 26100.4652) and the marketing version (24H2) are only in the
+                    // registry. Windows 10 before 20H2 has ReleaseId (1909) where later ones have DisplayVersion.
+                    object revisionValue = SystemInfoReader.RegistryValue(registryScope(), "GetDWORDValue", CurrentVersionKey, "UBR");
+                    Version version = new Version(build, revisionValue == null ? 0 : (int)Convert.ToUInt32(revisionValue));
+                    string buildText = revisionValue == null ? build.ToString(CultureInfo.InvariantCulture) : version.ToString();
+
+                    // ProductType 1 is a workstation; 2 and 3 are domain controllers and servers, whose builds follow
+                    // their own line (Server 2022 is 20348) and aren't held to a workstation build.
+                    if (Convert.ToUInt32(os["ProductType"] ?? 1u) != 1)
+                        return new InfoCell(SystemInfoReader.Join(", ", ServerName(os["Caption"] as string), buildText), version);
+
+                    string release = SystemInfoReader.RegistryValue(registryScope(), "GetStringValue", CurrentVersionKey, "DisplayVersion") as string
+                        ?? SystemInfoReader.RegistryValue(registryScope(), "GetStringValue", CurrentVersionKey, "ReleaseId") as string;
+                    if (version < windowsBuild) report.Issues.Add(HealthIssue.WindowsBehind);
+                    return new InfoCell(SystemInfoReader.Join(", ", release, buildText), version);
+                }
             });
 
             report.Client = Read(report, host, "Client", () =>
@@ -293,6 +329,13 @@ namespace Layer8.Device
             return report;
         }
 
+        /// <summary>"Server 2022" from "Microsoft Windows Server 2022 Datacenter"; "Server" if the caption has no year.</summary>
+        internal static string ServerName(string caption)
+        {
+            Match match = Regex.Match(caption ?? string.Empty, @"Server \d{4}( R2)?");
+            return match.Success ? match.Value : "Server";
+        }
+
         /// <summary>
         /// When the crash dumps in C:\Windows\Minidump written in the last days were written: one for each blue screen.
         /// Listing the folder takes milliseconds, where searching the System event log for crashes takes seconds and
@@ -412,6 +455,7 @@ namespace Layer8.Device
         /// </summary>
         private static InfoCell Read(HealthReport report, string host, string check, Func<InfoCell> read)
         {
+            Stopwatch watch = Stopwatch.StartNew();
             try
             {
                 return read();
@@ -428,6 +472,19 @@ namespace Layer8.Device
                 log.Warn(string.Format("Health Dashboard on {0}: couldn't read {1}", host, check), root);
                 return new InfoCell("?");
             }
+            finally
+            {
+                LogTime(host, check, watch.Elapsed);
+            }
+        }
+
+        /// <summary>How long one step took on one device: every step at Debug, and at Info when it's slow.</summary>
+        private static void LogTime(string host, string step, TimeSpan took)
+        {
+            if (took >= SlowStep)
+                log.InfoFormat("Health Dashboard on {0}: {1} took {2:0.0} seconds", host, step, took.TotalSeconds);
+            else if (log.IsDebugEnabled)
+                log.DebugFormat("Health Dashboard on {0}: {1} took {2} ms", host, step, (long)took.TotalMilliseconds);
         }
     }
 }
