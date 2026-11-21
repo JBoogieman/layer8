@@ -37,7 +37,7 @@ Written for the lab STATUS.md describes: a site server, the client the console r
 
 ### A. Health Dashboard
 
-Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Layer8.Device/HealthRun.cs`, `Layer8.Device/ListViewSorter.cs`, `Extensions/Actions/*/Layer8*Health.xml`
+Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Layer8.Device/HealthRun.cs`, `Layer8.Device/ListViewSorter.cs`, `Extensions/Actions/*/Layer8*Health.xml`, `Extensions/Actions/*/Layer8Devices.xml`
 
 - [ ] **Layer8 Dev:** both clients checked in a few seconds. BitLocker reads as BitLocker Status reads it ("Suspended (encrypted)" when not protected but fully encrypted, "Off" when fully decrypted).
 - [ ] **All Systems:** the placeholders are skipped by name. The site server shows Client "Not installed" (its management point runs CcmExec without a client), BitLocker "Not available" and not counted, and Updates "No client".
@@ -71,7 +71,7 @@ Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Laye
 
 ### B. Layer8 Settings
 
-Files: `Layer8/Layer8Settings.cs`, `Layer8/OptionsControl*`, `Layer8/HealthDashboardOptionsControl.cs`, `Extensions/Forms/Layer8Settings.xml`, `Extensions/Actions/*/Layer8*Settings.xml`
+Files: `Layer8/Layer8Settings.cs`, `Layer8/OptionsControl*`, `Layer8/HealthDashboardOptionsControl.cs`, `Extensions/Forms/Layer8Settings.xml`, `Extensions/Actions/*/Layer8*Settings.xml`, `Extensions/Actions/*/Layer8Devices.xml`
 
 Open it from a collection's Client Actions menu. Every change below is set back afterwards; the script's `-Since` run warns about one left changed.
 
@@ -87,7 +87,7 @@ Open it from a collection's Client Actions menu. Every change below is set back 
 
 ### C. Client actions and client tools
 
-Files: `Layer8.Device/ClientActions.cs`, `Layer8.Device/ClientActionProgressBar.cs`, `Layer8.Device/ResultClientHealthControl*`, `Layer8.Device/ResultSoftwareUpdatesControl*`, `Layer8.Device/ResultSUComplianceControl*`, `Extensions/Actions/*/Layer8*ClientActions.xml`
+Files: `Layer8.Device/ClientActions.cs`, `Layer8.Device/ClientActionProgressBar.cs`, `Layer8.Device/ResultClientHealthControl*`, `Layer8.Device/ResultSoftwareUpdatesControl*`, `Layer8.Device/ResultSUComplianceControl*`, `Extensions/Actions/*/Layer8*ClientActions.xml`, `Extensions/Actions/*/Layer8Devices.xml`
 
 - [ ] **Evaluation cycles:** Machine Policy and App Deployment Evaluation fire on both clients.
 - [ ] **List Missing Updates on a client that has scanned:** lists the deployed and the needed updates, not "No update scan yet".
@@ -115,7 +115,7 @@ Files: `Layer8.Device/DeviceProgressDialog*`, `Layer8.Device/DeviceColumns.cs`, 
 
 ### E. Remote tools and Send Message
 
-Files: `Layer8.Device/RemoteTools.cs`, `Layer8.Device/InputPrompt.cs`, `Extensions/Actions/*/Layer8DevicesRemoteTools.xml`
+Files: `Layer8.Device/RemoteTools.cs`, `Layer8.Device/InputPrompt.cs`, `Extensions/Actions/*/Layer8Devices.xml`
 
 - [ ] **Both clients:** Ping, Browse C$, Browse ccmcache, Client Logs (the folder, and Collect Client Logs' zip), Client Log in CMTrace, Computer Management, Event Viewer (the client's logs, not the console's) and Services.
 - [ ] **Remote Desktop:** to the console's own computer.
@@ -133,7 +133,7 @@ Files: `Layer8.Device/Device.cs`, `Extensions/Actions/*/Layer8CollectionCopyName
 
 ### G. BitLocker Recovery Key and LAPS Password
 
-Files: `Layer8.Device/BitLockerKeys.cs`, `Layer8.Device/LAPSDialog.cs`, `Extensions/Actions/*/Layer8DevicesBitLocker.xml`, `Extensions/Actions/*/Layer8DevicesLAPS.xml`
+Files: `Layer8.Device/BitLockerKeys.cs`, `Layer8.Device/LAPSDialog.cs`, `Extensions/Actions/*/Layer8Devices.xml`
 
 Check that the fields are there. Don't copy or screenshot the key or the password.
 
@@ -144,7 +144,7 @@ Check that the fields are there. Don't copy or screenshot the key or the passwor
 
 ### H. Install Application
 
-Files: `Layer8.Device/ApplicationInstall.cs`, `Extensions/Actions/*/Layer8DevicesApplications.xml`
+Files: `Layer8.Device/ApplicationInstall.cs`, `Extensions/Actions/*/Layer8Devices.xml`
 
 - [ ] **Changes something:** Install Application on both clients installs Layer8 Test App, which reaches Installed.
 - [ ] **The failing app:** it shows 1603 (0x643) in the list, and again under it when selected.
@@ -179,7 +179,7 @@ Files: `Layer8/AddResourcesListDialog*`, `Layer8/RemoveResourcesListDialog*`, `E
 
 ### L. System Information
 
-Files: `Layer8.Device/SystemInfo.cs`, `Extensions/Actions/*/Layer8DevicesSystemInfo.xml`
+Files: `Layer8.Device/SystemInfo.cs`, `Extensions/Actions/*/Layer8Devices.xml`
 
 - [ ] **Both clients:** all seven tabs load.
 - [ ] **Overview against the script:** its build, C: and client version match the script's columns. Its uptime is read from the counter first, so on the second client it can differ from the dashboard by about 10 minutes, because that client's clock was set after it booted.
@@ -196,7 +196,7 @@ Files: `Layer8.Device/SystemInfo.cs`, `Extensions/Actions/*/Layer8DevicesSystemI
 
 ### M. Windows Security
 
-Files: `Layer8.Device/WindowsSecurity.cs`, `Layer8.Device/SystemInfo.cs`, `Extensions/Actions/*/Layer8DevicesWindowsSecurity.xml`
+Files: `Layer8.Device/WindowsSecurity.cs`, `Layer8.Device/SystemInfo.cs`, `Extensions/Actions/*/Layer8Devices.xml`
 
 - [ ] **Defender:** on the second client, its 14 items.
 - [ ] **Firewall:** the three profiles, with the domain profile in use.
@@ -206,7 +206,7 @@ Files: `Layer8.Device/WindowsSecurity.cs`, `Layer8.Device/SystemInfo.cs`, `Exten
 
 ### N. Error Lookup
 
-Files: `Layer8.Device/ErrorLookup.cs`, `Layer8.Device/ErrorCodes.cs`, `Extensions/Actions/*/Layer8DevicesErrorLookup.xml`
+Files: `Layer8.Device/ErrorLookup.cs`, `Layer8.Device/ErrorCodes.cs`, `Extensions/Actions/*/Layer8Devices.xml`
 
 The script checks the parsing and the text from the console's catalog (its Library section).
 

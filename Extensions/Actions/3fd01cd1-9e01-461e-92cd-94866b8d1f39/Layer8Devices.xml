@@ -14,12 +14,697 @@
   <MatchPattern>[^2]</MatchPattern>
   <MatchValueToTest>##SUB:ResourceType##</MatchValueToTest>
   <ActionGroups>
-    <ActionDescription NamespaceGuid="915FA5D4-D0B2-4C56-A8AE-235D4C84C37D" Class="ShowDialog" DisplayName="Driver Grabber" MnemonicDisplayName="Driver Grabber" Description="Grab drivers from selected device">
+    <ActionDescription NamespaceGuid="530F6FC3-EB77-4EFD-8B92-20347CC5378D" Class="AssemblyType" SelectionMode="Both" DisplayName="Health Dashboard" MnemonicDisplayName="Health Dashboard" Description="Check the selected devices at once: offline, restart pending, low disk, BitLocker off, Defender, missing updates, client problems and long uptime, counted on tiles over a grid you can filter and export">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>
       </ShowOn>
-      <DialogId>Layer8DriverGrabberWizard</DialogId>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.HealthDashboard</Type>
+        <Method>Show</Method>
+      </ActionAssembly>
+    </ActionDescription>
+    <ActionDescription Class="Separator">
+      <ShowOn>
+        <string>ContextMenu</string>
+      </ShowOn>
+    </ActionDescription>
+    <ActionDescription Class="Group" SelectionMode="Both" DisplayName="Status" MnemonicDisplayName="Status" Description="Read-only checks: nothing on the device changes" NodeInConsole="3fd01cd1-9e01-461e-92cd-94866b8d1f39" RibbonDisplayType="TextAndSmallImage">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
+      <ActionGroups>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="BitLocker Status" MnemonicDisplayName="BitLocker Status" Description="Whether C: is protected by BitLocker and how far encryption has got (no recovery keys)">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>BitLockerStatus</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Check Pending Restart" MnemonicDisplayName="Check Pending Restart" Description="Ask each device whether it is waiting on a restart: ConfigMgr, Windows servicing or Windows Update">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>CheckPendingRestart</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Client Info" MnemonicDisplayName="Client Info" Description="Site, management point, client version and client GUID, from the client">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>ClientInfo</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Defender Status" MnemonicDisplayName="Defender Status" Description="Microsoft Defender antivirus and real-time protection, signature age and last quick scan">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>DefenderStatus</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Find Software..." MnemonicDisplayName="Find Software..." Description="Check which devices have a program installed, and which version">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>FindSoftware</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="List Missing Updates" MnemonicDisplayName="List Missing Updates" Description="List each device's missing software updates by KB number: deployed ones it hasn't installed, and ones its last scan says it needs that nothing deploys">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>MissingUpdates</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Quick Status" MnemonicDisplayName="Quick Status" Description="Who is signed in, time since the last restart, free space on C:, IP address and ConfigMgr client version, in columns you can sort and export">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>QuickStatus</DialogId>
+        </ActionDescription>
+      </ActionGroups>
+    </ActionDescription>
+    <ActionDescription Class="Group" SelectionMode="Both" DisplayName="Client Cycles" MnemonicDisplayName="Client Cycles" Description="Start a ConfigMgr client cycle on the selected devices" NodeInConsole="3fd01cd1-9e01-461e-92cd-94866b8d1f39" RibbonDisplayType="TextAndSmallImage">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
+      <ActionGroups>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Application Deployment Evaluation Cycle" MnemonicDisplayName="Application Deployment Evaluation Cycle" Description="Application Deployment Evaluation Cycle">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientAction</Method>
+          </ActionAssembly>
+          <DialogId>{00000000-0000-0000-0000-000000000121}</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Discovery Data Collection Cycle" MnemonicDisplayName="Discovery Data Collection Cycle" Description="Discovery Data Collection Cycle">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientAction</Method>
+          </ActionAssembly>
+          <DialogId>{00000000-0000-0000-0000-000000000003}</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="File Collection Cycle" MnemonicDisplayName="File Collection Cycle" Description="File Collection Cycle">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientAction</Method>
+          </ActionAssembly>
+          <DialogId>{00000000-0000-0000-0000-000000000010}</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Full Hardware Inventory Cycle" MnemonicDisplayName="Full Hardware Inventory Cycle" Description="Full Hardware Inventory Cycle">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientAction</Method>
+          </ActionAssembly>
+          <DialogId>{00000000-0000-0000-0000-000000000001},true</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Hardware Inventory Cycle" MnemonicDisplayName="Hardware Inventory Cycle" Description="Hardware Inventory Cycle">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientAction</Method>
+          </ActionAssembly>
+          <DialogId>{00000000-0000-0000-0000-000000000001}</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Machine Policy Retrieval and Evaluation Cycle" MnemonicDisplayName="Machine Policy Retrieval and Evaluation Cycle" Description="Machine Policy Retrieval and Evaluation Cycle">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientAction</Method>
+          </ActionAssembly>
+          <DialogId>{00000000-0000-0000-0000-000000000021}</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Software Inventory Cycle" MnemonicDisplayName="Software Inventory Cycle" Description="Software Inventory Cycle">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientAction</Method>
+          </ActionAssembly>
+          <DialogId>{00000000-0000-0000-0000-000000000002}</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Software Metering Usage Report Cycle" MnemonicDisplayName="Software Metering Usage Report Cycle" Description="Software Metering Usage Report Cycle">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientAction</Method>
+          </ActionAssembly>
+          <DialogId>{00000000-0000-0000-0000-000000000031}</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Software Updates Deployment Evaluation Cycle" MnemonicDisplayName="Software Updates Deployment Evaluation Cycle" Description="Software Updates Deployment Evaluation Cycle">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientAction</Method>
+          </ActionAssembly>
+          <DialogId>{00000000-0000-0000-0000-000000000108}</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Software Updates Scan Cycle" MnemonicDisplayName="Software Updates Scan Cycle" Description="Software Updates Scan Cycle">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientAction</Method>
+          </ActionAssembly>
+          <DialogId>{00000000-0000-0000-0000-000000000113}</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Windows Installer Source List Update Cycle" MnemonicDisplayName="Windows Installer Source List Update Cycle" Description="Windows Installer Source List Update Cycle">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientAction</Method>
+          </ActionAssembly>
+          <DialogId>{00000000-0000-0000-0000-000000000032}</DialogId>
+        </ActionDescription>
+      </ActionGroups>
+    </ActionDescription>
+    <ActionDescription Class="Group" SelectionMode="Both" DisplayName="Fix" MnemonicDisplayName="Fix" Description="Change something on the device: repairs, policy, installs" NodeInConsole="3fd01cd1-9e01-461e-92cd-94866b8d1f39" RibbonDisplayType="TextAndSmallImage">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
+      <ActionGroups>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Clear Client Cache" MnemonicDisplayName="Clear Client Cache" Description="Delete cached content from the ConfigMgr client cache, except content kept on purpose or in use">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>ClearClientCache</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Full Machine Policy Refresh" MnemonicDisplayName="Full Machine Policy Refresh" Description="Request full machine policy instead of only the changes, then evaluate it">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>FullMachinePolicyRefresh</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Group Policy Update (Computer)" MnemonicDisplayName="Group Policy Update (Computer)" Description="Run gpupdate for computer policy on the device">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>GroupPolicyUpdate</DialogId>
+        </ActionDescription>
+        <ActionDescription NamespaceGuid="C8219F80-525D-47E9-9DAF-8FFD1053066B" Class="AssemblyType" SelectionMode="Single" DisplayName="Install Application..." MnemonicDisplayName="Install Application" Description="List the applications deployed to this device and install one now, like Install in Software Center">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ApplicationInstall</Type>
+            <Method>Show</Method>
+          </ActionAssembly>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Install Missing Updates" MnemonicDisplayName="Install Missing Updates" Description="Install every deployed software update the device reports as missing, now">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>InstallMissingUpdates</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Repair Client" MnemonicDisplayName="Repair Client" Description="Run ccmrepair on the ConfigMgr client">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>RepairClient</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Reset Policy" MnemonicDisplayName="Reset Policy" Description="Purge the client policy and download it again (for clients stuck on old policy)">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>ResetPolicy</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Restart SMS Agent Host Service" MnemonicDisplayName="Restart SMS Agent Host Service" Description="Restart SMS Agent Host Service">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientActionRestartService</Method>
+          </ActionAssembly>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Run Client Health Check" MnemonicDisplayName="Run Client Health Check" Description="Run the ConfigMgr client health check (CcmEval) on the device">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>ClientHealthCheck</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Turn Off Provisioning Mode" MnemonicDisplayName="Turn Off Provisioning Mode" Description="Take the client out of provisioning mode, where it ignores policy (often left on by a failed task sequence)">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>TurnOffProvisioningMode</DialogId>
+        </ActionDescription>
+      </ActionGroups>
+    </ActionDescription>
+    <ActionDescription Class="Group" SelectionMode="Both" DisplayName="Power and Users" MnemonicDisplayName="Power and Users" Description="Restart the device or message whoever is signed in" NodeInConsole="3fd01cd1-9e01-461e-92cd-94866b8d1f39" RibbonDisplayType="TextAndSmallImage">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
+      <ActionGroups>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Cancel Restart" MnemonicDisplayName="Cancel Restart" Description="Cancel a restart Windows has scheduled, such as Restart Computer (not ConfigMgr restart countdowns)">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>CancelRestart</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Restart Computer" MnemonicDisplayName="Restart Computer" Description="Restart the device after a 5-minute warning to whoever is signed in">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>RestartComputer</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Send Message..." MnemonicDisplayName="Send Message..." Description="Pop up a message for whoever is signed in, and see who got it">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>SendMessage</DialogId>
+        </ActionDescription>
+      </ActionGroups>
+    </ActionDescription>
+    <ActionDescription Class="Group" SelectionMode="Both" DisplayName="Security" MnemonicDisplayName="Security" Description="BitLocker, LAPS and Defender" NodeInConsole="3fd01cd1-9e01-461e-92cd-94866b8d1f39" RibbonDisplayType="TextAndSmallImage">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
+      <ActionGroups>
+        <ActionDescription NamespaceGuid="91593F35-CA90-495D-ACD2-3AFF9830B467" Class="AssemblyType" SelectionMode="Single" DisplayName="BitLocker Recovery Key" MnemonicDisplayName="BitLocker Recovery Key" Description="Look up the BitLocker recovery keys Active Directory holds for this device">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.BitLockerKeys</Type>
+            <Method>Show</Method>
+          </ActionAssembly>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Defender Quick Scan" MnemonicDisplayName="Defender Quick Scan" Description="Start a Microsoft Defender quick scan">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>DefenderQuickScan</DialogId>
+        </ActionDescription>
+        <ActionDescription NamespaceGuid="00AA55FA-F9B8-4293-9761-83C50822BF35" Class="AssemblyType" DisplayName="LAPS Password" MnemonicDisplayName="LAPS Password" Description="The local administrator password from Active Directory: Windows LAPS (encrypted or not) or legacy LAPS, with Expire Now">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.LAPSDialog</Type>
+            <Method>Show</Method>
+          </ActionAssembly>
+        </ActionDescription>
+        <ActionDescription NamespaceGuid="96E14CE4-5BDB-425F-B933-88F03699C0C3" Class="AssemblyType" SelectionMode="Single" DisplayName="Windows Security..." MnemonicDisplayName="Windows Security" Description="Microsoft Defender, Windows Firewall and BitLocker on this device, with Suspend BitLocker for a number of restarts and a Defender quick scan">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.WindowsSecurity</Type>
+            <Method>Show</Method>
+          </ActionAssembly>
+        </ActionDescription>
+      </ActionGroups>
+    </ActionDescription>
+    <ActionDescription Class="Group" SelectionMode="Both" DisplayName="Remote Tools" MnemonicDisplayName="Remote Tools" Description="Open Windows remote tools against the selected device" NodeInConsole="3fd01cd1-9e01-461e-92cd-94866b8d1f39" RibbonDisplayType="TextAndSmallImage">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
+      <ActionGroups>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Online Status (Ping)" MnemonicDisplayName="Online Status (Ping)" Description="Check which devices are reachable: ping, or port 445 when ping is blocked">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>OnlineStatus</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Ping" MnemonicDisplayName="Ping" Description="Ping the device continuously in a command window">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.RemoteTools</Type>
+            <Method>Open</Method>
+          </ActionAssembly>
+          <DialogId>Ping</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Remote Desktop" MnemonicDisplayName="Remote Desktop" Description="Open a Remote Desktop connection to the device">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.RemoteTools</Type>
+            <Method>Open</Method>
+          </ActionAssembly>
+          <DialogId>RemoteDesktop</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Remote Assistance" MnemonicDisplayName="Remote Assistance" Description="Offer Remote Assistance to the signed-in user">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.RemoteTools</Type>
+            <Method>Open</Method>
+          </ActionAssembly>
+          <DialogId>RemoteAssistance</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="PowerShell Session" MnemonicDisplayName="PowerShell Session" Description="Open PowerShell with a remote session on the device">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.RemoteTools</Type>
+            <Method>Open</Method>
+          </ActionAssembly>
+          <DialogId>PowerShell</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="Separator">
+          <ShowOn>
+            <string>ContextMenu</string>
+          </ShowOn>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Browse C$" MnemonicDisplayName="Browse C$" Description="Open the device C: drive (C$ share) in Explorer">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.RemoteTools</Type>
+            <Method>Open</Method>
+          </ActionAssembly>
+          <DialogId>BrowseC</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Client Logs" MnemonicDisplayName="Client Logs" Description="Open the ConfigMgr client log folder (C:\Windows\CCM\Logs) on the device">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.RemoteTools</Type>
+            <Method>Open</Method>
+          </ActionAssembly>
+          <DialogId>ClientLogs</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Browse ccmcache" MnemonicDisplayName="Browse ccmcache" Description="Open the ConfigMgr client cache folder (C:\Windows\ccmcache) on the device">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.RemoteTools</Type>
+            <Method>Open</Method>
+          </ActionAssembly>
+          <DialogId>BrowseCache</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Client Log in CMTrace..." MnemonicDisplayName="Client Log in CMTrace..." Description="Open one ConfigMgr client log from the device in CMTrace">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.RemoteTools</Type>
+            <Method>Open</Method>
+          </ActionAssembly>
+          <DialogId>ClientLogCMTrace</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Collect Client Logs" MnemonicDisplayName="Collect Client Logs" Description="Copy the ConfigMgr client logs and zip them to Desktop\Layer8 Logs">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>CollectLogs</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="Separator">
+          <ShowOn>
+            <string>ContextMenu</string>
+          </ShowOn>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Computer Management" MnemonicDisplayName="Computer Management" Description="Open Computer Management for the device">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.RemoteTools</Type>
+            <Method>Open</Method>
+          </ActionAssembly>
+          <DialogId>ComputerManagement</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Event Viewer" MnemonicDisplayName="Event Viewer" Description="Open Event Viewer for the device">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.RemoteTools</Type>
+            <Method>Open</Method>
+          </ActionAssembly>
+          <DialogId>EventViewer</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Services" MnemonicDisplayName="Services" Description="Open Services for the device">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.RemoteTools</Type>
+            <Method>Open</Method>
+          </ActionAssembly>
+          <DialogId>Services</DialogId>
+        </ActionDescription>
+      </ActionGroups>
+    </ActionDescription>
+    <ActionDescription Class="Separator">
+      <ShowOn>
+        <string>ContextMenu</string>
+      </ShowOn>
     </ActionDescription>
     <ActionDescription NamespaceGuid="9D4F1D1A-FAD0-478C-B441-D5A6CD05FCD0" Class="AssemblyType" SelectionMode="Both" DisplayName="Client Cache" MnemonicDisplayName="Client Cache" Description="Client cache settings for one device, or set the cache size on several">
       <ShowOn>
@@ -31,7 +716,18 @@
         <Type>Layer8.Device.ClientCache</Type>
         <Method>ChangeClientCache</Method>
       </ActionAssembly>
-    </ActionDescription>    
+    </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Copy Device Info" MnemonicDisplayName="Copy Device Info" Description="Copy name, client, last online, users, OS and AD site of the selected devices, from site data">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.Device</Type>
+        <Method>CopyDeviceInfo</Method>
+      </ActionAssembly>
+    </ActionDescription>
     <ActionDescription NamespaceGuid="EB5DD4AB-5760-4BDF-9D10-DC1399582E6F" Class="AssemblyType" SelectionMode="Both" DisplayName="Copy Names" MnemonicDisplayName="Copy Names" Description="Copy the selected device names to the clipboard, one per line">
       <ShowOn>
         <string>DefaultHomeTab</string>
@@ -43,7 +739,14 @@
         <Method>CopyNames</Method>
       </ActionAssembly>
     </ActionDescription>
-    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Copy Device Info" MnemonicDisplayName="Copy Device Info" Description="Copy name, client, last online, users, OS and AD site of the selected devices, from site data">
+    <ActionDescription NamespaceGuid="915FA5D4-D0B2-4C56-A8AE-235D4C84C37D" Class="ShowDialog" DisplayName="Driver Grabber" MnemonicDisplayName="Driver Grabber" Description="Grab drivers from selected device">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <DialogId>Layer8DriverGrabberWizard</DialogId>
+    </ActionDescription>
+    <ActionDescription NamespaceGuid="D24FAF31-0199-44A9-A2B6-CF44175053D5" Class="AssemblyType" SelectionMode="Both" DisplayName="Error Lookup..." MnemonicDisplayName="Error Lookup" Description="What an error code means: ConfigMgr, Windows Update, Windows and installer codes">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>
@@ -51,7 +754,34 @@
       <ActionAssembly>
         <Assembly>Layer8.Device.dll</Assembly>
         <Type>Layer8.Device.Device</Type>
-        <Method>CopyDeviceInfo</Method>
+        <Method>OpenErrorLookup</Method>
+      </ActionAssembly>
+    </ActionDescription>
+    <ActionDescription NamespaceGuid="D13816C5-4C70-483D-B92E-C10933AEF1F6" Class="AssemblyType" SelectionMode="Single" DisplayName="System Information..." MnemonicDisplayName="System Information" Description="Model, serial, Windows build, disks and battery, installed programs and updates, services, drivers, user profiles and local administrators of this device">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.SystemInfo</Type>
+        <Method>Show</Method>
+      </ActionAssembly>
+    </ActionDescription>
+    <ActionDescription Class="Separator">
+      <ShowOn>
+        <string>ContextMenu</string>
+      </ShowOn>
+    </ActionDescription>
+    <ActionDescription NamespaceGuid="D24FAF31-0199-44A9-A2B6-CF44175053D5" Class="AssemblyType" SelectionMode="Both" DisplayName="Layer8 Settings..." MnemonicDisplayName="Layer8 Settings" Description="Devices contacted at once, the quick offline check and the log level">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.Device</Type>
+        <Method>OpenSettings</Method>
       </ActionAssembly>
     </ActionDescription>
     <ActionDescription NamespaceGuid="B7009279-2666-45EF-9935-1FB3D3ED2ABF" Class="None" />

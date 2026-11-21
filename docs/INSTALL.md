@@ -117,7 +117,7 @@ If another console window is still open, the installer stops with *"The feature 
 
 If the installer window isn't in front, look for it on the taskbar. Until you close it, starting the console says *"The Configuration Manager console is currently updating 1 or more console extensions and cannot be run at this time."*
 
-**6. Check.** Right-click a device: the **Layer8**, **Client Actions** and **Remote Tools** menus are there.
+**6. Check.** Right-click a device: the **Layer8** menu is there, with **Health Dashboard** at its top.
 
 ![Layer8 menus on a device](images/install-device-menu.png)
 
