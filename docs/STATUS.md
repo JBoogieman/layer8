@@ -1,6 +1,6 @@
 # Layer8 status
 
-Updated November 20, 2026. Version 1.0.0.
+Updated November 20, 2026. Version 1.1.0.
 
 Layer8 is early. Everything below was tested in one lab on ConfigMgr 2509 (console 5.2509.1038.1000), and the lab has since been upgraded to 2609 (console 5.2609.1050.1000, both clients on the 2609 client 5.00.9152.1004; see the 2609 rows): a site server (with a software update point since 0.9.0, synchronizing Windows 11 security and critical updates), the client the console runs on, and a second Windows 11 client reached over the network. The site server stands in for "no ConfigMgr client". Treat anything that changes clients as something to try on a few devices first.
 
@@ -95,7 +95,7 @@ Inherited from ConfigMgr Quick Tools and smoke-tested (opened and cancelled, not
 
 ## Next up
 
-Layer8 1.1, on the `next` branch until it's released as one update: more for the Health Dashboard. Client actions on selected devices are in and tested (above); so are its thresholds, on a page of their own in Layer8 Settings, a Not reporting tile for clients the site hasn't heard from, a Blue screen tile for crash dumps written recently, a Windows behind tile for workstations older than a chosen build, a Not scanning tile for clients whose last software update scan is too old, and what changed since the collection's last run. Next: merge `next` to `master` and release 1.1.0. AD cleanup is parked under Ideas.
+Nothing queued after 1.1. AD cleanup is parked under Ideas.
 
 ## Ideas
 
