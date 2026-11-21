@@ -524,7 +524,7 @@ namespace Layer8.Device
             string neededNote = null;
             try
             {
-                if (CountWMI(Utility.GetWMIScope(host, @"ccm\ScanAgent"), "SELECT * FROM CCM_ScanUpdateSourceHistory") == 0)
+                if (!LastUpdateScan(Utility.GetWMIScope(host, @"ccm\ScanAgent")).HasValue)
                 {
                     neededNote = "No update scan yet";
                 }
@@ -581,11 +581,25 @@ namespace Layer8.Device
             return null;
         }
 
-        private static int CountWMI(ManagementScope scope, string query)
+        /// <summary>
+        /// When the client last finished a software update scan, in local time: the newest LastCompletionTime in its
+        /// scan history (CCM_ScanUpdateSourceHistory, one entry per update source it has scanned against). The value
+        /// comes marked +000 and really is UTC: 23:24 UTC on the console's computer was the 17:24 (UTC-6) at which
+        /// ScanAgent.log reported that scan complete. Null when it has never finished one. List Missing Updates and
+        /// the Health Dashboard both ask here; with no software updates agent, IsNoClient recognises the error.
+        /// </summary>
+        internal static DateTime? LastUpdateScan(ManagementScope scanAgent)
         {
-            List<ManagementObject> found = Utility.SearchWMIToList(scope, query);
-            foreach (ManagementObject item in found) item.Dispose();
-            return found.Count;
+            DateTime? newest = null;
+            foreach (ManagementObject source in Utility.SearchWMIToList(scanAgent, "SELECT LastCompletionTime FROM CCM_ScanUpdateSourceHistory"))
+            {
+                using (source)
+                {
+                    DateTime? finished = ToDateTime(source["LastCompletionTime"]);
+                    if (finished.HasValue && (!newest.HasValue || finished.Value > newest.Value)) newest = finished;
+                }
+            }
+            return newest;
         }
 
         /// <summary>

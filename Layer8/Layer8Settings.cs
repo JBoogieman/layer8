@@ -42,6 +42,11 @@ namespace Layer8
         public const int MinBlueScreenDays = 1;
         public const int MaxBlueScreenDays = 365;
 
+        /// <summary>Two of ConfigMgr's default software update scan cycles (every 7 days): one late scan doesn't count.</summary>
+        public const int DefaultNotScanningDays = 14;
+        public const int MinNotScanningDays = 1;
+        public const int MaxNotScanningDays = 365;
+
         /// <summary>Windows 11 24H2. A build alone, or a build and update revision ("26100.4652").</summary>
         public const string DefaultWindowsBuild = "26100";
         /// <summary>Windows 10's first release: nothing older reports a build this dashboard can compare.</summary>
@@ -55,6 +60,7 @@ namespace Layer8
         private const string LongUptimeDaysValue = "LongUptimeDays";
         private const string NotReportingDaysValue = "NotReportingDays";
         private const string BlueScreenDaysValue = "BlueScreenDays";
+        private const string NotScanningDaysValue = "NotScanningDays";
         private const string WindowsBuildValue = "WindowsBuild";
 
         /// <summary>How many devices an action on many devices contacts at the same time.</summary>
@@ -121,6 +127,13 @@ namespace Layer8
         {
             get { return ReadInt(BlueScreenDaysValue, DefaultBlueScreenDays, MinBlueScreenDays, MaxBlueScreenDays); }
             set { WriteInt(BlueScreenDaysValue, Clamp(value, MinBlueScreenDays, MaxBlueScreenDays)); }
+        }
+
+        /// <summary>Health Dashboard: a client whose last software update scan finished this many days ago or more counts as not scanning.</summary>
+        public static int NotScanningDays
+        {
+            get { return ReadInt(NotScanningDaysValue, DefaultNotScanningDays, MinNotScanningDays, MaxNotScanningDays); }
+            set { WriteInt(NotScanningDaysValue, Clamp(value, MinNotScanningDays, MaxNotScanningDays)); }
         }
 
         /// <summary>

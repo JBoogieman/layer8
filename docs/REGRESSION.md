@@ -50,6 +50,7 @@ Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Laye
 - [ ] **Policy request:** matches the times the console's Devices view shows, and stays blank for the site server and the placeholders.
 - [ ] **Blue screen:** a dump inside the window shows its time and stop code, as the script lists it.
 - [ ] **Windows:** reads version and build ("26H2, 26300.x"), and the site server "Server 2025, 26100.x".
+- [ ] **Update scan:** reads how long ago each client's last software update scan finished, as the script lists it, and "No client" for the site server. It sorts oldest or newest first.
 - [ ] **Double-click a row:** System Information opens with the same uptime, free space and client version.
 - [ ] **Check Again:** re-checks just the selected device.
 - [ ] **Export:** writes the shown rows in their sort order, UTF-8 with a byte order mark.
@@ -68,10 +69,11 @@ Files: `Layer8/Layer8Settings.cs`, `Layer8/OptionsControl*`, `Layer8/HealthDashb
 
 Open it from a collection's Client Actions menu. Every change below is set back afterwards; the script's `-Since` run warns about one left changed.
 
-- [ ] **Tabs:** General and Health Dashboard. Health Dashboard shows the defaults (10 GB, 14 days, 7 days, 14 days, build 26100), and Apply lights up after a change.
+- [ ] **Tabs:** General and Health Dashboard. Health Dashboard shows the defaults (10 GB, 14 days, 7 days, 14 days, 14 days, build 26100), and Apply lights up after a change.
 - [ ] **Long uptime:** set below the console's computer's uptime, the next dashboard counts that computer under Long uptime and not the second client. The page shows the new number when opened again. Set back to 14, the tile goes back to 0.
 - [ ] **Not reporting:** 3 saves and shows 3 when opened again. Set back to 7.
 - [ ] **Blue screens:** 30 saves, and the tile's hover text says "in the last 30 days". Set back to 14.
+- [ ] **Not scanning:** set to a number of days between the two clients' last scans (the script's Update scan column), and the next dashboard counts only the client that scanned longer ago. The tile's hover text shows the number. Set back to 14.
 - [ ] **Windows build:** one revision above the clients' build gives Windows behind on both clients, and the site server isn't counted. Set back to 26100.
 - [ ] **A build of "26300.":** the console's red mark appears beside the box. OK gives the console's own error with the help text and keeps the page open, not "The given key was not present in the dictionary".
 - [ ] **The log:** each save is logged with its values. The script's `-Since` run lists the "settings saved" lines.
@@ -82,6 +84,7 @@ Open it from a collection's Client Actions menu. Every change below is set back 
 Files: `Layer8.Device/ClientActions.cs`, `Layer8.Device/ClientActionProgressBar.cs`, `Layer8.Device/ResultClientHealthControl*`, `Layer8.Device/ResultSoftwareUpdatesControl*`, `Layer8.Device/ResultSUComplianceControl*`, `Extensions/Actions/*/Layer8*ClientActions.xml`
 
 - [ ] **Evaluation cycles:** Machine Policy and App Deployment Evaluation fire on both clients.
+- [ ] **List Missing Updates on a client that has scanned:** lists the deployed and the needed updates, not "No update scan yet".
 - [ ] **Tools on both clients:** Quick Status, Find Software, List Missing Updates, Check Pending Restart, policy and Group Policy refresh, Client Health Check, Client Info, BitLocker Status and Defender Status all complete. On the site server they say "No ConfigMgr client found".
 - [ ] **Against the script:** Client Info's version, Check Pending Restart and List Missing Updates agree with the script's Client, Restart and Updates columns. An up-to-date client says "No missing updates".
 - [ ] **Find Software:** finds the 64-bit Teams Meeting Add-in on the second client.
@@ -240,7 +243,7 @@ The script checks:
 
 ### Q. Inherited tools: open and cancel
 
-Files: `Layer8/IncrementalCollectionsPage*`, `Layer8/RemoveRetiredContentPage*`, `Layer8/CleanSoftwareUpdatesPage*`, `Layer8/QuickDeployment*`, `Layer8/CollevalStatisticsDialog*`, `Layer8/TaskSequenceImportExport.cs`, `Layer8/DataGridViewCalendarColumn.cs`, `Layer8.Device/ResultCollectionsControl*`, `Layer8.Device/ResultMaintenanceWindowsControl*`, `Layer8.Device/TrackBarWithoutFocus*`, `Layer8.Device/HealthCheck.cs`, `Extensions/Forms/CollectionResource.xml`, `Extensions/Forms/Layer8IncrementalCollectionsWizard.xml`, `Extensions/Forms/Layer8RemoveRetiredContentWizard.xml`, `Extensions/Forms/Layer8CleanSoftwareUpdatesWizard.xml`, `Extensions/Forms/Layer8QuickDeploymentWizard.xml`
+Files: `Layer8/IncrementalCollectionsPage*`, `Layer8/RemoveRetiredContentPage*`, `Layer8/CleanSoftwareUpdatesPage*`, `Layer8/QuickDeployment*`, `Layer8/CollevalStatisticsDialog*`, `Layer8/TaskSequenceImportExport.cs`, `Layer8/DataGridViewCalendarColumn.cs`, `Layer8.Device/ResultCollectionsControl*`, `Layer8.Device/ResultMaintenanceWindowsControl*`, `Layer8.Device/TrackBarWithoutFocus*`, `Extensions/Forms/CollectionResource.xml`, `Extensions/Forms/Layer8IncrementalCollectionsWizard.xml`, `Extensions/Forms/Layer8RemoveRetiredContentWizard.xml`, `Extensions/Forms/Layer8CleanSoftwareUpdatesWizard.xml`, `Extensions/Forms/Layer8QuickDeploymentWizard.xml`
 
 - [ ] **Open and cancel, with nothing changed:** the device properties tabs, Client Cache, Driver Grabber, Incremental Collections, Remove Retired Content, Clean Software Update Groups, the driver package importers, and the Dell and HP driver packs.
 

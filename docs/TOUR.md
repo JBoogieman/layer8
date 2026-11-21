@@ -25,6 +25,7 @@ Right-click a device collection, **Health Dashboard** (or select devices, **Laye
 | Defender | antivirus or real-time protection is off, or the signatures are more than 7 days old (not counted when Defender is passive behind another antivirus) |
 | Blue screen | Windows wrote a crash dump in the last 14 days (read from the minidump folder; the column shows when, and the stop code) |
 | Missing updates | the client reports deployed updates as missing |
+| Not scanning | the client's last software update scan finished 14 days ago or more, or it has never finished one (the Update scan column shows how long ago; not counted where client settings turn software updates off) |
 | Windows behind | a workstation on a Windows build older than 26100 (24H2) by default; the Windows column shows each device's version and build, servers included, but servers aren't counted |
 | Client | there's no ConfigMgr client, its service (CcmExec) isn't running, or it's in provisioning mode |
 | Not reporting | the site hasn't had a policy request from its client in 7 days or more (read from the site, so it counts offline devices too) |
@@ -109,6 +110,6 @@ Software Library > Driver Packages, **Layer8** on the ribbon: the Driver Package
 
 ## Settings
 
-**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, when to ask before a big run, the quick check that each device answers, and the log level. A second page sets the Health Dashboard's low disk, long uptime, not reporting, blue screen and Windows behind tiles. They're saved for your Windows account.
+**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, when to ask before a big run, the quick check that each device answers, and the log level. A second page sets the Health Dashboard's low disk, long uptime, not reporting, blue screen, not scanning and Windows behind tiles. They're saved for your Windows account.
 
 ![Layer8 Settings: 32 devices at once, ask before more than 100, check that each device answers within 2 seconds, log level Info](images/tour/layer8-settings.png)

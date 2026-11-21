@@ -207,11 +207,11 @@ namespace Layer8.Device
             },
         };
 
-        private static readonly string[] Columns = { "Device", "Status", "Issues", "Signed in", "Up", "C: free", "Restart", "BitLocker", "Defender", "Blue screen", "Windows", "Updates missing", "Client", "Policy request" };
-        private static readonly int[] StartWidths = { 120, 90, 220, 130, 60, 110, 110, 90, 90, 110, 120, 130, 110, 100 };
+        private static readonly string[] Columns = { "Device", "Status", "Issues", "Signed in", "Up", "C: free", "Restart", "BitLocker", "Defender", "Blue screen", "Windows", "Updates missing", "Update scan", "Client", "Policy request" };
+        private static readonly int[] StartWidths = { 120, 90, 220, 130, 60, 110, 110, 90, 90, 110, 120, 130, 90, 110, 100 };
         private const int StatusColumn = 1;
         private const int IssuesColumn = 2;
-        private const int PolicyColumn = 13;
+        private const int PolicyColumn = 14;
 
         private readonly ActionDescription action;
         private readonly ConnectionManagerBase connection;
@@ -223,6 +223,7 @@ namespace Layer8.Device
         private readonly int longUptimeDays = Layer8Settings.LongUptimeDays;
         private readonly int notReportingDays = Layer8Settings.NotReportingDays;
         private readonly int blueScreenDays = Layer8Settings.BlueScreenDays;
+        private readonly int notScanningDays = Layer8Settings.NotScanningDays;
         private readonly string windowsBuildText = Layer8Settings.WindowsBuild;
         private readonly Version windowsBuild;
         // Why the site's side couldn't be read this pass, for the status line; null when it could.
@@ -294,6 +295,8 @@ namespace Layer8.Device
             AddIssueTile(HealthIssue.BlueScreen, string.Format(
                 "Windows wrote a crash dump (a blue screen) in the last {0} days. Read from C:\\Windows\\Minidump: a blue screen whose dump was turned off or cleaned up doesn't show", blueScreenDays));
             AddIssueTile(HealthIssue.MissingUpdates, "Deployed software updates the client reports as missing");
+            AddIssueTile(HealthIssue.NotScanning, string.Format(
+                "The client's last software update scan finished {0} days ago or more, or it has never finished one (its scan history, as List Missing Updates reads it). Not counted where client settings turn software updates off", notScanningDays));
             AddIssueTile(HealthIssue.WindowsBehind, string.Format(
                 "A workstation on a Windows build older than {0} (set in Layer8 Settings). Servers aren't counted: their builds follow their own line", windowsBuildText));
             AddIssueTile(HealthIssue.Client, "No ConfigMgr client, its service (CcmExec) isn't running, or it's in provisioning mode");
@@ -591,7 +594,7 @@ namespace Layer8.Device
                         ClientActions.EnsureReachable(row.Host, reachableMs);
                     }
                     Progress(row, "Checking");
-                    report = HealthCheck.Check(row.Host, lowDiskGB, longUptimeDays, blueScreenDays, windowsBuild);
+                    report = HealthCheck.Check(row.Host, lowDiskGB, longUptimeDays, blueScreenDays, windowsBuild, notScanningDays);
                     int issues = report.Issues.Count;
                     state = RowState.Checked;
                     text = issues == 0 ? "Healthy" : issues + (issues == 1 ? " issue" : " issues");
@@ -657,7 +660,8 @@ namespace Layer8.Device
             SetCell(item, 9, report?.BlueScreen);
             SetCell(item, 10, report?.Windows);
             SetCell(item, 11, report?.Updates);
-            SetCell(item, 12, report?.Client);
+            SetCell(item, 12, report?.UpdateScan);
+            SetCell(item, 13, report?.Client);
             ShowIssues(row);
             item.ForeColor = row.State == RowState.Offline || row.State == RowState.Skipped || row.State == RowState.Canceled
                 ? SystemColors.GrayText

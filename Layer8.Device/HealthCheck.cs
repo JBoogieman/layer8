@@ -21,6 +21,8 @@ namespace Layer8.Device
         /// <summary>Windows wrote a crash dump lately: read from the minidump folder, not the event log.</summary>
         BlueScreen,
         MissingUpdates,
+        /// <summary>The client's last software update scan finished too long ago, or it has never finished one.</summary>
+        NotScanning,
         /// <summary>A workstation on a Windows build older than the one chosen in Layer8 Settings. Servers don't count.</summary>
         WindowsBehind,
         Client,
@@ -37,7 +39,7 @@ namespace Layer8.Device
         public readonly HashSet<HealthIssue> Issues = new HashSet<HealthIssue>();
         /// <summary>The checks that couldn't be read, as "BitLocker (access denied)".</summary>
         public readonly List<string> Unread = new List<string>();
-        public InfoCell SignedIn, Uptime, DiskFree, Restart, BitLocker, Defender, BlueScreen, Windows, Updates, Client;
+        public InfoCell SignedIn, Uptime, DiskFree, Restart, BitLocker, Defender, BlueScreen, Windows, Updates, UpdateScan, Client;
 
         /// <summary>"Couldn't check: BitLocker (access denied)", as the Issues column shows it.</summary>
         public string UnreadText => HealthCheck.Name(HealthIssue.CouldNotCheck) + ": " + string.Join(", ", Unread);
@@ -73,8 +75,8 @@ namespace Layer8.Device
 
     /// <summary>
     /// Reads one device's health for the Health Dashboard: who's signed in, uptime, free space on C:, recent blue
-    /// screens, the Windows build, the ConfigMgr client, a pending restart, BitLocker on C:, Microsoft Defender and
-    /// deployed updates that are missing. Read
+    /// screens, the Windows build, the ConfigMgr client, a pending restart, BitLocker on C:, Microsoft Defender,
+    /// deployed updates that are missing and the last software update scan. Read
     /// only: nothing on the device changes, and BitLocker recovery passwords are never read.
     ///
     /// The checks ask the same code the single-purpose tools use (Check Pending Restart, BitLocker Status, Defender
@@ -106,6 +108,7 @@ namespace Layer8.Device
                 case HealthIssue.Defender: return "Defender";
                 case HealthIssue.BlueScreen: return "Blue screen";
                 case HealthIssue.MissingUpdates: return "Missing updates";
+                case HealthIssue.NotScanning: return "Not scanning";
                 case HealthIssue.WindowsBehind: return "Windows behind";
                 case HealthIssue.Client: return "Client";
                 case HealthIssue.NotReporting: return "Not reporting";
@@ -120,7 +123,7 @@ namespace Layer8.Device
         /// check stands alone: one that can't be read shows "?", is named in the Issues column, and the rest still
         /// answer.
         /// </summary>
-        public static HealthReport Check(string host, int lowDiskGB, int longUptimeDays, int blueScreenDays, Version windowsBuild)
+        public static HealthReport Check(string host, int lowDiskGB, int longUptimeDays, int blueScreenDays, Version windowsBuild, int notScanningDays)
         {
             HealthReport report = new HealthReport();
             Stopwatch connecting = Stopwatch.StartNew();
@@ -326,7 +329,43 @@ namespace Layer8.Device
                 return new InfoCell(missing.Count + ": " + shown, missing.Count);
             });
 
+            report.UpdateScan = Read(report, host, "Update scan", () =>
+            {
+                if (clientSdk == null) return new InfoCell("No client");
+                // Client settings can turn software updates off: such a client never scans, on purpose.
+                if (!SoftwareUpdatesEnabled(host)) return new InfoCell("Turned off");
+                DateTime? last;
+                try
+                {
+                    last = ClientActions.LastUpdateScan(Utility.GetWMIScope(host, @"ccm\ScanAgent"));
+                }
+                catch (ManagementException ex) when (ClientActions.IsNoClient(ex))
+                {
+                    return new InfoCell("Turned off");
+                }
+                if (!last.HasValue)
+                {
+                    report.Issues.Add(HealthIssue.NotScanning);
+                    return new InfoCell("Never", DateTime.MinValue);
+                }
+                TimeSpan age = Age(last.Value);
+                if (age.TotalDays >= notScanningDays) report.Issues.Add(HealthIssue.NotScanning);
+                return new InfoCell(FormatAge(age), last.Value);
+            });
+
             return report;
+        }
+
+        /// <summary>
+        /// Whether the client's settings turn its software updates agent on (CCM_SoftwareUpdatesClientConfig in its
+        /// policy). True when it has no such policy, which the agent's own default is.
+        /// </summary>
+        private static bool SoftwareUpdatesEnabled(string host)
+        {
+            using (ManagementObject config = Utility.GetFirstWMIInstance(Utility.GetWMIScope(host, @"ccm\Policy\Machine\ActualConfig"), "SELECT Enabled FROM CCM_SoftwareUpdatesClientConfig"))
+            {
+                return config == null || !(config["Enabled"] is bool enabled) || enabled;
+            }
         }
 
         /// <summary>"Server 2022" from "Microsoft Windows Server 2022 Datacenter"; "Server" if the caption has no year.</summary>

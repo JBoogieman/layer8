@@ -8,7 +8,8 @@ namespace Layer8
 {
     /// <summary>
     /// The Health Dashboard page of Layer8 Settings: when a device counts as low on disk, as up too long, as not
-    /// reporting to the site, as having had a recent blue screen, and as behind on Windows. Saved
+    /// reporting to the site, as having had a recent blue screen, as not scanning for updates, and as behind on
+    /// Windows. Saved
     /// per Windows user like the General page (see Layer8Settings); a dashboard opened after a change uses the new
     /// values. Laid out in code to match the General page: the same column for the number boxes, the same note at
     /// the bottom.
@@ -21,6 +22,7 @@ namespace Layer8
         private readonly NumericUpDown numericLongUptimeDays;
         private readonly NumericUpDown numericNotReportingDays;
         private readonly NumericUpDown numericBlueScreenDays;
+        private readonly NumericUpDown numericNotScanningDays;
         private readonly TextBox textWindowsBuild;
 
         // Set while the page fills its controls, so filling them doesn't count as a change.
@@ -38,7 +40,7 @@ namespace Layer8
             {
                 Text = "Tiles",
                 Location = new Point(10, 10),
-                Size = new Size(360, 226),
+                Size = new Size(360, 256),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 TabIndex = 0,
             };
@@ -50,22 +52,24 @@ namespace Layer8
             numericNotReportingDays = new NumericUpDown { Location = new Point(270, 84), Size = new Size(70, 20), TabIndex = 5 };
             Label labelBlueScreen = new Label { Text = "Blue screens: a crash dump in (days):", AutoSize = true, Location = new Point(12, 116), TabIndex = 6 };
             numericBlueScreenDays = new NumericUpDown { Location = new Point(270, 114), Size = new Size(70, 20), TabIndex = 7 };
-            Label labelWindowsBuild = new Label { Text = "Windows behind: older than build:", AutoSize = true, Location = new Point(12, 146), TabIndex = 8 };
-            textWindowsBuild = new TextBox { Location = new Point(270, 144), Size = new Size(70, 20), MaxLength = 12, TabIndex = 9 };
+            Label labelNotScanning = new Label { Text = "Not scanning: no update scan in (days):", AutoSize = true, Location = new Point(12, 146), TabIndex = 8 };
+            numericNotScanningDays = new NumericUpDown { Location = new Point(270, 144), Size = new Size(70, 20), TabIndex = 9 };
+            Label labelWindowsBuild = new Label { Text = "Windows behind: older than build:", AutoSize = true, Location = new Point(12, 176), TabIndex = 10 };
+            textWindowsBuild = new TextBox { Location = new Point(270, 174), Size = new Size(70, 20), MaxLength = 12, TabIndex = 11 };
             Label labelTilesHelp = new Label
             {
                 Text = "A build as winver shows it: 26100, or 26100.4652 to count the monthly update too. Servers aren't counted. The other tiles follow Windows and ConfigMgr themselves. Hover over a tile in the dashboard for its rule.",
-                Location = new Point(12, 174),
+                Location = new Point(12, 204),
                 Size = new Size(336, 44),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-                TabIndex = 10,
+                TabIndex = 12,
             };
-            tiles.Controls.AddRange(new Control[] { labelLowDisk, numericLowDiskGB, labelLongUptime, numericLongUptimeDays, labelNotReporting, numericNotReportingDays, labelBlueScreen, numericBlueScreenDays, labelWindowsBuild, textWindowsBuild, labelTilesHelp });
+            tiles.Controls.AddRange(new Control[] { labelLowDisk, numericLowDiskGB, labelLongUptime, numericLongUptimeDays, labelNotReporting, numericNotReportingDays, labelBlueScreen, numericBlueScreenDays, labelNotScanning, numericNotScanningDays, labelWindowsBuild, textWindowsBuild, labelTilesHelp });
 
             Label labelSavedFor = new Label
             {
                 Text = "Saved for your Windows account. A dashboard opened after a change uses the new values.",
-                Location = new Point(10, 248),
+                Location = new Point(10, 278),
                 Size = new Size(360, 30),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 TabIndex = 1,
@@ -77,6 +81,7 @@ namespace Layer8
             numericLongUptimeDays.ValueChanged += Setting_Changed;
             numericNotReportingDays.ValueChanged += Setting_Changed;
             numericBlueScreenDays.ValueChanged += Setting_Changed;
+            numericNotScanningDays.ValueChanged += Setting_Changed;
             textWindowsBuild.TextChanged += Setting_Changed;
             textWindowsBuild.TextChanged += WindowsBuild_Changed;
             ResumeLayout(false);
@@ -105,6 +110,10 @@ namespace Layer8
             numericBlueScreenDays.Minimum = Layer8Settings.MinBlueScreenDays;
             numericBlueScreenDays.Maximum = Layer8Settings.MaxBlueScreenDays;
             numericBlueScreenDays.Value = Layer8Settings.BlueScreenDays;
+
+            numericNotScanningDays.Minimum = Layer8Settings.MinNotScanningDays;
+            numericNotScanningDays.Maximum = Layer8Settings.MaxNotScanningDays;
+            numericNotScanningDays.Value = Layer8Settings.NotScanningDays;
 
             textWindowsBuild.Text = Layer8Settings.WindowsBuild;
 
@@ -138,6 +147,7 @@ namespace Layer8
                 Layer8Settings.LongUptimeDays = (int)numericLongUptimeDays.Value;
                 Layer8Settings.NotReportingDays = (int)numericNotReportingDays.Value;
                 Layer8Settings.BlueScreenDays = (int)numericBlueScreenDays.Value;
+                Layer8Settings.NotScanningDays = (int)numericNotScanningDays.Value;
                 Layer8Settings.WindowsBuild = textWindowsBuild.Text;
             }
             catch (Exception ex) when (ex is UnauthorizedAccessException || ex is System.Security.SecurityException || ex is IOException)
@@ -149,8 +159,8 @@ namespace Layer8
                 return false;
             }
 
-            log.InfoFormat("Health Dashboard settings saved: low disk under {0} GB; long uptime {1} days or more; not reporting after {2} days; blue screens in the last {3} days; Windows older than build {4}",
-                (int)numericLowDiskGB.Value, (int)numericLongUptimeDays.Value, (int)numericNotReportingDays.Value, (int)numericBlueScreenDays.Value, textWindowsBuild.Text.Trim());
+            log.InfoFormat("Health Dashboard settings saved: low disk under {0} GB; long uptime {1} days or more; not reporting after {2} days; blue screens in the last {3} days; not scanning after {4} days; Windows older than build {5}",
+                (int)numericLowDiskGB.Value, (int)numericLongUptimeDays.Value, (int)numericNotReportingDays.Value, (int)numericBlueScreenDays.Value, (int)numericNotScanningDays.Value, textWindowsBuild.Text.Trim());
 
             Dirty = false;
 

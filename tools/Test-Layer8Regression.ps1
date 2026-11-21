@@ -386,7 +386,12 @@ function Test-Installed {
     if (-not $loaded) { Add-Result WARN 'Version the console loaded' 'Layer8.log has no line from the console loading Layer8'; return }
     $null = $loaded.Text -match '^Layer8 (\S+) loaded in console (5\.\S+)'
     $what = "Layer8 $($Matches[1]) in console $($Matches[2]) at $($loaded.Time.ToString('g'))"
-    if ($Matches[1] -ne "$version") { Add-Result FAIL 'Version the console loaded' "$what`: close the console and open it again" }
+    # Layer8Log writes the line the first time the console runs something of Layer8's, not when the console starts, so
+    # a load from before this copy was installed only means nothing has run since. The dashboard run will.
+    if ($Matches[1] -ne "$version" -and $newest.Name -eq "$version" -and $loaded.Time -lt $newest.CreationTime) {
+        Add-Result WARN 'Version the console loaded' "nothing of Layer8's has run since $version was installed (last: $what). The -Since run checks it after the dashboard"
+    }
+    elseif ($Matches[1] -ne "$version") { Add-Result FAIL 'Version the console loaded' "$what`: close the console and open it again" }
     elseif ($newest.Name -eq "$version" -and $loaded.Time -lt $newest.CreationTime) { Add-Result WARN 'Version the console loaded' "$what, before this copy was installed: close the console and open it again" }
     else { Add-Result PASS 'Version the console loaded' $what }
 }
@@ -739,7 +744,7 @@ function Get-Layer8Settings {
         [Math]::Max($Min, [Math]::Min($Max, $number))
     }
     $settings = [ordered]@{}
-    foreach ($name in 'LowDiskGB', 'LongUptimeDays', 'NotReportingDays', 'BlueScreenDays', 'DevicesAtOnce', 'ConfirmAbove', 'ReachableSeconds') {
+    foreach ($name in 'LowDiskGB', 'LongUptimeDays', 'NotReportingDays', 'BlueScreenDays', 'NotScanningDays', 'DevicesAtOnce', 'ConfirmAbove', 'ReachableSeconds') {
         $settings[$name] = & $readInt $name $const["Default$name"] $const["Min$name"] $const["Max$name"]
         $settings["Default$name"] = $const["Default$name"]
     }
@@ -771,6 +776,7 @@ function Test-Settings {
         LongUptimeDays   = 'Long uptime (days)'
         NotReportingDays = 'Not reporting after (days)'
         BlueScreenDays   = 'Blue screens in the last (days)'
+        NotScanningDays  = 'Not scanning after (days)'
     }
     # Several tested rows end "set back to ..."; a value left changed would skew the next dashboard run.
     foreach ($name in $labels.Keys) {
@@ -808,7 +814,7 @@ function Get-HealthIssues {
     $script:healthIssues
 }
 # The issues this script knows how to read. One the dashboard has and this doesn't gets "?" instead of a count.
-$readableIssues = 'RestartPending', 'LowDisk', 'BitLockerOff', 'Defender', 'BlueScreen', 'MissingUpdates', 'WindowsBehind', 'Client', 'NotReporting', 'LongUptime', 'CouldNotCheck'
+$readableIssues = 'RestartPending', 'LowDisk', 'BitLockerOff', 'Defender', 'BlueScreen', 'MissingUpdates', 'NotScanning', 'WindowsBehind', 'Client', 'NotReporting', 'LongUptime', 'CouldNotCheck'
 
 # RemoteTools.IsComputerName: placeholder records ("x64 Unknown Computer (x64 Unknown Computer)") aren't machines.
 $computerName = '^[A-Za-z0-9][A-Za-z0-9.\-_]{0,254}$'
@@ -928,7 +934,7 @@ function Read-Device([string]$Name, $Settings) {
     $row = [ordered]@{
         Device = $Name; State = 'Checked'; Status = ''; Online = (Get-OnlineStatus $Name)
         'Signed in' = ''; Up = ''; 'C: free' = ''; 'Blue screen' = ''; Windows = ''; Client = ''
-        Restart = ''; BitLocker = ''; Defender = ''; Updates = ''; 'Policy request' = ''; Issues = ''
+        Restart = ''; BitLocker = ''; Defender = ''; Updates = ''; 'Update scan' = ''; 'Policy request' = ''; Issues = ''
         IssueSet = $issues; Unread = $unread; NotReporting = $false
     }
     $done = { [pscustomobject]$row }
@@ -1121,6 +1127,21 @@ function Read-Device([string]$Name, $Settings) {
             if ($missing.Count -gt 3) { $text += ', ...' }
             $text
         }
+
+        $row['Update scan'] = Invoke-Check 'Update scan' $issues $unread {
+            if (-not $state.ClientSdk) { return 'No client' }
+            # Client settings can turn software updates off: such a client never scans, on purpose.
+            $config = Get-CimInstance -CimSession $session -Namespace 'root\ccm\Policy\Machine\ActualConfig' -ClassName CCM_SoftwareUpdatesClientConfig -Property Enabled | Select-Object -First 1
+            if ($config -and $config.Enabled -eq $false) { return 'Turned off' }
+            try { $history = @(Get-CimInstance -CimSession $session -Namespace 'root\ccm\ScanAgent' -ClassName CCM_ScanUpdateSourceHistory -Property LastCompletionTime) }
+            catch { if (Test-CimError $_ 'InvalidNamespace', 'InvalidClass') { return 'Turned off' }; throw }
+            # The newest completion over every update source; CIM hands it over in local time (it's stored as real UTC).
+            $last = $history | ForEach-Object LastCompletionTime | Where-Object { $_ -is [datetime] -and $_.Year -gt 2000 } | Sort-Object -Descending | Select-Object -First 1
+            if (-not $last) { [void]$issues.Add('NotScanning'); return 'Never' }
+            $age = (Get-Date) - $last
+            if ($age.TotalDays -ge $Settings.NotScanningDays) { [void]$issues.Add('NotScanning') }
+            Format-Age $age
+        }
     }
     finally {
         Remove-CimSession -CimSession $session -ErrorAction SilentlyContinue
@@ -1224,7 +1245,7 @@ function Test-Devices {
     if ($shown) {
         Write-Host ''
         Write-Host '  What the dashboard should show (Up and Policy request move on with the clock):' -ForegroundColor Gray
-        $shown | Format-List Device, Online, 'Signed in', Up, 'C: free', 'Blue screen', Windows, Client, Restart, BitLocker, Defender, Updates, 'Policy request', Issues |
+        $shown | Format-List Device, Online, 'Signed in', Up, 'C: free', 'Blue screen', Windows, Client, Restart, BitLocker, Defender, Updates, 'Update scan', 'Policy request', Issues |
             Out-String -Width 160 | ForEach-Object { $_.TrimEnd() } | Write-Host
     }
 
@@ -1315,8 +1336,8 @@ function Test-Log {
     # The Devices section reads with the current settings. A run made with others (a threshold being tested, not yet
     # set back) can't match it, so say so before the mismatches. HealthDashboardOptionsControl logs every save this way.
     $current = $script:expected.Settings
-    $currentText = 'Health Dashboard settings saved: low disk under {0} GB; long uptime {1} days or more; not reporting after {2} days; blue screens in the last {3} days; Windows older than build {4}' -f
-        $current.LowDiskGB, $current.LongUptimeDays, $current.NotReportingDays, $current.BlueScreenDays, $current.WindowsBuildText
+    $currentText = 'Health Dashboard settings saved: low disk under {0} GB; long uptime {1} days or more; not reporting after {2} days; blue screens in the last {3} days; not scanning after {4} days; Windows older than build {5}' -f
+        $current.LowDiskGB, $current.LongUptimeDays, $current.NotReportingDays, $current.BlueScreenDays, $current.NotScanningDays, $current.WindowsBuildText
     $usedLine = Get-LogEntries | Where-Object { $_.Text -like 'Health Dashboard settings saved:*' -and $_.Time -le $entries[$startIndex].Time } | Select-Object -Last 1
     if ($usedLine -and $usedLine.Text -ne $currentText) {
         Add-Result WARN 'Settings the run used' ("other than the current ones, saved {0:T}: {1}. Run the dashboard again at the current settings" -f $usedLine.Time, $usedLine.Text.Substring('Health Dashboard settings saved: '.Length))
@@ -1428,7 +1449,7 @@ function Write-Report {
     foreach ($result in $results) { $lines.Add(('| {0} | {1} | {2} | {3} |' -f $result.Section, $result.Result, (& $cell $result.Check), (& $cell $result.Detail))) }
 
     if ($script:expected) {
-        $columns = 'Device', 'Status', 'Online', 'Signed in', 'Up', 'C: free', 'Blue screen', 'Windows', 'Client', 'Restart', 'BitLocker', 'Defender', 'Updates', 'Policy request', 'Issues'
+        $columns = 'Device', 'Status', 'Online', 'Signed in', 'Up', 'C: free', 'Blue screen', 'Windows', 'Client', 'Restart', 'BitLocker', 'Defender', 'Updates', 'Update scan', 'Policy request', 'Issues'
         $lines.Add('')
         $lines.Add("## What the Health Dashboard should show on $Collection")
         $lines.Add('')
