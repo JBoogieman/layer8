@@ -4,11 +4,11 @@ What Layer8 looks like in the ConfigMgr console. The screenshots are from a lab 
 
 ## Right-click menus
 
-Right-click a device collection, **Client Actions**: the eleven standard client cycles, then Layer8's own actions. Each one runs on every device in the collection. The menu scrolls for the rest.
+Right-click a device collection, **Layer8**: **Health Dashboard** first, then **Status** (read-only checks), **Client Cycles**, **Fix** (changes something on the devices) and **Power and Users**, each alphabetical inside. Each action runs on every device in the collection. Below them are Add and Remove Resources List, Collect Client Logs, Copy Member Names and Error Lookup, then Layer8 Settings.
 
-![A device collection's context menu, Client Actions open: the client cycles, then Restart SMS Agent Host Service, Online Status, Quick Status, Find Software, Check Pending Restart, update, policy and repair actions, Send Message, restarts and Defender](images/tour/collection-client-actions.png)
+![A device collection's context menu, Layer8 open: Health Dashboard, then Status, Client Cycles, Fix and Power and Users, then Add Resources List, Collect Client Logs, Copy Member Names, Error Lookup, Remove Resources List and Layer8 Settings](images/tour/collection-client-actions.png)
 
-Right-click a device, **Layer8**: **Health Dashboard** first, then everything else in submenus by what each action does. **Status** is read-only checks, **Client Cycles** the eleven standard cycles, **Fix** whatever changes something on the device (repairs, policy, installs), then **Power and Users**, **Security** and **Remote Tools**. Below them are the tools for one device, and Layer8 Settings. Each submenu is alphabetical. Add Selected Items to Existing Device Collections is in the console's own **Add Selected Items** menu.
+Right-click a device, **Layer8**: **Health Dashboard** first, then everything else in submenus by what each action does. **Status** is read-only checks, **Client Cycles** the eleven standard cycles, **Fix** whatever changes something on the device (repairs, policy, installs, scans), then **Power and Users**, **Security** (read-only: BitLocker key, LAPS password, Windows Security) and **Remote Tools**. Below them are the tools for one device, and Layer8 Settings. Each submenu is alphabetical. Add Selected Items to Existing Device Collections is in the console's own **Add Selected Items** menu.
 
 ![A device's context menu, Layer8 open: Health Dashboard, then Status, Client Cycles, Fix, Power and Users, Security and Remote Tools, then Client Cache, Copy Device Info, Copy Names, Driver Grabber, Error Lookup, System Information and Layer8 Settings](images/tour/device-menu.png)
 

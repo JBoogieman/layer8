@@ -276,7 +276,7 @@
         </ActionDescription>
       </ActionGroups>
     </ActionDescription>
-    <ActionDescription Class="Group" SelectionMode="Both" DisplayName="Fix" MnemonicDisplayName="Fix" Description="Change something on the device: repairs, policy, installs" NodeInConsole="3fd01cd1-9e01-461e-92cd-94866b8d1f39" RibbonDisplayType="TextAndSmallImage">
+    <ActionDescription Class="Group" SelectionMode="Both" DisplayName="Fix" MnemonicDisplayName="Fix" Description="Change something on the device: repairs, policy, installs, scans" NodeInConsole="3fd01cd1-9e01-461e-92cd-94866b8d1f39" RibbonDisplayType="TextAndSmallImage">
       <ShowOn>
         <string>DefaultHomeTab</string>
         <string>ContextMenu</string>
@@ -300,6 +300,18 @@
             <Method>RunClientTool</Method>
           </ActionAssembly>
           <DialogId>ClearClientCache</DialogId>
+        </ActionDescription>
+        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Defender Quick Scan" MnemonicDisplayName="Defender Quick Scan" Description="Start a Microsoft Defender quick scan">
+          <ShowOn>
+            <string>DefaultHomeTab</string>
+            <string>ContextMenu</string>
+          </ShowOn>
+          <ActionAssembly>
+            <Assembly>Layer8.Device.dll</Assembly>
+            <Type>Layer8.Device.ClientActions</Type>
+            <Method>RunClientTool</Method>
+          </ActionAssembly>
+          <DialogId>DefenderQuickScan</DialogId>
         </ActionDescription>
         <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Full Machine Policy Refresh" MnemonicDisplayName="Full Machine Policy Refresh" Description="Request full machine policy instead of only the changes, then evaluate it">
           <ShowOn>
@@ -483,18 +495,6 @@
             <Type>Layer8.Device.BitLockerKeys</Type>
             <Method>Show</Method>
           </ActionAssembly>
-        </ActionDescription>
-        <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="Defender Quick Scan" MnemonicDisplayName="Defender Quick Scan" Description="Start a Microsoft Defender quick scan">
-          <ShowOn>
-            <string>DefaultHomeTab</string>
-            <string>ContextMenu</string>
-          </ShowOn>
-          <ActionAssembly>
-            <Assembly>Layer8.Device.dll</Assembly>
-            <Type>Layer8.Device.ClientActions</Type>
-            <Method>RunClientTool</Method>
-          </ActionAssembly>
-          <DialogId>DefenderQuickScan</DialogId>
         </ActionDescription>
         <ActionDescription NamespaceGuid="00AA55FA-F9B8-4293-9761-83C50822BF35" Class="AssemblyType" DisplayName="LAPS Password" MnemonicDisplayName="LAPS Password" Description="The local administrator password from Active Directory: Windows LAPS (encrypted or not) or legacy LAPS, with Expire Now">
           <ShowOn>

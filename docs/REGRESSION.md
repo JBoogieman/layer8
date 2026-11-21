@@ -37,7 +37,7 @@ Written for the lab STATUS.md describes: a site server, the client the console r
 
 ### A. Health Dashboard
 
-Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Layer8.Device/HealthRun.cs`, `Layer8.Device/ListViewSorter.cs`, `Extensions/Actions/*/Layer8*Health.xml`, `Extensions/Actions/*/Layer8Devices.xml`
+Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Layer8.Device/HealthRun.cs`, `Layer8.Device/ListViewSorter.cs`, `Extensions/Actions/*/Layer8Devices.xml`, `Extensions/Actions/*/Layer8Collections.xml`
 
 - [ ] **Layer8 Dev:** both clients checked in a few seconds. BitLocker reads as BitLocker Status reads it ("Suspended (encrypted)" when not protected but fully encrypted, "Off" when fully decrypted).
 - [ ] **All Systems:** the placeholders are skipped by name. The site server shows Client "Not installed" (its management point runs CcmExec without a client), BitLocker "Not available" and not counted, and Updates "No client".
@@ -71,7 +71,7 @@ Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Laye
 
 ### B. Layer8 Settings
 
-Files: `Layer8/Layer8Settings.cs`, `Layer8/OptionsControl*`, `Layer8/HealthDashboardOptionsControl.cs`, `Extensions/Forms/Layer8Settings.xml`, `Extensions/Actions/*/Layer8*Settings.xml`, `Extensions/Actions/*/Layer8Devices.xml`
+Files: `Layer8/Layer8Settings.cs`, `Layer8/OptionsControl*`, `Layer8/HealthDashboardOptionsControl.cs`, `Extensions/Forms/Layer8Settings.xml`, `Extensions/Actions/*/Layer8Devices.xml`, `Extensions/Actions/*/Layer8Collections.xml`
 
 Open it from a collection's Client Actions menu. Every change below is set back afterwards; the script's `-Since` run warns about one left changed.
 
@@ -87,7 +87,7 @@ Open it from a collection's Client Actions menu. Every change below is set back 
 
 ### C. Client actions and client tools
 
-Files: `Layer8.Device/ClientActions.cs`, `Layer8.Device/ClientActionProgressBar.cs`, `Layer8.Device/ResultClientHealthControl*`, `Layer8.Device/ResultSoftwareUpdatesControl*`, `Layer8.Device/ResultSUComplianceControl*`, `Extensions/Actions/*/Layer8*ClientActions.xml`, `Extensions/Actions/*/Layer8Devices.xml`
+Files: `Layer8.Device/ClientActions.cs`, `Layer8.Device/ClientActionProgressBar.cs`, `Layer8.Device/ResultClientHealthControl*`, `Layer8.Device/ResultSoftwareUpdatesControl*`, `Layer8.Device/ResultSUComplianceControl*`, `Extensions/Actions/*/Layer8Devices.xml`, `Extensions/Actions/*/Layer8Collections.xml`
 
 - [ ] **Evaluation cycles:** Machine Policy and App Deployment Evaluation fire on both clients.
 - [ ] **List Missing Updates on a client that has scanned:** lists the deployed and the needed updates, not "No update scan yet".
@@ -102,7 +102,7 @@ Files: `Layer8.Device/ClientActions.cs`, `Layer8.Device/ClientActionProgressBar.
 
 ### D. Collection runs, Online Status and Quick Status columns
 
-Files: `Layer8.Device/DeviceProgressDialog*`, `Layer8.Device/DeviceColumns.cs`, `Layer8.Device/ListViewSorter.cs`, `Layer8.Device/RemoteTools.cs`, `Layer8.Device/Device.cs`, `Extensions/Actions/a92615d6-*/Layer8CollectionClientActions.xml`
+Files: `Layer8.Device/DeviceProgressDialog*`, `Layer8.Device/DeviceColumns.cs`, `Layer8.Device/ListViewSorter.cs`, `Layer8.Device/RemoteTools.cs`, `Layer8.Device/Device.cs`, `Extensions/Actions/*/Layer8Collections.xml`
 
 - [ ] **A client tool on All Systems and on Layer8 Dev:** the four placeholder records are skipped by name and counted as Skipped.
 - [ ] **Online Status:** on both clients and the site server it reads what the script's Online line says. The site server: "ping blocked, port 445 answers".
@@ -126,7 +126,7 @@ Files: `Layer8.Device/RemoteTools.cs`, `Layer8.Device/InputPrompt.cs`, `Extensio
 
 ### F. Copy and export
 
-Files: `Layer8.Device/Device.cs`, `Extensions/Actions/*/Layer8CollectionCopyNames.xml`, `Extensions/Actions/*/Layer8Devices.xml`
+Files: `Layer8.Device/Device.cs`, `Extensions/Actions/*/Layer8Devices.xml`, `Extensions/Actions/*/Layer8Collections.xml`
 
 - [ ] **Copy Names, Copy Device Info, Copy Results and Export:** on a client, they give what the window shows.
 - [ ] **Copy Member Names:** on All Systems, the same.
@@ -173,7 +173,7 @@ The test data comes from `tools\New-Layer8LabTestData.ps1`. Retry uses summarize
 
 ### K. Collection membership
 
-Files: `Layer8/AddResourcesListDialog*`, `Layer8/RemoveResourcesListDialog*`, `Extensions/Forms/Layer8AddResourcesListDialog.xml`, `Extensions/Forms/Layer8RemoveResourcesListDialog.xml`, `Extensions/Actions/*/Layer8CollectionAddResource.xml`, `Extensions/Actions/*/Layer8CollectionRemoveResource.xml`, `Extensions/Actions/*/Layer8DevicesCollections.xml`
+Files: `Layer8/AddResourcesListDialog*`, `Layer8/RemoveResourcesListDialog*`, `Extensions/Forms/Layer8AddResourcesListDialog.xml`, `Extensions/Forms/Layer8RemoveResourcesListDialog.xml`, `Extensions/Actions/*/Layer8DevicesCollections.xml`, `Extensions/Actions/*/Layer8Collections.xml`
 
 - [ ] **Changes something** (a test collection's members): Add Resources List with names pasted with blanks, duplicates, padding and made-up names adds each real name once. Remove Resources List does the same in reverse.
 
@@ -206,7 +206,7 @@ Files: `Layer8.Device/WindowsSecurity.cs`, `Layer8.Device/SystemInfo.cs`, `Exten
 
 ### N. Error Lookup
 
-Files: `Layer8.Device/ErrorLookup.cs`, `Layer8.Device/ErrorCodes.cs`, `Extensions/Actions/*/Layer8Devices.xml`
+Files: `Layer8.Device/ErrorLookup.cs`, `Layer8.Device/ErrorCodes.cs`, `Extensions/Actions/*/Layer8Devices.xml`, `Extensions/Actions/*/Layer8Collections.xml`
 
 The script checks the parsing and the text from the console's catalog (its Library section).
 
