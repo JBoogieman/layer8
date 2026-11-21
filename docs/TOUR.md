@@ -6,7 +6,7 @@ What Layer8 looks like in the ConfigMgr console. The screenshots are from a lab 
 
 Right-click a device collection, **Layer8**: **Health Dashboard** first, then **Status** (read-only checks), **Client Cycles**, **Fix** (changes something on the devices) and **Power and Users**, each alphabetical inside. Each action runs on every device in the collection. Below them are Add and Remove Resources List, Collect Client Logs, Copy Member Names and Error Lookup, then Layer8 Settings.
 
-![A device collection's context menu, Layer8 open: Health Dashboard, then Status, Client Cycles, Fix and Power and Users, then Add Resources List, Collect Client Logs, Copy Member Names, Error Lookup, Remove Resources List and Layer8 Settings](images/tour/collection-client-actions.png)
+![A device collection's context menu, Layer8 open: Health Dashboard, then Status, Client Cycles, Fix and Power and Users, then Add Resources List, Collect Client Logs, Copy Member Names, Error Lookup, Remove Resources List and Layer8 Settings](images/tour/collection-menu.png)
 
 Right-click a device, **Layer8**: **Health Dashboard** first, then everything else in submenus by what each action does. **Status** is read-only checks, **Client Cycles** the eleven standard cycles, **Fix** whatever changes something on the device (repairs, policy, installs, scans), then **Power and Users**, **Security** (read-only: BitLocker key, LAPS password, Windows Security) and **Remote Tools**. Below them are the tools for one device, and Layer8 Settings. Each submenu is alphabetical. Add Selected Items to Existing Device Collections is in the console's own **Add Selected Items** menu.
 

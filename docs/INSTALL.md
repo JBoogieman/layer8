@@ -119,7 +119,7 @@ If the installer window isn't in front, look for it on the taskbar. Until you cl
 
 **6. Check.** Right-click a device: the **Layer8** menu is there, with **Health Dashboard** at its top.
 
-![Layer8 menus on a device](images/install-device-menu.png)
+![A device's context menu, Layer8 open: Health Dashboard, then Status, Client Cycles, Fix, Power and Users, Security and Remote Tools](images/tour/device-menu.png)
 
 ### What the install does
 
