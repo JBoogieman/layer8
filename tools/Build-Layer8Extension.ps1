@@ -55,6 +55,9 @@
     has to trust the certificate (its root in Trusted Root Certification Authorities, the certificate itself in
     Trusted Publishers).
 
+    A signed cab is named with the whole version (Layer8-1.1.0.11.cab), so each test build keeps its own file.
+    An unsigned cab is named as a release takes it (Layer8-1.1.0.cab).
+
     Without it nothing is signed, and a site imports the cab only with "Hierarchy approved console extensions can
     be unsigned" turned on (Hierarchy Settings, General tab) and "Allow extension to be unsigned" ticked in the
     import wizard.
@@ -132,8 +135,17 @@ $version = [Version](Get-Item (Join-Path $buildDir 'Layer8.dll')).VersionInfo.Fi
 # The menu and dialog XML to package: the repo's, or a copy without the left-out features.
 $extensionsDir = Get-Layer8ExtensionsFolder -Repo $repo -WorkFolder (Join-Path $repo "Build\Extensions-$Configuration") -Exclude $Exclude
 
+# A signed cab is a test build, named with the whole version (Layer8-1.1.0.11.cab). Named with three parts, every
+# 1.1.0.x test build overwrote Layer8-1.1.0.cab, and Build\Release\1.1.0 holds an older cab by the same name, so
+# the name didn't say which build a file was. An unsigned cab is a release build: Layer8-1.1.0.cab, the name a
+# GitHub release takes. The site goes by the ID and version in manifest.xml, not the file name (it imported
+# Layer8-0.2.0-signed.cab), so the name is free to change.
+$cabVersion = $version.ToString(3)
+if ($certificate) { $cabVersion = $version.ToString() }
+$cabName = "Layer8-$cabVersion.cab"
+
 $outDir = Join-Path $repo 'Build\Extension'
-$contents = Join-Path $outDir "Layer8-$($version.ToString(3))"
+$contents = Join-Path $outDir "Layer8-$cabVersion"
 if (Test-Path $contents) { Remove-Item $contents -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $contents | Out-Null
 
@@ -274,7 +286,6 @@ finally {
 }
 
 # 5. The cab, with makecab (part of Windows). The manifest and every file sit at the root of the cab.
-$cabName = "Layer8-$($version.ToString(3)).cab"
 $cab = Join-Path $outDir $cabName
 if (Test-Path $cab) { Remove-Item $cab -Force }
 $ddf = Join-Path $outDir 'Layer8.ddf'

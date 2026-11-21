@@ -312,11 +312,11 @@ On a computer with the ConfigMgr console and Visual Studio (.NET desktop develop
 ```powershell
 .\tools\Build-Layer8Msi.ps1                       # builds the DLLs and Build\Installer\Release\Layer8.msi
 .\tools\Build-Layer8Extension.ps1                 # Build\Extension\Layer8-<version>.cab, unsigned
-.\tools\Build-Layer8Extension.ps1 -CertificateThumbprint <thumbprint>   # signed
+.\tools\Build-Layer8Extension.ps1 -CertificateThumbprint <thumbprint>   # signed: Layer8-<version>.<build>.cab
 ```
 
 `Build-Layer8Extension.ps1` packages the DLLs that `Build-Layer8Msi.ps1` built, so run that first. The certificate has to be a code-signing certificate in your `CurrentUser\My` or `LocalMachine\My` store. Signing uses a timestamp server (`-TimestampServer`, DigiCert's by default), so the computer needs internet access while it signs. Both scripts take `-Exclude` (see [Leaving features out](#leaving-features-out)).
 
 `Build-Layer8Extension.ps1` also writes `Build\Extension\Customize-Layer8Cab.ps1`: `tools\Customize-Layer8Cab.ps1` with `tools\Layer8Features.ps1` built in, so it works on its own. Run unsigned, it puts the three files a GitHub release takes in `Build\Release\<version>`: `Layer8.msi` (if `Build-Layer8Msi.ps1` built the same version), the cab, and that copy of the script. Upload everything in that folder.
 
-The version comes from `SharedAssemblyInfo.cs`. Bump it for each cab you import into a site: a site won't import the same version of Layer8 again.
+The version comes from `SharedAssemblyInfo.cs`. Bump it for each cab you import into a site: a site won't import the same version of Layer8 again. A signed cab's name has the whole version (`Layer8-1.1.0.11.cab`), so each test build keeps its own file. An unsigned cab is named as a release takes it (`Layer8-1.1.0.cab`).

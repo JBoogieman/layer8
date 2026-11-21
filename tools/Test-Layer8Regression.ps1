@@ -24,6 +24,11 @@
       Settings   Layer8 Settings at their defaults (HKCU\SOFTWARE\Layer8).
       Devices    Every member of the collection, read from the same places the Health Dashboard reads: what each
                  column should show, each device's issues and the tile counts.
+      Tools      In 32-bit PowerShell, as the console runs them: Online Status, Quick Status, Client Info, Check
+                 Pending Restart, BitLocker Status, Defender Status and List Missing Updates on every member of the
+                 collection, through the code the Client Tools menu and its progress window use. Each answer is
+                 checked against the Devices section's reading of that device, and the registry view Check Pending
+                 Restart reads against Windows' own.
       Log        With -Since: the errors, warnings and slow steps Layer8 logged since then, and the last Health
                  Dashboard run on the collection compared with the Devices section.
       Changes    The files changed since the last commit that changed docs\STATUS.md (the last recorded run), and
@@ -33,11 +38,13 @@
 
     The Devices section reads the same WMI classes and registry values as the dashboard, but in 64-bit PowerShell,
     so it reads the registry as Windows itself does. It's a second copy of the same reads: it catches the dashboard
-    drifting from what the device says, not a mistake made the same way in both.
+    drifting from what the device says, not a mistake made the same way in both. Started from 32-bit PowerShell,
+    the script runs itself again in 64-bit for that reason; the Library and Tools sections start their own 32-bit
+    PowerShell either way.
 
 .PARAMETER Since
-    For the second run, after the console steps: adds the Log section from this time on, and skips Build, Customize
-    and Library (unless -Skip says otherwise). The first run prints the command to use.
+    For the second run, after the console steps: adds the Log section from this time on, and skips Build, Customize,
+    Library and Tools (unless -Skip says otherwise). The first run prints the command to use.
 
 .PARAMETER Collection
     The collection the Devices and Log sections look at. Default: All Systems.
@@ -53,7 +60,7 @@
     Without one, the catalog checks are skipped.
 
 .PARAMETER Skip
-    Sections to leave out: Build, Installed, Customize, Library, Settings, Devices, Log, Changes.
+    Sections to leave out: Build, Installed, Customize, Library, Settings, Devices, Tools, Log, Changes.
 
 .EXAMPLE
     .\tools\Test-Layer8Regression.ps1
@@ -71,9 +78,25 @@ param(
     [string]$SiteServer,
     [string]$SiteCode,
     [string]$LenovoCatalog = (Join-Path ([IO.Path]::GetTempPath()) 'LenovoCatalogV2.xml'),
-    [ValidateSet('Build', 'Installed', 'Customize', 'Library', 'Settings', 'Devices', 'Log', 'Changes')]
+    [ValidateSet('Build', 'Installed', 'Customize', 'Library', 'Settings', 'Devices', 'Tools', 'Log', 'Changes')]
     [string[]]$Skip
 )
+
+# The Devices section has to read the registry as Windows does: from 32-bit PowerShell, WMI's registry provider
+# answers with the 32-bit view (WOW6432Node), the blind spot the Tools section looks for in Layer8. So run again in
+# 64-bit, with the same parameters. The 32-bit parts start their own 32-bit PowerShell.
+if ([IntPtr]::Size -eq 4 -and [Environment]::Is64BitOperatingSystem) {
+    $quote = { param($text) "'" + ([string]$text).Replace("'", "''") + "'" }
+    $command = '& ' + (& $quote $PSCommandPath)
+    foreach ($name in $PSBoundParameters.Keys) {
+        $value = $PSBoundParameters[$name]
+        if ($value -is [datetime]) { $value = $value.ToString('yyyy-MM-dd HH:mm:ss') }
+        $command += " -$name " + ((@($value) | ForEach-Object { & $quote $_ }) -join ', ')
+    }
+    Write-Host 'Started in 32-bit PowerShell: running in 64-bit PowerShell instead.' -ForegroundColor DarkGray
+    & (Join-Path $env:SystemRoot 'Sysnative\WindowsPowerShell\v1.0\powershell.exe') -NoProfile -Command ($command + '; exit $LASTEXITCODE')
+    exit $LASTEXITCODE
+}
 
 $ErrorActionPreference = 'Stop'
 $started = Get-Date
@@ -83,8 +106,9 @@ Import-Module CimCmdlets
 Add-Type -AssemblyName System.Management
 
 $sinceGiven = $PSBoundParameters.ContainsKey('Since')
-# The second run comes after the console steps, which don't change the build, so by default it doesn't repeat those checks.
-if ($sinceGiven -and -not $PSBoundParameters.ContainsKey('Skip')) { $Skip = 'Build', 'Customize', 'Library' }
+# The second run comes after the console steps, which don't change the build or the devices' answers, so by default
+# it doesn't repeat those checks.
+if ($sinceGiven -and -not $PSBoundParameters.ContainsKey('Skip')) { $Skip = 'Build', 'Customize', 'Library', 'Tools' }
 
 # Layer8's permanent console extension ID, the same in every Layer8 cab (Build-Layer8Extension.ps1).
 $extensionId = '3b900076-0ea8-46a7-b3b3-57bc7336c50f'
@@ -104,7 +128,11 @@ $ownVersion = 'Layer8.IniFileParser.dll'
 $buildDir = Join-Path $repo 'Build\Release'
 $sharedInfo = Get-Content -LiteralPath (Join-Path $repo 'SharedAssemblyInfo.cs') -Raw
 $version = [version][regex]::Match($sharedInfo, 'AssemblyFileVersion\("([0-9.]+)"\)').Groups[1].Value
-$cabPath = Join-Path $repo ('Build\Extension\Layer8-{0}.cab' -f $version.ToString(3))
+# A signed test build is named with the whole version, an unsigned (release) build with three parts
+# (Build-Layer8Extension.ps1). The test build is the one the console steps install.
+$cabPath = Join-Path $repo ('Build\Extension\Layer8-{0}.cab' -f $version)
+$releaseCabPath = Join-Path $repo ('Build\Extension\Layer8-{0}.cab' -f $version.ToString(3))
+if (-not (Test-Path -LiteralPath $cabPath) -and (Test-Path -LiteralPath $releaseCabPath)) { $cabPath = $releaseCabPath }
 $msiPath = Join-Path $repo 'Build\Installer\Release\Layer8.msi'
 
 # SMS_ADMIN_UI_PATH is the console's bin\i386 folder.
@@ -456,10 +484,13 @@ function Test-Customize {
     New-Item -ItemType Directory -Path $downloads | Out-Null
     Copy-Item -LiteralPath $releaseCopy, $cab.Path -Destination $downloads
     $copy = Join-Path $downloads (Split-Path $cab.Path -Leaf)
-    $output = & (Join-Path $downloads 'Customize-Layer8Cab.ps1') -Path $copy -Exclude $exclude *>&1 | Out-String
+    # Each line's own text: Out-String wraps at the window's width, which in the ISE broke the summary line in two.
+    $output = (& (Join-Path $downloads 'Customize-Layer8Cab.ps1') -Path $copy -Exclude $exclude *>&1 | ForEach-Object {
+        if ($_ -is [System.Management.Automation.InformationRecord]) { [string]$_.MessageData } else { [string]$_ }
+    }) -join "`n"
     $counts = [regex]::Match($output, '\((\d+) menu files dropped, (\d+) changed\)')
     if ($counts.Success) { Add-Result INFO 'Customize-Layer8Cab.ps1 ran' "without $($exclude -join ', '): $($counts.Groups[1].Value) menu files dropped, $($counts.Groups[2].Value) changed" }
-    else { Add-Result WARN 'Customize-Layer8Cab.ps1 ran' "its summary line wasn't there: $(Get-FirstLine $output)" }
+    else { Add-Result WARN 'Customize-Layer8Cab.ps1 ran' "its summary line wasn't there: $(Get-FirstLine $output.Trim())" }
 
     $customCab = Join-Path $downloads ('{0}-custom.cab' -f [IO.Path]::GetFileNameWithoutExtension($copy))
     if (-not (Test-Path -LiteralPath $customCab)) { Add-Result FAIL 'Customized cab' "no $(Split-Path $customCab -Leaf)"; return }
@@ -502,27 +533,9 @@ function Test-Customize {
 
 # --- Library --------------------------------------------------------------------------------------------------------
 
-# Runs in a 32-bit PowerShell job: Layer8's DLLs are built for x86, like the console. It returns its checks as objects.
-$libraryChecks = {
-    param([string]$BuildDir, [string]$ConsoleBin, [string]$Catalog, [string]$Work)
-    $ErrorActionPreference = 'Stop'
-    $out = New-Object System.Collections.Generic.List[object]
-    function Add-Check([string]$Result, [string]$Check, [string]$Detail = '') { $out.Add([pscustomobject]@{ Result = $Result; Check = $Check; Detail = $Detail }) }
-    # What a method called by reflection threw, without the wrappers reflection and PowerShell put round it.
-    function Get-Message($Exception) {
-        while ($Exception.InnerException -and ($Exception -is [Management.Automation.MethodInvocationException] -or $Exception -is [Reflection.TargetInvocationException])) { $Exception = $Exception.InnerException }
-        $Exception.Message
-    }
-    function Test-Text([string]$Check, [string]$Actual, [string]$Expected) {
-        if (-not $Actual) { Add-Check FAIL $Check "expected '$Expected', got nothing (for a refusal: it was accepted)" }
-        elseif ($Actual -like "*$Expected*") { Add-Check PASS $Check $Actual }
-        else { Add-Check FAIL $Check "expected '$Expected', got '$Actual'" }
-    }
-
-    try {
-        if ([IntPtr]::Size -ne 4) { throw 'this has to run in 32-bit PowerShell' }
-        # The console's own DLLs (the wizard pages' base classes) are in its bin folder, not next to Layer8's.
-        Add-Type -TypeDefinition @'
+# Layer8's DLLs reference the console's own (the wizard pages' and dialogs' base classes, the SMS Provider's
+# classes), which are in the console's bin folder, not next to Layer8's. The 32-bit jobs register this first.
+$resolverSource = @'
 using System;
 using System.IO;
 using System.Reflection;
@@ -546,6 +559,27 @@ public static class Layer8RegressionResolver
     }
 }
 '@
+
+# Runs in a 32-bit PowerShell job: Layer8's DLLs are built for x86, like the console. It returns its checks as objects.
+$libraryChecks = {
+    param([string]$BuildDir, [string]$ConsoleBin, [string]$Catalog, [string]$Work, [string]$ResolverSource)
+    $ErrorActionPreference = 'Stop'
+    $out = New-Object System.Collections.Generic.List[object]
+    function Add-Check([string]$Result, [string]$Check, [string]$Detail = '') { $out.Add([pscustomobject]@{ Result = $Result; Check = $Check; Detail = $Detail }) }
+    # What a method called by reflection threw, without the wrappers reflection and PowerShell put round it.
+    function Get-Message($Exception) {
+        while ($Exception.InnerException -and ($Exception -is [Management.Automation.MethodInvocationException] -or $Exception -is [Reflection.TargetInvocationException])) { $Exception = $Exception.InnerException }
+        $Exception.Message
+    }
+    function Test-Text([string]$Check, [string]$Actual, [string]$Expected) {
+        if (-not $Actual) { Add-Check FAIL $Check "expected '$Expected', got nothing (for a refusal: it was accepted)" }
+        elseif ($Actual -like "*$Expected*") { Add-Check PASS $Check $Actual }
+        else { Add-Check FAIL $Check "expected '$Expected', got '$Actual'" }
+    }
+
+    try {
+        if ([IntPtr]::Size -ne 4) { throw 'this has to run in 32-bit PowerShell' }
+        Add-Type -TypeDefinition $ResolverSource
         [Layer8RegressionResolver]::Register([string[]]@($BuildDir, $ConsoleBin))
         $flags = [Reflection.BindingFlags]'Static, Public, NonPublic'
         $device = [Reflection.Assembly]::LoadFrom((Join-Path $BuildDir 'Layer8.Device.dll'))
@@ -719,7 +753,7 @@ function Test-Library {
     $libraryWork = Join-Path $work 'library'
     New-Item -ItemType Directory -Path $libraryWork | Out-Null
     # A job's PowerShell process is a fresh one: -RunAs32 makes it 32-bit, and it loads no profile.
-    $job = Start-Job -RunAs32 -ScriptBlock $libraryChecks -ArgumentList $buildDir, $consoleBin, $LenovoCatalog, $libraryWork
+    $job = Start-Job -RunAs32 -ScriptBlock $libraryChecks -ArgumentList $buildDir, $consoleBin, $LenovoCatalog, $libraryWork, $resolverSource
     foreach ($check in @(Receive-Job -Job $job -Wait -AutoRemoveJob)) { Add-Result $check.Result $check.Check $check.Detail }
 }
 
@@ -936,6 +970,8 @@ function Read-Device([string]$Name, $Settings) {
         'Signed in' = ''; Up = ''; 'C: free' = ''; 'Blue screen' = ''; Windows = ''; Client = ''
         Restart = ''; BitLocker = ''; Defender = ''; Updates = ''; 'Update scan' = ''; 'Policy request' = ''; Issues = ''
         IssueSet = $issues; Unread = $unread; NotReporting = $false
+        # The values behind the text, for the Tools section: uptime, bytes, BitLocker's and Defender's own fields.
+        Raw = @{ ClientSdk = $false }
     }
     $done = { [pscustomobject]$row }
 
@@ -964,6 +1000,7 @@ function Read-Device([string]$Name, $Settings) {
                 if ($owner.Domain) { $who = "$($owner.Domain)\$($owner.User)" }
                 if (-not ($users -contains $who)) { $users.Add($who) }
             }
+            $row.Raw.SignedIn = @($users)
             if ($users.Count -eq 0) { 'No one' } else { $users -join ', ' }
         }
 
@@ -977,6 +1014,7 @@ function Read-Device([string]$Name, $Settings) {
                 if ($counter.SystemUpTime -gt 0) { $uptime = [TimeSpan]::FromSeconds($counter.SystemUpTime) }
             }
             if ($null -eq $uptime) { throw 'no uptime counter or boot time' }
+            $row.Raw.Uptime = $uptime
             if ($uptime.TotalDays -ge $Settings.LongUptimeDays) { [void]$issues.Add('LongUptime') }
             Format-Uptime $uptime
         }
@@ -986,6 +1024,8 @@ function Read-Device([string]$Name, $Settings) {
             if (-not $disk) { return 'No C: drive' }
             $free = [double]$disk.FreeSpace
             $size = [double]$disk.Size
+            $row.Raw.FreeBytes = $free
+            $row.Raw.SizeBytes = $size
             if ($free -lt $Settings.LowDiskGB * 1GB) { [void]$issues.Add('LowDisk') }
             $text = Format-Bytes $free '0.#'
             if ($size -gt 0) { $text += ' of ' + (Format-Bytes $size '0') }
@@ -1045,6 +1085,7 @@ function Read-Device([string]$Name, $Settings) {
                 throw
             }
             $state.ClientSdk = $true
+            $row.Raw.ClientSdk = $true
             if ((Get-RegistryValue $session 'GetStringValue' 'SOFTWARE\Microsoft\CCM\CcmExec' 'ProvisioningMode') -eq 'true') { [void]$issues.Add('Client'); return 'Provisioning mode' }
             if ($client.ClientVersion) { $client.ClientVersion } else { 'Running' }
         }
@@ -1070,8 +1111,8 @@ function Read-Device([string]$Name, $Settings) {
         $row.BitLocker = Invoke-Check 'BitLocker' $issues $unread {
             # Read only, like BitLocker Status: protection and conversion, never a recovery password.
             try { $volume = Get-CimInstance -CimSession $session -Namespace 'root\cimv2\Security\MicrosoftVolumeEncryption' -ClassName Win32_EncryptableVolume -Filter "DriveLetter = 'C:'" }
-            catch { if (Test-CimError $_ 'InvalidNamespace') { return 'Not available' }; throw }
-            if (-not $volume) { return 'C: not encryptable' }
+            catch { if (Test-CimError $_ 'InvalidNamespace') { $row.Raw.BitLocker = 'NoNamespace'; return 'Not available' }; throw }
+            if (-not $volume) { $row.Raw.BitLocker = 'NoVolume'; return 'C: not encryptable' }
             $protection = 2
             if ($null -ne $volume.ProtectionStatus) { $protection = [int]$volume.ProtectionStatus }
             $conversion = ''
@@ -1082,6 +1123,7 @@ function Read-Device([string]$Name, $Settings) {
                 if ($number -lt $conversionStates.Count) { $conversion = $conversionStates[$number] }
                 if ($number -ge 2 -and $number -le 5) { $conversion += " $($status.EncryptionPercentage)%" }
             }
+            $row.Raw.BitLocker = @{ Protection = $protection; Conversion = $conversion }
             if ($protection -eq 0) {
                 [void]$issues.Add('BitLockerOff')
                 if ($conversion -eq 'fully encrypted') { return 'Suspended (encrypted)' }
@@ -1097,8 +1139,9 @@ function Read-Device([string]$Name, $Settings) {
 
         $row.Defender = Invoke-Check 'Defender' $issues $unread {
             try { $status = Get-CimInstance -CimSession $session -Namespace 'root\Microsoft\Windows\Defender' -ClassName MSFT_MpComputerStatus }
-            catch { if (Test-CimError $_ 'InvalidNamespace') { return 'Not installed' }; throw }
-            if (-not $status) { return 'No status' }
+            catch { if (Test-CimError $_ 'InvalidNamespace') { $row.Raw.Defender = 'NoNamespace'; return 'Not installed' }; throw }
+            if (-not $status) { $row.Raw.Defender = 'NoStatus'; return 'No status' }
+            $row.Raw.Defender = $status
             # Another antivirus is in charge and Defender stands back on purpose.
             if ($status.CimInstanceProperties['AMRunningMode'] -and "$($status.AMRunningMode)" -like '*Passive*') { return 'Passive' }
             $problems = New-Object System.Collections.Generic.List[string]
@@ -1178,14 +1221,11 @@ function Test-RowHas($Row, [string]$Issue) {
     $Row.IssueSet.Contains($Issue)
 }
 
-$expected = $null
-function Test-Devices {
-    $settings = Get-Layer8Settings
-    $health = Get-HealthIssues
-    $unknown = @($health.Order | Where-Object { $readableIssues -notcontains $_ })
-    foreach ($issue in $unknown) { Add-Result WARN "The $($health.Names[$issue]) tile" "this script doesn't read it yet, so its count shows ?" }
-
-    # The site: the console's last connection unless told otherwise.
+# The site and the collection: the console's last connection unless told otherwise. Read once, for the Devices and
+# Tools sections. Throws when there's no site to read or no such collection.
+$siteInfo = $null
+function Get-Site {
+    if ($script:siteInfo) { return $script:siteInfo }
     $server = $SiteServer
     $code = $SiteCode
     if (-not $server -or -not $code) {
@@ -1194,14 +1234,30 @@ function Test-Devices {
         if (-not $server -and $last) { $server = $last.ServerName }
         if (-not $code -and $last) { $code = $last.SiteCode }
     }
-    if (-not $server -or -not $code) { Add-Result FAIL 'Site' 'no -SiteServer and -SiteCode, and the console has no last connection'; return }
+    if (-not $server -or -not $code) { throw 'no -SiteServer and -SiteCode, and the console has no last connection' }
     $namespace = "root\sms\site_$code"
-    # Get-WmiObject, not CIM: it hands the site's dates over as the provider's own text, which is UTC with no offset.
     $quoted = $Collection.Replace('\', '\\').Replace("'", "\'")
     $record = @(Get-WmiObject -ComputerName $server -Namespace $namespace -Query "SELECT CollectionID, Name FROM SMS_Collection WHERE Name = '$quoted'")
-    if ($record.Count -ne 1) { Add-Result FAIL "Collection $Collection" "not found on $server"; return }
-    $collectionId = $record[0].CollectionID
-    $members = @(Get-WmiObject -ComputerName $server -Namespace $namespace -Query "SELECT Name, ResourceID FROM SMS_FullCollectionMembership WHERE CollectionID = '$collectionId'" | Sort-Object Name)
+    if ($record.Count -ne 1) { throw "collection $Collection not found on $server" }
+    $script:siteInfo = [pscustomobject]@{ Server = $server; Code = $code; Namespace = $namespace; CollectionId = $record[0].CollectionID }
+    $script:siteInfo
+}
+
+$expected = $null
+function Test-Devices {
+    $settings = Get-Layer8Settings
+    $health = Get-HealthIssues
+    $unknown = @($health.Order | Where-Object { $readableIssues -notcontains $_ })
+    foreach ($issue in $unknown) { Add-Result WARN "The $($health.Names[$issue]) tile" "this script doesn't read it yet, so its count shows ?" }
+
+    try { $siteRead = Get-Site }
+    catch { Add-Result FAIL 'Site' $_.Exception.Message; return }
+    $server = $siteRead.Server
+    $code = $siteRead.Code
+    # Get-WmiObject, not CIM: it hands the site's dates over as the provider's own text, which is UTC with no offset.
+    $namespace = $siteRead.Namespace
+    $collectionId = $siteRead.CollectionId
+    $members = @(Get-WmiObject -ComputerName $server -Namespace $namespace -Query "SELECT Name, ResourceID, SMSID FROM SMS_FullCollectionMembership WHERE CollectionID = '$collectionId'" | Sort-Object Name)
     Add-Result INFO 'Collection' "$Collection ($collectionId): $($members.Count) members, from site $code on $server"
 
     # When the site last heard from each client: SMS_CombinedDeviceResources, 300 at a time, as HealthCheck.ReadSiteContact.
@@ -1221,12 +1277,14 @@ function Test-Devices {
 
     $rows = foreach ($member in $members) {
         if ($member.Name -notmatch $computerName) {
-            $row = [pscustomobject]@{ Device = $member.Name; State = 'Skipped'; Status = 'Skipped: not a computer name'; IssueSet = (New-Object 'System.Collections.Generic.HashSet[string]'); Unread = @(); NotReporting = $false; 'Policy request' = ''; Issues = '' }
+            $row = [pscustomobject]@{ Device = $member.Name; State = 'Skipped'; Status = 'Skipped: not a computer name'; IssueSet = (New-Object 'System.Collections.Generic.HashSet[string]'); Unread = @(); NotReporting = $false; 'Policy request' = ''; Issues = ''; Raw = @{} }
         }
         else {
             Write-Host "  ...  reading $($member.Name)" -ForegroundColor DarkGray
             $row = Read-Device $member.Name $settings
         }
+        # The client's GUID as the site has it, which Client Info reads from the client.
+        $row.Raw.SMSID = $member.SMSID
         $site = $contact[[int]$member.ResourceID]
         if ($site) {
             $row.NotReporting = $site.NotReporting
@@ -1279,6 +1337,8 @@ function Test-Devices {
     Add-Result INFO 'Tiles' "$($rows.Count) devices; $tileText"
 
     $script:expected = [pscustomobject]@{
+        Server       = $server
+        SiteCode     = $code
         CollectionId = $collectionId
         Rows         = $rows
         Tiles        = $tiles
@@ -1286,6 +1346,589 @@ function Test-Devices {
         Contacted    = $contact.Count
         NotReporting = @($rows | Where-Object NotReporting).Count
         Settings     = $settings
+    }
+}
+
+# --- Tools ----------------------------------------------------------------------------------------------------------------
+
+# The client tools this section runs, by the method name their menu XML gives as DialogId, in the order each device
+# runs them. Quick Status last: it reads the uptime counter first, which took 43.1 s the first time on the site server,
+# and last it holds up no other tool, even past the time limit.
+$clientTools = [ordered]@{
+    OnlineStatus        = 'Online Status'
+    ClientInfo          = 'Client Info'
+    CheckPendingRestart = 'Check Pending Restart'
+    BitLockerStatus     = 'BitLocker Status'
+    DefenderStatus      = 'Defender Status'
+    MissingUpdates      = 'List Missing Updates'
+    QuickStatus         = 'Quick Status'
+}
+# The dashboard logs a step over 10 seconds as slow, at any log level; a tool call over it gets the same flag here.
+$slowSeconds = 10
+# Calls still running after this are reported as unfinished, so one device that hangs can't hold up the run.
+$toolTimeoutSeconds = 45
+$toolCalls = $null
+# The job is started before the first section and collected in this one. Its longest call is Quick Status on the
+# site server: Quick Status reads the uptime counter first, and that read took 43.1 s on the first run of this
+# section (STATUS.md's step timing row measured the same on the dashboard). One WMI call can't be split, so the run
+# waits it out alongside the other sections instead of after them.
+$toolJob = $null
+function Start-ToolJob {
+    if ($script:toolJob -or -not $consoleBin) { return }
+    foreach ($dll in 'Layer8.dll', 'Layer8.Device.dll') { if (-not (Test-Path -LiteralPath (Join-Path $buildDir $dll))) { return } }
+    $siteRead = Get-Site
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    $job = Start-Job -RunAs32 -ScriptBlock $toolChecks -ArgumentList $buildDir, $consoleBin, $siteRead.Server, $siteRead.CollectionId, @($clientTools.Keys), $toolTimeoutSeconds, $resolverSource, $toolRunnerSource
+    $script:toolJob = [pscustomobject]@{ Job = $job; Watch = $watch }
+}
+
+# DeviceProgressDialog.RunAction, step for step, without the window: a placeholder name is skipped, the port check
+# (Layer8 Settings' offline check) comes first except for Online Status, then the tool, and a failure is unwrapped
+# and worded by DeviceProgressDialog.DescribeFailure. Devices run at once on the thread pool, as the window runs
+# them; each device's tools run one after another, as someone working down the Client Tools menu runs them.
+$toolRunnerSource = @'
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Reflection;
+using System.Threading.Tasks;
+
+public sealed class Layer8ToolCall
+{
+    public string Tool;
+    public string Device;
+    // Completed, Failed, Offline, Skipped, or Unfinished when it was still running at the time limit.
+    public string State = "Unfinished";
+    // What the progress window's Status column shows.
+    public string Text;
+    // The tool's own answer, for Quick Status's columns.
+    public object Result;
+    // A failure's exception, unwrapped as the window unwraps it.
+    public string Error;
+    public double Seconds;
+
+    public Layer8ToolCall Copy() { return (Layer8ToolCall)MemberwiseClone(); }
+}
+
+public static class Layer8ToolRunner
+{
+    public static Layer8ToolCall[] Run(object[] records, string[] names, string[] tools, Delegate[] runs, bool checkReachable, int reachableMs,
+        MethodInfo isComputerName, MethodInfo ensureReachable, MethodInfo waitForResult, MethodInfo describeFailure, MethodInfo unwrap, int timeoutSeconds)
+    {
+        Layer8ToolCall[] calls = new Layer8ToolCall[records.Length * tools.Length];
+        for (int d = 0; d < records.Length; d++)
+            for (int t = 0; t < tools.Length; t++)
+                calls[d * tools.Length + t] = new Layer8ToolCall { Tool = tools[t], Device = names[d] };
+
+        List<Task> devices = new List<Task>();
+        for (int d = 0; d < records.Length; d++)
+        {
+            int device = d;
+            devices.Add(Task.Run(() =>
+            {
+                for (int t = 0; t < tools.Length; t++)
+                {
+                    RunOne(calls[device * tools.Length + t], records[device], runs[t], checkReachable && tools[t] != "OnlineStatus", reachableMs,
+                        isComputerName, ensureReachable, waitForResult, describeFailure, unwrap);
+                }
+            }));
+        }
+        Task.WaitAll(devices.ToArray(), TimeSpan.FromSeconds(timeoutSeconds));
+
+        // Copies, so a call that finishes after the time limit doesn't change what's being handed back.
+        Layer8ToolCall[] copies = new Layer8ToolCall[calls.Length];
+        for (int i = 0; i < calls.Length; i++) lock (calls[i]) copies[i] = calls[i].Copy();
+        return copies;
+    }
+
+    static void RunOne(Layer8ToolCall call, object record, Delegate run, bool checkReachable, int reachableMs,
+        MethodInfo isComputerName, MethodInfo ensureReachable, MethodInfo waitForResult, MethodInfo describeFailure, MethodInfo unwrap)
+    {
+        string state, text, error = null;
+        object result = null;
+        Stopwatch watch = Stopwatch.StartNew();
+        if (!(bool)isComputerName.Invoke(null, new object[] { call.Device }))
+        {
+            state = "Skipped";
+            text = "Skipped: not a computer name";
+        }
+        else
+        {
+            try
+            {
+                if (checkReachable) ensureReachable.Invoke(null, new object[] { call.Device, reachableMs });
+                result = run.DynamicInvoke(record);
+                string outcome = result != null && result.GetType().Name == "DeviceColumns"
+                    ? (string)result.GetType().GetProperty("Status").GetValue(result, null)
+                    : (string)waitForResult.Invoke(null, new object[] { result });
+                state = "Completed";
+                text = string.IsNullOrEmpty(outcome) ? "Completed" : outcome;
+            }
+            catch (Exception ex)
+            {
+                Exception root = (Exception)unwrap.Invoke(null, new object[] { ex });
+                error = root.GetType().FullName + ": " + root.Message;
+                try
+                {
+                    object[] arguments = { call.Device, root, false };
+                    text = (string)describeFailure.Invoke(null, arguments);
+                    state = (bool)arguments[2] ? "Offline" : "Failed";
+                }
+                catch (Exception describing)
+                {
+                    state = "Failed";
+                    text = "DescribeFailure threw " + describing.GetType().Name + " on: " + root.Message;
+                }
+            }
+        }
+        watch.Stop();
+        lock (call)
+        {
+            call.State = state;
+            call.Text = text;
+            call.Result = result;
+            call.Error = error;
+            call.Seconds = watch.Elapsed.TotalSeconds;
+        }
+    }
+}
+'@
+
+# Runs in a 32-bit PowerShell job, as the console runs: the tools' WMI calls get the providers the console's calls
+# get. Returns one object: every call, the registry views, how long each part took, or what stopped it.
+$toolChecks = {
+    param([string]$BuildDir, [string]$ConsoleBin, [string]$Server, [string]$CollectionId, [string[]]$Tools, [int]$TimeoutSeconds, [string]$ResolverSource, [string]$RunnerSource)
+    $ErrorActionPreference = 'Stop'
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    $answer = [pscustomobject]@{ Calls = @(); Registry = @(); Values = @(); Error = $null; ReadySeconds = 0; Seconds = 0; Reachable = '' }
+    function Get-Message($Exception) {
+        while ($Exception.InnerException -and ($Exception -is [Management.Automation.MethodInvocationException] -or $Exception -is [Reflection.TargetInvocationException])) { $Exception = $Exception.InnerException }
+        $Exception.Message
+    }
+    try {
+        if ([IntPtr]::Size -ne 4) { throw 'this has to run in 32-bit PowerShell' }
+        Add-Type -TypeDefinition $ResolverSource
+        [Layer8RegressionResolver]::Register([string[]]@($BuildDir, $ConsoleBin))
+        Add-Type -TypeDefinition $RunnerSource
+        $flags = [Reflection.BindingFlags]'Static, Public, NonPublic'
+        $layer8 = [Reflection.Assembly]::LoadFrom((Join-Path $BuildDir 'Layer8.dll'))
+        $device = [Reflection.Assembly]::LoadFrom((Join-Path $BuildDir 'Layer8.Device.dll'))
+        function Get-Method($Type, [string]$Name) {
+            $method = $Type.GetMethod($Name, $flags)
+            if (-not $method) { throw "$($Type.FullName).$Name isn't there (renamed?)" }
+            $method
+        }
+        $actions = $device.GetType('Layer8.Device.ClientActions', $true)
+        $settings = $layer8.GetType('Layer8.Layer8Settings', $true)
+        $checkReachable = [bool]$settings.GetProperty('CheckReachable').GetValue($null)
+        $reachableMs = [int]$settings.GetProperty('ReachableSeconds').GetValue($null) * 1000
+        $answer.Reachable = if ($checkReachable) { "port check first, $($reachableMs / 1000) s" } else { 'no port check (Layer8 Settings)' }
+
+        # Each tool as the menus and the dashboard get it ready to run on a device.
+        $prepare = Get-Method $actions 'PrepareClientTool'
+        $runs = New-Object System.Collections.Generic.List[Delegate]
+        foreach ($tool in $Tools) {
+            [object[]]$arguments = @($tool, $null, $null, $null)
+            if (-not $prepare.Invoke($null, $arguments)) { throw "PrepareClientTool didn't get $tool ready" }
+            $runs.Add($arguments[1])
+        }
+
+        # The collection's members as a collection run gets them (ClientActions.ProcessAction): SMS_FullCollectionMembership
+        # records, through the console's own connection to the SMS Provider.
+        [void][Reflection.Assembly]::LoadFrom((Join-Path $ConsoleBin 'Microsoft.ConfigurationManagement.ManagementProvider.dll'))
+        [void][Reflection.Assembly]::LoadFrom((Join-Path $ConsoleBin 'AdminUI.WqlQueryEngine.dll'))
+        $connection = New-Object Microsoft.ConfigurationManagement.ManagementProvider.WqlQueryEngine.WqlConnectionManager (New-Object Microsoft.ConfigurationManagement.ManagementProvider.SmsNamedValuesDictionary)
+        try {
+            if (-not $connection.Connect($Server)) { throw "couldn't connect to the SMS Provider on $Server" }
+            $records = New-Object System.Collections.Generic.List[object]
+            $names = New-Object System.Collections.Generic.List[string]
+            $members = $connection.QueryProcessor.ExecuteQuery("SELECT * FROM SMS_FullCollectionMembership WHERE CollectionID = '$CollectionId'")
+            # IResultObject works with C#'s foreach but isn't an IEnumerable, so PowerShell walks its enumerator.
+            $each = $members.GetEnumerator()
+            while ($each.MoveNext()) {
+                $records.Add($each.Current)
+                $names.Add($each.Current['Name'].StringValue)
+            }
+            $answer.ReadySeconds = $watch.Elapsed.TotalSeconds
+
+            $remoteTools = $device.GetType('Layer8.Device.RemoteTools', $true)
+            $dialog = $device.GetType('Layer8.Device.DeviceProgressDialog', $true)
+            $safeAction = $layer8.GetType('Layer8.SafeAction', $true)
+            $calls = [Layer8ToolRunner]::Run($records.ToArray(), $names.ToArray(), $Tools, $runs.ToArray(), $checkReachable, $reachableMs,
+                (Get-Method $remoteTools 'IsComputerName'), (Get-Method $actions 'EnsureReachable'), (Get-Method $actions 'WaitForResult'),
+                (Get-Method $dialog 'DescribeFailure'), (Get-Method $safeAction 'Unwrap'), $TimeoutSeconds)
+        }
+        finally {
+            if ($connection -is [IDisposable]) { $connection.Dispose() }
+        }
+
+        # Plain objects, so they come back from the job as they are: Quick Status's columns with the values they sort by.
+        $answer.Calls = @(foreach ($call in $calls) {
+            $cells = @()
+            $summary = $null
+            if ($null -ne $call.Result -and $call.Result.GetType().Name -eq 'DeviceColumns') {
+                $summary = $call.Result.Summary
+                $cells = @(foreach ($cell in $call.Result.Cells) {
+                    $key = $cell.SortKey
+                    if ($key -is [TimeSpan]) { $key = $key.TotalSeconds }
+                    elseif ($null -ne $key -and -not ($key -is [double] -or $key -is [long])) { $key = "$key" }
+                    [pscustomobject]@{ Column = $cell.Column; Text = $cell.Text; Key = $key }
+                })
+            }
+            [pscustomobject]@{ Tool = $call.Tool; Device = $call.Device; State = $call.State; Text = $call.Text; Error = $call.Error; Seconds = $call.Seconds; Cells = $cells; Summary = $summary }
+        })
+
+        # Check Pending Restart's registry reads (ClientActions.WindowsRestartReasons): its own HasSubKey, on the registry
+        # class made as it makes it, asked about every subkey Windows has under the two keys it looks in. Windows' list
+        # comes from the 64-bit provider. A HasSubKey that reads another view (the 32-bit one, as the console is) misses
+        # some, and would miss the restart flag too. Nothing on the lab's devices is waiting for a restart, so the flags
+        # themselves can't be the test.
+        $hasSubKey = Get-Method $actions 'HasSubKey'
+        $utility = $layer8.GetType('Layer8.Utility', $true)
+        $getScope = $utility.GetMethod('GetWMIScope')
+        $context64 = $utility.GetMethod('Provider64Context').Invoke($null, $null)
+        $restartKeys = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing', 'SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update'
+        function Get-SubKeys($Registry, [string]$Key, $Context) {
+            $in = $Registry.GetMethodParameters('EnumKey')
+            $in['hDefKey'] = [uint32]2147483650
+            $in['sSubKeyName'] = $Key
+            $options = $null
+            if ($Context) { $options = New-Object Management.InvokeMethodOptions; $options.Context = $Context }
+            $out = $Registry.InvokeMethod('EnumKey', $in, $options)
+            [pscustomobject]@{ Found = [uint32]$out['ReturnValue'] -eq 0; Names = @(@($out['sNames']) | Where-Object { $_ } | Sort-Object) -join '|' }
+        }
+        $reached = @($answer.Calls | Where-Object { $_.Tool -eq 'OnlineStatus' -and $_.State -eq 'Completed' } | ForEach-Object Device)
+        $answer.Registry = @(foreach ($name in $reached) {
+            try {
+                # [string]: the name comes out of a PowerShell object, and reflection won't take the wrapper for a string.
+                $scope = $getScope.Invoke($null, @([string]$name, 'default', $null, $null))
+                $registry = New-Object Management.ManagementClass($scope, (New-Object Management.ManagementPath('StdRegProv')), $null)
+                foreach ($key in $restartKeys) {
+                    $windows = Get-SubKeys $registry $key $context64
+                    $subKeys = @($windows.Names -split '\|' | Where-Object { $_ })
+                    # BaseObject: New-Object wraps what it makes for PowerShell, and reflection wants the object itself.
+                    $missed = @(foreach ($subKey in $subKeys) { if (-not $hasSubKey.Invoke($null, @($registry.PSObject.BaseObject, [string]$key, [string]$subKey))) { $subKey } })
+                    [pscustomobject]@{ Device = $name; Key = $key; WindowsFound = $windows.Found; SubKeys = $subKeys.Count; Missed = @($missed); Error = $null }
+                }
+            }
+            catch { [pscustomobject]@{ Device = $name; Key = $null; WindowsFound = $false; SubKeys = 0; Missed = @(); Error = (Get-Message $_.Exception) } }
+        })
+
+        # Registry values as Layer8 reads them, against what the 64-bit provider gives for the same value:
+        #   Provisioning mode: ClientActions.ProvisioningModeValue, behind the dashboard's Client column and Turn Off
+        #     Provisioning Mode. Every lab machine has it, "false"; a read from another view comes back with none.
+        #   Registry values: SystemInfoReader.RegistryValue, behind Windows Security's Defender for Endpoint line and
+        #     the Windows version on System Information and the dashboard. Defender for Endpoint's key isn't in the
+        #     32-bit view at all, but its value is missing in both on the lab's devices (not onboarded), so it can't
+        #     tell them apart; ProgramFilesDir can: "C:\Program Files" in the 64-bit view, "C:\Program Files (x86)"
+        #     in the 32-bit one.
+        function Get-StringValue64($Scope, [string]$Key, [string]$Name) {
+            $registry = New-Object Management.ManagementClass($Scope, (New-Object Management.ManagementPath('StdRegProv')), $null)
+            $in = $registry.GetMethodParameters('GetStringValue')
+            $in['hDefKey'] = [uint32]2147483650
+            $in['sSubKeyName'] = $Key
+            $in['sValueName'] = $Name
+            $options = New-Object Management.InvokeMethodOptions
+            $options.Context = $context64
+            $registry.InvokeMethod('GetStringValue', $in, $options)['sValue']
+        }
+        $reader = $device.GetType('Layer8.Device.SystemInfoReader', $true)
+        $valueReads = @(
+            [pscustomobject]@{
+                Check = 'Provisioning mode as Layer8 reads it'; Method = 'ClientActions.ProvisioningModeValue'
+                Info = $actions.GetMethod('ProvisioningModeValue', $flags); Key = 'SOFTWARE\Microsoft\CCM\CcmExec'; Name = 'ProvisioningMode'
+                Arguments = { param($scope) , @($scope) }
+                Means = "the dashboard's Client column and Turn Off Provisioning Mode can't see a client in provisioning mode"
+            }
+            [pscustomobject]@{
+                Check = 'Registry values as Layer8 reads them'; Method = 'SystemInfoReader.RegistryValue'
+                Info = $reader.GetMethod('RegistryValue', $flags, $null, [Type[]]@([Management.ManagementScope], [string], [string], [string]), $null)
+                Key = 'SOFTWARE\Microsoft\Windows\CurrentVersion'; Name = 'ProgramFilesDir'
+                Arguments = { param($scope) , @($scope, 'GetStringValue', 'SOFTWARE\Microsoft\Windows\CurrentVersion', 'ProgramFilesDir') }
+                Means = "Windows Security says Not onboarded on a device onboarded to Defender for Endpoint, whose key isn't in that view"
+            }
+        )
+        $answer.Values = @(foreach ($read in $valueReads) {
+            if (-not $read.Info) { [pscustomobject]@{ Check = $read.Check; Method = $read.Method; Means = $read.Means; Device = $null; Layer8 = $null; Windows = $null; Error = 'missing' }; continue }
+            foreach ($name in $reached) {
+                try {
+                    # BaseObject, as for HasSubKey: reflection wants the scope itself, not PowerShell's wrapper round it.
+                    $scope = ($getScope.Invoke($null, @([string]$name, 'default', $null, $null))).PSObject.BaseObject
+                    $layer8Value = $read.Info.Invoke($null, [object[]](& $read.Arguments $scope))
+                    [pscustomobject]@{ Check = $read.Check; Method = $read.Method; Means = $read.Means; Device = $name; Layer8 = $layer8Value; Windows = (Get-StringValue64 $scope $read.Key $read.Name); Error = $null }
+                }
+                catch { [pscustomobject]@{ Check = $read.Check; Method = $read.Method; Means = $read.Means; Device = $name; Layer8 = $null; Windows = $null; Error = (Get-Message $_.Exception) } }
+            }
+        })
+    }
+    catch {
+        $answer.Error = "script error at line {0}: {1}" -f $_.InvocationInfo.ScriptLineNumber, (Get-Message $_.Exception)
+    }
+    $answer.Seconds = $watch.Elapsed.TotalSeconds
+    $answer
+}
+
+# List Missing Updates' answer, worked out again from the client's own classes as ClientActions.MissingUpdates works
+# it out: what's deployed and missing (CCM_SoftwareUpdate), and what the last scan says it needs that no deployment
+# covers (CCM_UpdateStatus), each by KB, five shown and the rest counted.
+function Get-MissingUpdatesText([string]$Name) {
+    $session = New-CimSession -ComputerName $Name -SessionOption (New-CimSessionOption -Protocol Dcom) -OperationTimeoutSec 60
+    try {
+        $keyOf = { param($article, $title) if ($article) { "KB$article" } elseif ($title) { $title } else { '(unnamed update)' } }
+        $guidOf = {
+            param($id)
+            $found = [regex]::Matches([string]$id, '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
+            if ($found.Count) { $found[$found.Count - 1].Value.ToLowerInvariant() }
+        }
+        $deployed = New-Object System.Collections.Generic.List[string]
+        $deployedIds = New-Object 'System.Collections.Generic.HashSet[string]'
+        foreach ($update in Get-CimInstance -CimSession $session -Namespace 'root\ccm\ClientSDK' -Query 'SELECT * FROM CCM_SoftwareUpdate WHERE ComplianceState = 0') {
+            $updateKey = & $keyOf $update.ArticleID $update.Name
+            if (-not $deployed.Contains($updateKey)) { $deployed.Add($updateKey) }
+            if ($update.CimInstanceProperties['UpdateID']) { $id = & $guidOf $update.UpdateID; if ($id) { [void]$deployedIds.Add($id) } }
+        }
+        $needed = New-Object System.Collections.Generic.List[string]
+        $note = $null
+        try {
+            $scans = @(Get-CimInstance -CimSession $session -Namespace 'root\ccm\ScanAgent' -Query 'SELECT LastCompletionTime FROM CCM_ScanUpdateSourceHistory' |
+                Where-Object { $_.LastCompletionTime -is [datetime] -and $_.LastCompletionTime.Year -gt 2000 })
+            if (-not $scans) { $note = 'No update scan yet' }
+            else {
+                foreach ($update in Get-CimInstance -CimSession $session -Namespace 'root\ccm\SoftwareUpdates\UpdatesStore' -Query "SELECT Article, Title, UniqueId FROM CCM_UpdateStatus WHERE Status = 'Missing'") {
+                    $updateKey = & $keyOf $update.Article $update.Title
+                    $id = & $guidOf $update.UniqueId
+                    if ($deployed.Contains($updateKey) -or ($id -and $deployedIds.Contains($id)) -or $needed.Contains($updateKey)) { continue }
+                    $needed.Add($updateKey)
+                }
+            }
+        }
+        catch {
+            if (Test-CimError $_ 'InvalidNamespace', 'InvalidClass') { $note = 'No update scan results' } else { throw }
+        }
+        if ($deployed.Count -eq 0 -and $needed.Count -eq 0 -and -not $note) { return 'No missing updates' }
+        $summarize = { param($items) if ($items.Count -le 5) { $items -join ', ' } else { (@($items)[0..4] -join ', ') + " (+$($items.Count - 5) more)" } }
+        $deployedPart = 'Deployed: none missing'
+        if ($deployed.Count) { $deployedPart = 'Deployed, missing: ' + (& $summarize $deployed) }
+        $neededPart = $note
+        if (-not $neededPart) { $neededPart = 'Nothing else needed'; if ($needed.Count) { $neededPart = 'Needed, not deployed: ' + (& $summarize $needed) } }
+        "$deployedPart. $neededPart"
+    }
+    finally {
+        Remove-CimSession -CimSession $session -ErrorAction SilentlyContinue
+    }
+}
+
+# A tool's answer against the text it should be. $Normalize takes out what changes from one read to the next.
+function Test-Answer([string]$Check, [string]$Expected, $Call, [scriptblock]$Normalize) {
+    $got = [string]$Call.Text
+    $want = $Expected
+    $have = $got
+    if ($Normalize) { $want = & $Normalize $want; $have = & $Normalize $have }
+    if ($want -ceq $have) { Add-Result PASS $Check $got } else { Add-Result FAIL $Check "expected '$Expected', got '$got'" }
+}
+
+# One tool on one device the Devices section read, against what that reading says the tool should answer.
+function Test-ToolAnswer([string]$Tool, $Row, $Call, [string]$Check, $Reads) {
+    $raw = $Row.Raw
+    # The progress window's words for a WMI namespace or class that isn't there (DeviceProgressDialog.DescribeFailure).
+    $noClient = 'No ConfigMgr client found'
+    switch ($Tool) {
+        'OnlineStatus' {
+            # Two pings don't take the same time.
+            Test-Answer $Check $Row.Online $Call { param($text) $text -replace 'ping \d+ ms', 'ping # ms' }
+        }
+        'QuickStatus' {
+            if ($Call.State -ne 'Completed') { Add-Result FAIL $Check "expected 'Online' and its columns, got '$($Call.Text)'"; return }
+            $cell = @{}
+            foreach ($entry in $Call.Cells) { $cell[$entry.Column] = $entry }
+            $wrong = New-Object System.Collections.Generic.List[string]
+            if ($Call.Text -cne 'Online') { $wrong.Add("Status '$($Call.Text)', not 'Online'") }
+            foreach ($column in 'Signed in', 'Up', 'C: free', 'C: size', 'IP address', 'Client') { if (-not $cell.ContainsKey($column)) { $wrong.Add("no $column column") } }
+            if ($wrong.Count -eq 0) {
+                # The same accounts. Quick Status says Nobody where the dashboard says No one.
+                $want = @($raw.SignedIn | Sort-Object) -join ', '
+                $got = @($cell['Signed in'].Text -split ', ' | Where-Object { $_ -and $_ -cne 'Nobody' } | Sort-Object) -join ', '
+                if ($want -ne $got) { $wrong.Add("Signed in '$($cell['Signed in'].Text)', the script reads '$($Row.'Signed in')'") }
+                # Quick Status reads the uptime counter first, the dashboard the boot time. On the second client the two are
+                # about 10 minutes apart, because its clock was set after it booted (STATUS.md, the step timing row); 30
+                # minutes allows for that and catches a wrong unit or a wrong device.
+                if ($raw.Uptime -is [TimeSpan] -and $cell['Up'].Key -is [double]) {
+                    $minutes = [Math]::Abs($cell['Up'].Key - $raw.Uptime.TotalSeconds) / 60
+                    if ($minutes -gt 30) { $wrong.Add(("Up '{0}', the script reads '{1}' ({2:0} minutes apart)" -f $cell['Up'].Text, $Row.Up, $minutes)) }
+                }
+                else { $wrong.Add("Up '$($cell['Up'].Text)', the script reads '$($Row.Up)'") }
+                # Free space moves while it's read, so within 1 GB; the drive's size doesn't move.
+                if ($null -ne $raw.FreeBytes -and $cell['C: free'].Key -is [double]) {
+                    if ([Math]::Abs($cell['C: free'].Key - $raw.FreeBytes) -ge 1GB) { $wrong.Add("C: free '$($cell['C: free'].Text)', the script reads '$(Format-Bytes $raw.FreeBytes '0.#')'") }
+                }
+                else { $wrong.Add("C: free '$($cell['C: free'].Text)', the script reads '$($Row.'C: free')'") }
+                if ($null -eq $raw.SizeBytes -or $cell['C: size'].Text -cne (Format-Bytes $raw.SizeBytes '0')) { $wrong.Add("C: size '$($cell['C: size'].Text)', the script reads '$($Row.'C: free')'") }
+                # The device's own addresses, the one DNS gives among them.
+                $dnsAddress = [regex]::Match([string]$Row.Online, '\(([^)]+)\)$').Groups[1].Value
+                if ($dnsAddress -and @($cell['IP address'].Text -split ', ') -notcontains $dnsAddress) { $wrong.Add("IP address '$($cell['IP address'].Text)' doesn't include $dnsAddress, its address in DNS") }
+                if ($raw.ClientSdk -and $Row.Client -match '^\d' -and $cell['Client'].Text -cne $Row.Client) { $wrong.Add("Client '$($cell['Client'].Text)', the script reads '$($Row.Client)'") }
+                if (-not $raw.ClientSdk -and $Row.Client -eq 'Not installed' -and $cell['Client'].Text -cne 'None') { $wrong.Add("Client '$($cell['Client'].Text)', expected None (the script: $($Row.Client))") }
+            }
+            if ($wrong.Count) { Add-Result FAIL $Check ($wrong -join '; ') } else { Add-Result PASS $Check $Call.Summary }
+        }
+        'ClientInfo' {
+            if (-not $raw.ClientSdk) { Test-Answer $Check $noClient $Call; return }
+            $parts = [regex]::Match([string]$Call.Text, '^site (\S+) via (\S+); client (\S+); (\S+)$')
+            if (-not $parts.Success) { Add-Result FAIL $Check "expected 'site <code> via <management point>; client <version>; <GUID>', got '$($Call.Text)'"; return }
+            $wrong = New-Object System.Collections.Generic.List[string]
+            if ($parts.Groups[1].Value -ne $Reads.SiteCode) { $wrong.Add("site $($parts.Groups[1].Value), not $($Reads.SiteCode)") }
+            if ($Reads.ManagementPoints.Count -and $Reads.ManagementPoints -notcontains $parts.Groups[2].Value) { $wrong.Add("$($parts.Groups[2].Value) isn't one of the site's management points ($($Reads.ManagementPoints -join ', '))") }
+            if ($Row.Client -match '^\d' -and $parts.Groups[3].Value -cne $Row.Client) { $wrong.Add("client $($parts.Groups[3].Value), the script reads $($Row.Client)") }
+            if ($parts.Groups[4].Value -ne $raw.SMSID) { $wrong.Add("GUID $($parts.Groups[4].Value), the site has $($raw.SMSID)") }
+            if ($wrong.Count) { Add-Result FAIL $Check (($wrong -join '; ') + " (it said '$($Call.Text)')") } else { Add-Result PASS $Check $Call.Text }
+        }
+        'CheckPendingRestart' {
+            if (-not $raw.ClientSdk) { Test-Answer $Check $noClient $Call; return }
+            $want = 'No restart pending'
+            if ($Row.Restart -ne 'No') { $want = "Restart pending: $($Row.Restart)" }
+            Test-Answer $Check $want $Call
+        }
+        'BitLockerStatus' {
+            $state = $raw.BitLocker
+            if ($null -eq $state) { Add-Result INFO $Check "answered '$($Call.Text)'; this script couldn't read BitLocker ($($Row.BitLocker))"; return }
+            if ($state -eq 'NoNamespace') {
+                # No BitLocker WMI namespace (a server without the BitLocker feature): the dashboard says Not available.
+                Test-Answer $Check 'Not available (no BitLocker WMI namespace)' $Call
+                return
+            }
+            if ($state -eq 'NoVolume') { Test-Answer $Check "C: isn't an encryptable volume" $Call; return }
+            $protection = switch ([int]$state.Protection) { 1 { 'protected' } 0 { 'not protected' } default { 'protection unknown' } }
+            $want = "C: $protection"
+            if ($state.Conversion) { $want += ", $($state.Conversion)" }
+            Test-Answer $Check $want $Call
+        }
+        'DefenderStatus' {
+            $status = $raw.Defender
+            if ($null -eq $status) { Add-Result INFO $Check "answered '$($Call.Text)'; this script couldn't read Defender ($($Row.Defender))"; return }
+            if ($status -eq 'NoNamespace') { Test-Answer $Check 'No Microsoft Defender on this device' $Call; return }
+            if ($status -eq 'NoStatus') { Test-Answer $Check 'Defender reports no status (another antivirus may be in charge)' $Call; return }
+            $parts = @('AV OFF', 'real-time OFF')
+            if ($status.AntivirusEnabled -eq $true) { $parts[0] = 'AV on' }
+            if ($status.RealTimeProtectionEnabled -eq $true) { $parts[1] = 'real-time on' }
+            $updated = ''
+            if ($status.AntivirusSignatureLastUpdated -is [datetime] -and $status.AntivirusSignatureLastUpdated.Year -gt 2000) { $updated = ' (' + $status.AntivirusSignatureLastUpdated.ToString('g') + ')' }
+            $parts += "signatures $($status.AntivirusSignatureAge) day(s) old$updated"
+            if ($null -eq $status.QuickScanAge -or [int64]$status.QuickScanAge -ge [uint32]::MaxValue) { $parts += 'no quick scan yet' } else { $parts += "last quick scan $($status.QuickScanAge) day(s) ago" }
+            Test-Answer $Check ($parts -join ', ') $Call
+        }
+        'MissingUpdates' {
+            if (-not $raw.ClientSdk) { Test-Answer $Check $noClient $Call; return }
+            $read = $Reads.Updates[$Row.Device]
+            if (-not $read -or $read.Error) { Add-Result INFO $Check "answered '$($Call.Text)'; this script couldn't read the client's updates: $($read.Error)"; return }
+            Test-Answer $Check $read.Text $Call
+        }
+        default { Add-Result WARN $Check "this script doesn't know what $Tool should answer: '$($Call.Text)'" }
+    }
+}
+
+function Test-Tools {
+    if (-not $consoleBin) { Add-Result SKIP 'Tools' 'no ConfigMgr console on this computer (SMS_ADMIN_UI_PATH)'; return }
+    foreach ($dll in 'Layer8.dll', 'Layer8.Device.dll') { if (-not (Test-Path -LiteralPath (Join-Path $buildDir $dll))) { Add-Result FAIL 'Tools' "$dll isn't in Build\Release: run tools\Build-Layer8Msi.ps1"; return } }
+    if (-not $script:expected) { Add-Result SKIP 'Tools' 'the Devices section didn''t run, and it says what each tool should answer'; return }
+    $tools = @($clientTools.Keys)
+    Start-ToolJob
+    $running = $script:toolJob
+    if (-not $running) { Add-Result FAIL 'The tool run' 'the 32-bit job didn''t start'; return }
+
+    # The reads the Devices section doesn't make: the site's management points, for Client Info, and each client's
+    # missing updates, for List Missing Updates.
+    $reads = [pscustomobject]@{ SiteCode = $script:expected.SiteCode; ManagementPoints = @(); Updates = @{} }
+    try {
+        # The provider refuses NetworkOSPath in a select list ("Generic failure"); ServerRemoteName is the server's FQDN.
+        $reads.ManagementPoints = @(Get-WmiObject -ComputerName $script:expected.Server -Namespace "root\sms\site_$($script:expected.SiteCode)" -Query "SELECT ServerRemoteName FROM SMS_SystemResourceList WHERE RoleName = 'SMS Management Point'" |
+            ForEach-Object ServerRemoteName)
+    }
+    catch { Add-Result WARN 'Management points' "couldn't read them from the site, so Client Info's isn't checked: $($_.Exception.Message)" }
+    foreach ($row in $script:expected.Rows | Where-Object { $_.State -eq 'Checked' -and $_.Raw.ClientSdk }) {
+        try { $reads.Updates[$row.Device] = [pscustomobject]@{ Text = (Get-MissingUpdatesText $row.Device); Error = $null } }
+        catch { $reads.Updates[$row.Device] = [pscustomobject]@{ Text = $null; Error = $_.Exception.Message.Trim() } }
+    }
+
+    $waited = [Diagnostics.Stopwatch]::StartNew()
+    $answer = @(Receive-Job -Job $running.Job -Wait -AutoRemoveJob) | Where-Object { $_.PSObject.Properties['Calls'] } | Select-Object -Last 1
+    $script:toolJob = $null
+    if (-not $answer) { Add-Result FAIL 'The tool run' 'the 32-bit job gave nothing back'; return }
+    if ($answer.Error) { Add-Result FAIL 'The tool run stopped' $answer.Error; return }
+    $calls = @($answer.Calls)
+    $script:toolCalls = $calls
+    $devices = @($calls | Group-Object Device)
+    Add-Result INFO 'Run' ("{0} tools on {1} records in 32-bit PowerShell, {2}: {3:0.0} s, {4:0.0} s of it starting PowerShell and loading Layer8 and the collection; started with the run, so this section waited {5:0.0} s for it" -f
+        $tools.Count, $devices.Count, $answer.Reachable, $answer.Seconds, $answer.ReadySeconds, $waited.Elapsed.TotalSeconds)
+
+    $byKey = @{}
+    foreach ($call in $calls) { $byKey["$($call.Device)|$($call.Tool)"] = $call }
+
+    # Placeholder records: every tool skips them by name, as the progress window does.
+    $placeholders = @($script:expected.Rows | Where-Object State -eq 'Skipped')
+    if ($placeholders) {
+        $ran = @(foreach ($row in $placeholders) {
+            foreach ($tool in $tools) {
+                $call = $byKey["$($row.Device)|$tool"]
+                if (-not $call) { "$($clientTools[$tool]) never saw $($row.Device)" }
+                elseif ($call.State -ne 'Skipped') { "$($clientTools[$tool]) on $($row.Device): '$($call.Text)'" }
+            }
+        })
+        if ($ran) { Add-Result FAIL 'Placeholder records skipped by name' (($ran | Select-Object -First 3) -join '; ') }
+        else { Add-Result PASS 'Placeholder records skipped by name' "$($placeholders.Count) records, by all $($tools.Count) tools" }
+    }
+
+    foreach ($row in $script:expected.Rows | Where-Object State -ne 'Skipped') {
+        foreach ($tool in $tools) {
+            $check = "$($clientTools[$tool]) on $($row.Device)"
+            $call = $byKey["$($row.Device)|$tool"]
+            if (-not $call) { Add-Result FAIL $check 'the collection record the console gets has no such device'; continue }
+            if ($call.State -eq 'Unfinished') { Add-Result FAIL $check "still running after $toolTimeoutSeconds s"; continue }
+            if ($call.State -eq 'Skipped') { Add-Result FAIL $check 'skipped as not a computer name'; continue }
+            if ($row.State -eq 'Offline') {
+                if ($call.State -eq 'Offline') { Add-Result PASS $check $call.Text } else { Add-Result FAIL $check "expected it offline, got '$($call.Text)'" }
+                continue
+            }
+            if ($row.State -eq 'Failed') { Add-Result INFO $check "answered '$($call.Text)'; this script couldn't connect: $($row.Status)"; continue }
+            Test-ToolAnswer $tool $row $call $check $reads
+        }
+    }
+
+    # The keys Check Pending Restart looks under for Windows' own restart flags: does its HasSubKey see what Windows has?
+    foreach ($group in $answer.Registry | Group-Object Device) {
+        $check = "Check Pending Restart's registry view on $($group.Name)"
+        $failed = @($group.Group | Where-Object Error)
+        if ($failed) { Add-Result WARN $check "couldn't read it: $($failed[0].Error)"; continue }
+        $missing = @($group.Group | Where-Object { -not $_.WindowsFound } | ForEach-Object { Split-Path $_.Key -Leaf })
+        $different = @(foreach ($view in $group.Group | Where-Object { @($_.Missed).Count }) {
+            "{0}: {1} of the {2} subkeys Windows has, such as {3}" -f (Split-Path $view.Key -Leaf), @($view.Missed).Count, $view.SubKeys, @($view.Missed)[0]
+        })
+        if ($different) { Add-Result FAIL $check ("ClientActions.HasSubKey doesn't see {0}. It's reading another registry view than Windows' own (the 32-bit one, from the 32-bit console), so a restart that Windows servicing or Windows Update is waiting for doesn't show, there or on the dashboard" -f ($different -join '; ')) }
+        else {
+            $seen = (@($group.Group | Where-Object WindowsFound | ForEach-Object { '{0} ({1})' -f (Split-Path $_.Key -Leaf), $_.SubKeys }) -join ' and ')
+            $detail = "HasSubKey sees every subkey Windows has under $seen"
+            if ($missing) { $detail += "; Windows has no $($missing -join ' or ') key" }
+            Add-Result PASS $check $detail
+        }
+    }
+
+    # Registry values: does Layer8 read the value Windows has?
+    foreach ($read in $answer.Values) {
+        if ($read.Error -eq 'missing') { Add-Result FAIL $read.Check "$($read.Method) isn't there (renamed?)"; continue }
+        $check = "$($read.Check) on $($read.Device)"
+        if ($read.Error) { Add-Result WARN $check "couldn't read it: $($read.Error)"; continue }
+        $layer8Text = 'no value'
+        if ($null -ne $read.Layer8) { $layer8Text = "'$($read.Layer8)'" }
+        $windowsText = 'none'
+        if ($null -ne $read.Windows) { $windowsText = "'$($read.Windows)'" }
+        if ("$($read.Layer8)" -ceq "$($read.Windows)" -and ($null -eq $read.Layer8) -eq ($null -eq $read.Windows)) { Add-Result PASS $check "$layer8Text, as Windows has it" }
+        else { Add-Result FAIL $check "$($read.Method) reads $layer8Text where Windows has $windowsText. It's reading another registry view (the 32-bit one, from the 32-bit console), so $($read.Means)" }
+    }
+
+    # Time per device, and any call the dashboard would call slow.
+    foreach ($call in $calls | Where-Object { $_.Seconds -ge $slowSeconds }) { Add-Result WARN "Slow: $($clientTools[$call.Tool]) on $($call.Device)" ("{0:0.0} s" -f $call.Seconds) }
+    foreach ($group in $devices | Where-Object { @($_.Group | Where-Object State -ne 'Skipped').Count }) {
+        $slowest = $group.Group | Sort-Object Seconds -Descending | Select-Object -First 1
+        Add-Result INFO "Time on $($group.Name)" ("{0:0.0} s for the {1} tools; the longest {2}, {3:0.0} s" -f ($group.Group | Measure-Object Seconds -Sum).Sum, $group.Count, $clientTools[$slowest.Tool], $slowest.Seconds)
     }
 }
 
@@ -1499,7 +2142,7 @@ function Write-Report {
     if ($sinceGiven) { $lines.Add(("Log checked from {0:yyyy-MM-dd HH:mm:ss}." -f $Since)) }
     $lines.Add('')
     $counts = ($results | Group-Object Result | Sort-Object Name | ForEach-Object { "$($_.Count) $($_.Name)" }) -join ', '
-    $lines.Add("Results: $counts.")
+    $lines.Add(("Results: {0}, in {1:0} s." -f $counts, ((Get-Date) - $started).TotalSeconds))
     $lines.Add('')
     $lines.Add('| Section | Result | Check | Detail |')
     $lines.Add('|---|---|---|---|')
@@ -1519,6 +2162,18 @@ function Write-Report {
             $lines.Add('| ' + ($values -join ' | ') + ' |')
         }
     }
+    if ($script:toolCalls) {
+        $lines.Add('')
+        $lines.Add("## What the client tools answered on $Collection")
+        $lines.Add('')
+        $lines.Add('| Device | Tool | Answer | Seconds |')
+        $lines.Add('|---|---|---|---|')
+        foreach ($call in $script:toolCalls | Where-Object State -ne 'Skipped') {
+            $text = $call.Text
+            if ($call.Summary) { $text += ': ' + $call.Summary }
+            $lines.Add(('| {0} | {1} | {2} | {3:0.0} |' -f (& $cell $call.Device), $clientTools[$call.Tool], (& $cell $text), $call.Seconds))
+        }
+    }
     [IO.File]::WriteAllLines($file, $lines, (New-Object Text.UTF8Encoding($false)))
     $file
 }
@@ -1529,7 +2184,10 @@ Write-Host "Layer8 $version regression checks, $($started.ToString('g'))" -Foreg
 New-Item -ItemType Directory -Path $work | Out-Null
 $report = $null
 try {
-    foreach ($name in 'Build', 'Installed', 'Customize', 'Library', 'Settings', 'Devices', 'Log', 'Changes') {
+    # The Tools section's 32-bit job, started now so its slowest device overlaps the sections before it. A problem
+    # starting it is reported in that section.
+    if ($Skip -notcontains 'Tools' -and $Skip -notcontains 'Devices') { try { Start-ToolJob } catch { } }
+    foreach ($name in 'Build', 'Installed', 'Customize', 'Library', 'Settings', 'Devices', 'Tools', 'Log', 'Changes') {
         $section = $name
         Write-Host ''
         Write-Host $name -ForegroundColor Cyan
@@ -1540,6 +2198,8 @@ try {
     }
 }
 finally {
+    # A job the Tools section didn't collect (it stopped, or was skipped after the start).
+    if ($toolJob) { Remove-Job -Job $toolJob.Job -Force -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
     $section = 'Run'
     $report = Write-Report
@@ -1547,7 +2207,7 @@ finally {
 
 $failures = @($results | Where-Object Result -eq 'FAIL').Count
 Write-Host ''
-Write-Host (($results | Group-Object Result | Sort-Object Name | ForEach-Object { "$($_.Count) $($_.Name)" }) -join ', ') -ForegroundColor Cyan
+Write-Host ("{0}, in {1:0} s" -f (($results | Group-Object Result | Sort-Object Name | ForEach-Object { "$($_.Count) $($_.Name)" }) -join ', '), ((Get-Date) - $started).TotalSeconds) -ForegroundColor Cyan
 Write-Host "Report: $report"
 if (-not $sinceGiven) {
     Write-Host ''

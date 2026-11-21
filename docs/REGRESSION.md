@@ -1,6 +1,6 @@
 # Layer8 regression run
 
-Every test build re-runs the old tests, not only the new one: everything in [STATUS.md](STATUS.md)'s tested table that the change could touch, and a Health Dashboard run on All Systems every time. This is that list. `tools\Test-Layer8Regression.ps1` checks what doesn't need the console (the build, the cab, the installed copy, Customize-Layer8Cab.ps1, Error Lookup's text, the signature checks, and what each device should show on the dashboard); the steps below are the rest.
+Every test build re-runs the old tests, not only the new one: everything in [STATUS.md](STATUS.md)'s tested table that the change could touch, and a Health Dashboard run on All Systems every time. This is that list. `tools\Test-Layer8Regression.ps1` checks what doesn't need the console (the build, the cab, the installed copy, Customize-Layer8Cab.ps1, Error Lookup's text, the signature checks, what each device should show on the dashboard, and what Online Status, Quick Status, Client Info, Check Pending Restart, BitLocker Status, Defender Status and List Missing Updates answer on each device, run in 32-bit PowerShell as the console runs them); the steps below are the rest.
 
 Written for the lab STATUS.md describes: a site server, the client the console runs on, a second client, the Layer8 Dev collection, and the test data from `tools\New-Layer8LabTestData.ps1`.
 
@@ -196,7 +196,7 @@ Files: `Layer8.Device/SystemInfo.cs`, `Extensions/Actions/*/Layer8DevicesSystemI
 
 ### M. Windows Security
 
-Files: `Layer8.Device/WindowsSecurity.cs`, `Extensions/Actions/*/Layer8DevicesWindowsSecurity.xml`
+Files: `Layer8.Device/WindowsSecurity.cs`, `Layer8.Device/SystemInfo.cs`, `Extensions/Actions/*/Layer8DevicesWindowsSecurity.xml`
 
 - [ ] **Defender:** on the second client, its 14 items.
 - [ ] **Firewall:** the three profiles, with the domain profile in use.
