@@ -2053,6 +2053,17 @@ function Test-Log {
     # Since the last run: the Changed tile against the run's own list of what changed (the run before it is gone now:
     # the dashboard has kept this one in its place).
     $after = @($entries[$startIndex..($entries.Count - 1)])
+
+    # Devices that didn't answer: once the run ends, the dashboard reads what ConfigMgr last had on them (C: from the
+    # last hardware inventory, the Windows build) and shows it in grey. It logs one line for that, after the run's own.
+    $offlineCount = if ($loggedTiles.Contains('offline')) { [int]$loggedTiles['offline'] } else { 0 }
+    $lastKnown = $after | Where-Object { $_.Text -match "^$scope`: ConfigMgr's last inventory read for (\d+) offline device\(s\)" } | Select-Object -First 1
+    if ($offlineCount -eq 0) { Add-Result INFO 'Last known values for offline devices' 'no device was offline in this run' }
+    elseif ($lastKnown) {
+        $null = $lastKnown.Text -match 'read for (\d+) offline'
+        Add-Result PASS 'Last known values for offline devices' "ConfigMgr's last inventory read for $($Matches[1]) of the $offlineCount offline"
+    }
+    else { Add-Result FAIL 'Last known values for offline devices' "$offlineCount offline, but no line says ConfigMgr's last inventory was read for them" }
     if ($loggedTiles.Contains('changed')) {
         $changes = $after | Where-Object { $_.Text -match "^$scope`: (since the run at .*?, (\d+) changed|no earlier run to compare with)" } | Select-Object -First 1
         if (-not $changes) { Add-Result FAIL "Tile 'changed'" "logged $($loggedTiles['changed']), but no line says what changed" }

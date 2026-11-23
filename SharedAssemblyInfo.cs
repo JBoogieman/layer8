@@ -7,6 +7,6 @@
 [assembly: AssemblyCopyright("Copyright © Peter Szalatnay and Layer8 contributors")]
 [assembly: AssemblyTrademark("")]
 
-[assembly: AssemblyVersion("1.1.1.17")]
-[assembly: AssemblyFileVersion("1.1.1.17")]
+[assembly: AssemblyVersion("1.1.1.19")]
+[assembly: AssemblyFileVersion("1.1.1.19")]
 [assembly: AssemblyInformationalVersion("1.1.1")]

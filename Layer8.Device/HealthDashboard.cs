@@ -123,6 +123,10 @@ namespace Layer8.Device
             public SiteContact Site;
             /// <summary>Whether this run's read of the site has come back for it (it can come after the device answers).</summary>
             public bool SiteRead;
+            /// <summary>What the site's records hold when it didn't answer (C:, the Windows build), read after the run; null until then.</summary>
+            public SiteInventory Inventory;
+            /// <summary>What its check said, before an offline row's Status becomes "Offline, last seen ..."; the tooltip keeps it.</summary>
+            public string StatusText;
             /// <summary>What changed since the last run, for the Since last run column and the Changed tile; null when nothing did.</summary>
             public string Change;
 
@@ -257,6 +261,8 @@ namespace Layer8.Device
         private string siteNote;
         // Whether this pass's read of the site has come back, and whether it was read.
         private bool siteDone, siteOk;
+        // Which run this is: a read of the site that comes back after the next run started is dropped.
+        private int runNumber;
 
         // The collection's last full run, kept to compare with: where it's kept (null for selected devices), the run
         // the grid compares with now, and one this window has just kept, which the next pass compares with.
@@ -654,12 +660,14 @@ namespace Layer8.Device
 
             runTotal = pending = targets.Count;
             list.BeginUpdate();
+            runNumber++;
             foreach (Row row in targets)
             {
                 row.State = RowState.Queued;
                 row.Report = null;
                 row.Site = null;
                 row.SiteRead = false;
+                row.Inventory = null;
                 FillRow(row, "Queued");
             }
             list.EndUpdate();
@@ -815,6 +823,7 @@ namespace Layer8.Device
         {
             HealthReport report = row.Report;
             ListViewItem item = row.Item;
+            row.StatusText = text;
             SetCell(item, StatusColumn, new InfoCell(text));
             SetCell(item, 4, report?.SignedIn);
             SetCell(item, 5, report?.Uptime);
@@ -847,6 +856,100 @@ namespace Layer8.Device
             SetCell(row.Item, ChangeColumn, row.Change == null ? null : new InfoCell(row.Change));
             SetCell(row.Item, PolicyColumn, PolicyCell(row.Site));
             row.Item.ToolTipText = names.Count > 0 ? issues : row.Item.SubItems[StatusColumn].Text;
+            if (row.State == RowState.Offline) ShowLastKnown(row);
+        }
+
+        /// <summary>
+        /// A device that didn't answer: what ConfigMgr last had on it, in the row's grey, so it never reads as live.
+        /// Status says when the site last heard from it; Signed in, Restart and Client come from its last check-ins,
+        /// Windows from its last heartbeat, and C: from its last hardware inventory, with that inventory's age (it
+        /// can be days old). Up, BitLocker, Defender, Blue screen and the update columns stay blank: only the device
+        /// can answer those now. The tiles count live answers only, so none of this changes them.
+        /// </summary>
+        private void ShowLastKnown(Row row)
+        {
+            ListViewItem item = row.Item;
+            SiteContact site = row.Site;
+            SiteInventory inventory = row.Inventory;
+            List<string> tip = new List<string> { item.ToolTipText, row.StatusText };
+
+            if (site != null && site.LastSeen.HasValue)
+            {
+                TimeSpan age = HealthCheck.Age(site.LastSeen.Value);
+                SetCell(item, StatusColumn, new InfoCell("Offline, last seen " + HealthCheck.FormatAge(age), age));
+                tip.Add(string.Format("ConfigMgr last heard from it {0:g}. Grey values are ConfigMgr's last record, not live:", site.LastSeen.Value.ToLocalTime()));
+            }
+            if (site != null && site.IsClient)
+            {
+                if (site.LastUser != null) SetCell(item, 4, new InfoCell(site.LastUser + " (last)"));
+                if (site.RestartFlags.HasValue) SetCell(item, 7, new InfoCell(HealthCheck.RestartText(site.RestartFlags.Value)));
+                if (site.ClientVersion != null)
+                {
+                    SetCell(item, 14, new InfoCell(site.ClientVersion + (site.ClientCheck == 2 ? ", client check failed" : string.Empty),
+                        Version.TryParse(site.ClientVersion, out Version version) ? version : null));
+                }
+                tip.Add("  Signed in, Restart, Client: its last check-ins");
+            }
+            if (inventory != null)
+            {
+                if (inventory.Build != null)
+                {
+                    SetCell(item, 11, new InfoCell(inventory.Build.ToString(), inventory.Build));
+                    tip.Add(site != null && site.LastHeartbeat.HasValue
+                        ? string.Format("  Windows: its last heartbeat, {0:g}", site.LastHeartbeat.Value.ToLocalTime())
+                        : "  Windows: its device record");
+                }
+                if (inventory.DiskFree.HasValue)
+                {
+                    string asOf = inventory.DiskAsOf.HasValue ? " (" + HealthCheck.FormatAge(HealthCheck.Age(inventory.DiskAsOf.Value)) + ")" : string.Empty;
+                    string size = inventory.DiskSize.HasValue && inventory.DiskSize.Value > 0 ? " of " + Utility.FormatBytes(inventory.DiskSize.Value, "0") : string.Empty;
+                    SetCell(item, 6, new InfoCell(Utility.FormatBytes(inventory.DiskFree.Value, "0.#") + size + asOf, inventory.DiskFree.Value));
+                    tip.Add(inventory.DiskAsOf.HasValue
+                        ? string.Format("  C: free: its last hardware inventory, {0:g}", inventory.DiskAsOf.Value)
+                        : "  C: free: its last hardware inventory");
+                }
+            }
+            item.ToolTipText = string.Join(Environment.NewLine, tip.Where(line => !string.IsNullOrEmpty(line)).Distinct());
+        }
+
+        /// <summary>
+        /// After a run: what the site's records hold for the devices that didn't answer (C: from the last hardware
+        /// inventory, the Windows build from the device record), two queries per 300 of them, in the background.
+        /// </summary>
+        private void ReadLastKnown()
+        {
+            List<Row> offline = rows.Where(row => row.State == RowState.Offline).ToList();
+            if (offline.Count == 0) return;
+            // Not the run's token: a run stopped early still shows what the site has for the devices that didn't answer.
+            int run = runNumber;
+            CancellationToken token = CancellationToken.None;
+            List<int> ids = offline.Select(row => row.ResourceId).ToList();
+            Task.Run(() =>
+            {
+                try
+                {
+                    Dictionary<int, SiteInventory> inventory = HealthCheck.ReadSiteInventory(connection, ids, token);
+                    OnUi(() =>
+                    {
+                        if (run != runNumber) return;
+                        list.BeginUpdate();
+                        foreach (Row row in offline)
+                        {
+                            if (row.State != RowState.Offline || !inventory.TryGetValue(row.ResourceId, out row.Inventory)) continue;
+                            ShowIssues(row);
+                        }
+                        list.EndUpdate();
+                        log.InfoFormat("{0} on {1}: ConfigMgr's last inventory read for {2} offline device(s)", title, scope, inventory.Count);
+                    });
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (Exception ex)
+                {
+                    log.Warn(string.Format("{0} on {1}: couldn't read ConfigMgr's last inventory for the offline devices", title, scope), SafeAction.Unwrap(ex));
+                }
+            });
         }
 
         /// <summary>When the site last had a policy request from its client: "40m ago", "3d ago", "Never". Blank without a client.</summary>
@@ -920,6 +1023,7 @@ namespace Layer8.Device
                 string.Join(", ", tiles.Skip(1).Select(tile => tile.Caption.ToLowerInvariant() + " " + tile.Count)));
 
             foreach (Tile tile in tiles) tile.ShowDelta = true;
+            ReadLastKnown();
             // Only a whole pass is kept: Check Again on a few devices, or a pass stopped early, would leave the rest
             // looking unchanged next time.
             if (fullRun && !stopping && historyPath != null)

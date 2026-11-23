@@ -37,7 +37,7 @@ Written for the lab STATUS.md describes: a site server, the client the console r
 
 ### A. Health Dashboard
 
-Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Layer8.Device/HealthRun.cs`, `Layer8.Device/ListViewSorter.cs`, `Extensions/Actions/*/Layer8Devices.xml`, `Extensions/Actions/*/Layer8Collections.xml`
+Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Layer8.Device/HealthRun.cs`, `Layer8/ListViewSorter.cs`, `Extensions/Actions/*/Layer8Devices.xml`, `Extensions/Actions/*/Layer8Collections.xml`
 
 - [ ] **Layer8 Dev:** both clients checked in a few seconds. BitLocker reads as BitLocker Status reads it ("Suspended (encrypted)" when not protected but fully encrypted, "Off" when fully decrypted).
 - [ ] **All Systems:** the placeholders are skipped by name. The site server shows Client "Not installed" (its management point runs CcmExec without a client), BitLocker "Not available" and not counted, and Updates "No client".
@@ -48,6 +48,11 @@ Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Laye
   - Each tile shows its rule on hover.
 - [ ] **Sorting:** C: free sorts by size both ways. Policy request sorts newest or oldest first. Issues, most first, puts devices with issues ahead of the placeholders.
 - [ ] **Policy request:** matches the times the console's Devices view shows, and stays blank for the site server and the placeholders.
+- [ ] **An offline client** (shut down DEV02 first, and note when):
+  - Status reads "Offline, last seen ...", matching when it went down, and the row is grey.
+  - Signed in, Restart, Client and Windows show ConfigMgr's last values. C: free shows the last hardware inventory's value and its age. Up, BitLocker, Defender, Blue screen and the update columns stay blank.
+  - Hovering the row gives the offline reason, when ConfigMgr last heard from it, and where each grey value came from. The hardware inventory time matches when the last Hardware Inventory Cycle ran on it.
+  - The tiles count it under Offline only: no Low disk or Restart from the grey values.
 - [ ] **Blue screen:** a dump inside the window shows its time and stop code, as the script lists it.
 - [ ] **Windows:** reads version and build ("26H2, 26300.x"), and the site server "Server 2025, 26100.x".
 - [ ] **Update scan:** reads how long ago each client's last software update scan finished, as the script lists it, and "No client" for the site server. It sorts oldest or newest first.
@@ -102,7 +107,7 @@ Files: `Layer8.Device/ClientActions.cs`, `Layer8.Device/ClientActionProgressBar.
 
 ### D. Collection runs, Online Status and Quick Status columns
 
-Files: `Layer8.Device/DeviceProgressDialog*`, `Layer8.Device/DeviceColumns.cs`, `Layer8.Device/ListViewSorter.cs`, `Layer8.Device/RemoteTools.cs`, `Layer8.Device/Device.cs`, `Extensions/Actions/*/Layer8Collections.xml`
+Files: `Layer8.Device/DeviceProgressDialog*`, `Layer8.Device/DeviceColumns.cs`, `Layer8/ListViewSorter.cs`, `Layer8.Device/RemoteTools.cs`, `Layer8.Device/Device.cs`, `Extensions/Actions/*/Layer8Collections.xml`
 
 - [ ] **A client tool on All Systems and on Layer8 Dev:** the four placeholder records are skipped by name and counted as Skipped.
 - [ ] **Online Status:** on both clients and the site server it reads what the script's Online line says. The site server: "ping blocked, port 445 answers".
@@ -155,10 +160,11 @@ Files: `Layer8.Device/ApplicationInstall.cs`, `Extensions/Actions/*/Layer8Device
 
 ### I. Client cache
 
-Files: `Layer8.Device/ClientCache.cs`, `Layer8.Device/ResultCacheControl*`, `Extensions/Forms/Layer8DeviceCache.xml`
+Files: `Layer8.Device/ClientCache.cs`, `Layer8.Device/ResultCacheControl*`, `Layer8/ListViewSorter.cs`, `Extensions/Forms/Layer8DeviceCache.xml`
 
 - [ ] **Changes something:** Clear Client Cache on both clients. On the second client it frees the test app's content.
 - [ ] **Client Cache:** opens and cancels.
+- [ ] **Client Cache sorting** (issue #3): Size sorts by size both ways (3 KB below 8 MB below 670 MB, whatever the decimal separator), and Last Used by date, not by day of the month. The arrow follows the sorted column.
 
 ### J. Deployments: Retry, Copy Failed, Delete, Redistribute
 
@@ -252,6 +258,7 @@ The script checks:
 Files: `Layer8/IncrementalCollectionsPage*`, `Layer8/RemoveRetiredContentPage*`, `Layer8/CleanSoftwareUpdatesPage*`, `Layer8/QuickDeployment*`, `Layer8/CollevalStatisticsDialog*`, `Layer8/TaskSequenceImportExport.cs`, `Layer8/DataGridViewCalendarColumn.cs`, `Layer8.Device/ResultCollectionsControl*`, `Layer8.Device/ResultMaintenanceWindowsControl*`, `Layer8.Device/TrackBarWithoutFocus*`, `Extensions/Forms/CollectionResource.xml`, `Extensions/Forms/Layer8IncrementalCollectionsWizard.xml`, `Extensions/Forms/Layer8RemoveRetiredContentWizard.xml`, `Extensions/Forms/Layer8CleanSoftwareUpdatesWizard.xml`, `Extensions/Forms/Layer8QuickDeploymentWizard.xml`
 
 - [ ] **Open and cancel, with nothing changed:** the device properties tabs, Client Cache, Driver Grabber, Incremental Collections, Remove Retired Content, Clean Software Update Groups, the driver package importers, and the Dell and HP driver packs.
+- [ ] **Collection Evaluation statistics sorting:** Evaluation Time sorts by the seconds both ways (9.5 below 12), and the arrow follows the sorted column.
 
 ### Z. Shared code: run every section
 

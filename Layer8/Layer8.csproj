@@ -147,6 +147,7 @@
       <DependentUpon>RemoveRetiredContentPage.cs</DependentUpon>
     </Compile>
     <Compile Include="TaskSequenceImportExport.cs" />
+    <Compile Include="ListViewSorter.cs" />
     <Compile Include="Utility.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -192,4 +193,4 @@
     <None Include="Resources\supersededupdate.ico" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-</Project>
+</Project>

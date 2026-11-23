@@ -19,6 +19,7 @@ namespace Layer8
         private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
         private BackgroundWorker backgroundWorker;
         private readonly ConnectionManagerBase connectionManager;
+        private readonly ListSorting sorting;
 
         public CollevalStatisticsDialog(ActionDescription action, ScopeNode scopeNode)
         {
@@ -34,6 +35,8 @@ namespace Layer8
             listViewListCollections.UpdateColumnWidth(columnHeaderName);
             listViewListCollections.Items.Clear();
             listViewListCollections.IsLoading = true;
+            // Evaluation Time sorts by the seconds, not the text (9.5 after 12 otherwise).
+            sorting = new ListSorting(listViewListCollections);
         }
 
         /// <summary>Console entry point: runs ShowCore behind Layer8's crash guard.</summary>
@@ -119,7 +122,7 @@ namespace Layer8
                             {
                                 string collectionId = obj.Groups[1].Value;
                                 IResultObject collection = collections.FirstOrDefault(x => x.Properties["CollectionID"].StringValue.Equals(collectionId));
-                                stats.Rows.Add(new ListViewItem()
+                                ListViewItem row = new ListViewItem()
                                 {
                                     // A collection deleted since the log was written has no name any more: show its ID.
                                     Text = collection != null ? collection["Name"].StringValue : collectionId,
@@ -127,9 +130,13 @@ namespace Layer8
                                         obj.Groups[2].Value,
                                         collectionId
                                     }
-                                });
+                                };
                                 if (double.TryParse(obj.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds))
+                                {
                                     stats.Seconds.Add(seconds);
+                                    row.SubItems[1].Tag = seconds;
+                                }
+                                stats.Rows.Add(row);
                             }
                         }
 
@@ -171,6 +178,7 @@ namespace Layer8
         private void ShowStats(EvaluationStats stats)
         {
             listViewListCollections.Items.AddRange(stats.Rows.ToArray());
+            sorting.Apply();
 
             labelStartTime.Text = stats.StartTime.ToString();
             labelEndTime.Text = stats.EndTime.ToString();

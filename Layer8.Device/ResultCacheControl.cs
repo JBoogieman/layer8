@@ -9,6 +9,7 @@ using System.Linq;
 using System.Windows;
 using System.IO;
 using System.Security.AccessControl;
+using System.Globalization;
 
 namespace Layer8.Device
 {
@@ -17,6 +18,7 @@ namespace Layer8.Device
         private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
         private BackgroundWorker backgroundWorker;
         private ManagementObject cacheConfig;
+        private readonly ListSorting sorting;
 
         public ResultCacheControl(SmsPageData pageData)
           : base(pageData)
@@ -24,6 +26,9 @@ namespace Layer8.Device
             InitializeComponent();
 
             Title = "Client Cache";
+            // The list sorts itself: the console's own sort compared the text, so 8,16 MB landed ahead of 670,42 MB
+            // and dates sorted by day of the month (issue #3). Size and Last Used sort by their values instead.
+            sorting = new ListSorting(listViewContent);
         }
 
         public override void InitializePageControl()
@@ -98,7 +103,7 @@ namespace Layer8.Device
                     UseWaitCursor = false;
                     listViewContent.IsLoading = false;
                     listViewContent.UpdateColumnWidth(columnHeaderLocation);
-                    listViewContent.Sorting = SortOrder.Ascending;
+                    sorting.Apply();
                     Initialized = true;
                 }
             }
@@ -156,24 +161,31 @@ namespace Layer8.Device
 
             foreach (ManagementObject item in items)
             {
-                string size = Utility.FormatBytes(double.Parse(item["ContentSize"].ToString()) * Utility.BytesPerKilobyte);
+                // ContentSize is in KB. The cells keep their values (bytes, the date) for sorting.
+                double bytes = ContentKB(item) * Utility.BytesPerKilobyte;
                 DateTime date = ManagementDateTimeConverter.ToDateTime(item["LastReferenced"].ToString());
 
-                listViewContent.Items.Add(new ListViewItem()
+                ListViewItem row = new ListViewItem()
                 {
                     Text = item["Location"].ToString(),
                     SubItems = {
-                            size,
+                            Utility.FormatBytes(bytes),
                             date.ToShortDateString(),
                             item["CacheId"].ToString()
                         },
                     Tag = item
-                });
+                };
+                row.SubItems[1].Tag = bytes;
+                row.SubItems[2].Tag = date;
+                listViewContent.Items.Add(row);
             }
 
-            double contentSize = items.Sum(item => double.Parse(item["ContentSize"].ToString()));
+            double contentSize = items.Sum(item => ContentKB(item));
             labelUsedSize.Text = Utility.FormatBytes(contentSize * Utility.BytesPerKilobyte);
         }
+
+        private static double ContentKB(ManagementObject item) =>
+            item["ContentSize"] == null ? 0 : Convert.ToDouble(item["ContentSize"], CultureInfo.InvariantCulture);
 
         private void RemoveCachedItems(IEnumerable<ListViewItem> items)
         {

@@ -20,7 +20,7 @@ Each full run on a collection is kept for your Windows account (in `%LOCALAPPDAT
 
 | Tile | Counts a device when |
 |---|---|
-| Offline | it doesn't answer: ports 135 and 445 closed, or WMI's RPC server unreachable |
+| Offline | it doesn't answer: ports 135 and 445 closed, or WMI's RPC server unreachable. Its row says when ConfigMgr last heard from it ("Offline, last seen 6h ago") and shows what ConfigMgr last had on it in grey; hover it for where each value came from |
 | Changed | its issues aren't the ones the collection's last full run found, or it wasn't in that run |
 | Restart pending | ConfigMgr, Windows servicing or Windows Update is waiting on a restart |
 | Low disk | C: has less than 10 GB free |

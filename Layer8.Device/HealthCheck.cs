@@ -71,6 +71,35 @@ namespace Layer8.Device
         public DateTime? LastPolicyRequest;
         /// <summary>A client that hasn't asked for policy in the Not reporting tile's number of days, or ever.</summary>
         public bool NotReporting;
+        /// <summary>
+        /// The last time the site heard from it at all: its last policy request, heartbeat, client check or
+        /// activity, or the fast channel seeing it come online or drop off. Null if never.
+        /// </summary>
+        public DateTime? LastSeen;
+        /// <summary>When its last heartbeat (discovery data) came in, which carries the Windows build; null if never.</summary>
+        public DateTime? LastHeartbeat;
+        /// <summary>Who was last signed in, as the site last heard it; null if it doesn't know.</summary>
+        public string LastUser;
+        /// <summary>
+        /// The site's pending-restart flags (ClientState), as of the last time the fast channel heard from it: 0 for
+        /// none, 1 ConfigMgr, 2 a file rename, 4 Windows Update, 8 adding or removing a Windows feature. Null if unknown.
+        /// </summary>
+        public int? RestartFlags;
+        public string ClientVersion;
+        /// <summary>The last client check's result: 1 passed, 2 failed, 3 no results, 0 unknown.</summary>
+        public int ClientCheck;
+    }
+
+    /// <summary>
+    /// What the site's records hold about an offline device beyond its check-ins: C: from its last hardware
+    /// inventory, and the Windows build from its device record. Read only for devices that didn't answer.
+    /// </summary>
+    internal sealed class SiteInventory
+    {
+        public double? DiskFree, DiskSize;
+        /// <summary>When the hardware inventory that read C: ran, on the device's own clock.</summary>
+        public DateTime? DiskAsOf;
+        public Version Build;
     }
 
     /// <summary>
@@ -446,22 +475,26 @@ namespace Layer8.Device
                 token.ThrowIfCancellationRequested();
                 string idList = string.Join(",", ids.Skip(start).Take(IdsPerQuery));
                 using (IResultObject results = connection.QueryProcessor.ExecuteQuery(
-                    "SELECT ResourceID, IsClient, LastPolicyRequest FROM SMS_CombinedDeviceResources WHERE ResourceID IN (" + idList + ")"))
+                    "SELECT ResourceID, IsClient, LastPolicyRequest, LastDDR, LastClientCheckTime, LastActiveTime, CNLastOnlineTime, CNLastOfflineTime, " +
+                    "UserName, LastLogonUser, ClientState, ClientVersion, ClientCheckPass FROM SMS_CombinedDeviceResources WHERE ResourceID IN (" + idList + ")"))
                 {
                     foreach (IResultObject device in results)
                     {
                         SiteContact site = new SiteContact
                         {
                             IsClient = device["IsClient"].ObjectValue != null && device["IsClient"].BooleanValue,
+                            LastPolicyRequest = SiteUtc(device, "LastPolicyRequest"),
+                            LastHeartbeat = SiteUtc(device, "LastDDR"),
+                            LastUser = SiteText(device, "LastLogonUser") ?? SiteText(device, "UserName"),
+                            RestartFlags = device["ClientState"].ObjectValue == null ? (int?)null : device["ClientState"].IntegerValue,
+                            ClientVersion = SiteText(device, "ClientVersion"),
+                            ClientCheck = device["ClientCheckPass"].ObjectValue == null ? 0 : device["ClientCheckPass"].IntegerValue,
                         };
-                        if (device["LastPolicyRequest"].ObjectValue != null)
+                        site.LastSeen = new[]
                         {
-                            DateTime when = device["LastPolicyRequest"].DateTimeValue;
-                            // An empty date can come back as year 1 or 1970 instead of null.
-                            // The site keeps this time in UTC but hands it back unmarked; read as local time it
-                            // would sit hours in the future (west of UTC) and every client would look "just now".
-                            if (when.Year >= 2000) site.LastPolicyRequest = DateTime.SpecifyKind(when, DateTimeKind.Utc);
-                        }
+                            site.LastPolicyRequest, site.LastHeartbeat, SiteUtc(device, "LastClientCheckTime"), SiteUtc(device, "LastActiveTime"),
+                            SiteUtc(device, "CNLastOnlineTime"), SiteUtc(device, "CNLastOfflineTime"),
+                        }.Where(time => time.HasValue).Select(time => time.Value).DefaultIfEmpty().Max() is DateTime seen && seen.Year >= 2000 ? seen : (DateTime?)null;
                         site.NotReporting = site.IsClient &&
                             (!site.LastPolicyRequest.HasValue || Age(site.LastPolicyRequest.Value).TotalDays >= notReportingDays);
                         contact[device["ResourceID"].IntegerValue] = site;
@@ -469,6 +502,90 @@ namespace Layer8.Device
                 }
             }
             return contact;
+        }
+
+        /// <summary>
+        /// A time from the site's record of a device's client, in UTC. The site keeps these in UTC but hands them back
+        /// unmarked; read as local time they'd sit hours in the future (west of UTC) and every client would look
+        /// "just now". An empty date can come back as year 1 or 1970 instead of null.
+        /// </summary>
+        private static DateTime? SiteUtc(IResultObject device, string property)
+        {
+            if (device[property].ObjectValue == null) return null;
+            DateTime when = device[property].DateTimeValue;
+            return when.Year >= 2000 ? DateTime.SpecifyKind(when, DateTimeKind.Utc) : (DateTime?)null;
+        }
+
+        /// <summary>
+        /// A time from a device's hardware inventory: on the device's own clock, not UTC. On DEV02 a scan run at
+        /// 3:21 PM came back as 3:21 PM here, while SMS_CombinedDeviceResources' copy of the same scan came back in UTC.
+        /// </summary>
+        private static DateTime? InventoryTime(IResultObject row, string property)
+        {
+            if (row[property].ObjectValue == null) return null;
+            DateTime when = row[property].DateTimeValue;
+            return when.Year >= 2000 ? DateTime.SpecifyKind(when, DateTimeKind.Local) : (DateTime?)null;
+        }
+
+        private static string SiteText(IResultObject row, string property)
+        {
+            string text = row[property].ObjectValue == null ? null : row[property].StringValue;
+            return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+        }
+
+        /// <summary>
+        /// What the site's records hold about devices that didn't answer, by ResourceID: C: from the last hardware
+        /// inventory (SMS_G_System_LOGICAL_DISK, in MB) and the Windows build with its update revision from the device
+        /// record (SMS_R_System's BuildExt, "10.0.26300.9974"), 300 devices a query. Runs on a background thread.
+        /// </summary>
+        internal static Dictionary<int, SiteInventory> ReadSiteInventory(ConnectionManagerBase connection, IList<int> ids, CancellationToken token)
+        {
+            Dictionary<int, SiteInventory> inventory = new Dictionary<int, SiteInventory>();
+            SiteInventory For(int id) => inventory.TryGetValue(id, out SiteInventory found) ? found : inventory[id] = new SiteInventory();
+            for (int start = 0; start < ids.Count; start += IdsPerQuery)
+            {
+                token.ThrowIfCancellationRequested();
+                string idList = string.Join(",", ids.Skip(start).Take(IdsPerQuery));
+                using (IResultObject results = connection.QueryProcessor.ExecuteQuery(
+                    "SELECT ResourceID, FreeSpace, Size, TimeStamp FROM SMS_G_System_LOGICAL_DISK WHERE DeviceID = 'C:' AND ResourceID IN (" + idList + ")"))
+                {
+                    foreach (IResultObject disk in results)
+                    {
+                        SiteInventory found = For(disk["ResourceID"].IntegerValue);
+                        if (disk["FreeSpace"].ObjectValue != null) found.DiskFree = disk["FreeSpace"].LongValue * 1048576d;
+                        if (disk["Size"].ObjectValue != null) found.DiskSize = disk["Size"].LongValue * 1048576d;
+                        found.DiskAsOf = InventoryTime(disk, "TimeStamp");
+                    }
+                }
+                token.ThrowIfCancellationRequested();
+                using (IResultObject results = connection.QueryProcessor.ExecuteQuery(
+                    "SELECT ResourceID, BuildExt FROM SMS_R_System WHERE ResourceID IN (" + idList + ")"))
+                {
+                    foreach (IResultObject device in results)
+                    {
+                        // "10.0.26300.9974": the dashboard shows the build and revision, as the device's own check does.
+                        string[] parts = (SiteText(device, "BuildExt") ?? string.Empty).Split('.');
+                        if (parts.Length == 4 && int.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out int build) &&
+                            int.TryParse(parts[3], NumberStyles.None, CultureInfo.InvariantCulture, out int revision))
+                        {
+                            For(device["ResourceID"].IntegerValue).Build = new Version(build, revision);
+                        }
+                    }
+                }
+            }
+            return inventory;
+        }
+
+        /// <summary>The site's pending-restart flags in the device check's words: "No", or why ("ConfigMgr; Windows Update").</summary>
+        internal static string RestartText(int flags)
+        {
+            if (flags == 0) return "No";
+            List<string> reasons = new List<string>();
+            if ((flags & 1) != 0) reasons.Add("ConfigMgr");
+            if ((flags & 2) != 0) reasons.Add("File rename");
+            if ((flags & 4) != 0) reasons.Add("Windows Update");
+            if ((flags & 8) != 0) reasons.Add("Windows feature");
+            return reasons.Count == 0 ? "Pending" : string.Join("; ", reasons);
         }
 
         /// <summary>How long ago a time was, whether it came back as local time or UTC. Never negative.</summary>
