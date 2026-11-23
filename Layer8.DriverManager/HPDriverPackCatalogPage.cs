@@ -419,6 +419,10 @@ namespace Layer8.DriverManager
                         // or one left in the download folder under the same name.
                         Authenticode.RequireSignedBy(data.Value, Authenticode.HPSigner, "HP");
 
+                        // Emptied first: a run that failed halfway left its files here, and they were copied in with
+                        // this pack, old .version files among them.
+                        if (Directory.Exists(tempFolder)) Directory.Delete(tempFolder, true);
+
                         extractProcess.StartInfo.FileName = data.Value;
                         extractProcess.StartInfo.Arguments = string.Format("-pdf -f \"{0}\" -s -e", tempFolder);
                         extractProcess.StartInfo.CreateNoWindow = true;
@@ -459,6 +463,7 @@ namespace Layer8.DriverManager
                     catch (Exception ex)
                     {
                         error.Add(currentModel, "Cannot extract driver pack: " + ex.Message);
+                        Utility.DeleteTempFolder(Path.Combine(tempFolderPath, "extract"), tempFolder);
 
                         CheckExtractQueueCompleted();
 

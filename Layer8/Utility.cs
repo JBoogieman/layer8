@@ -761,6 +761,22 @@ namespace Layer8
             return fullPath.StartsWith(fullRoot + "\\", StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Deletes a temporary folder Layer8 owns, if it's there and inside root (never root itself or anything
+        /// outside it). A folder that's in use is left for next time.
+        /// </summary>
+        public static void DeleteTempFolder(string root, string path)
+        {
+            try
+            {
+                if (IsInside(root, path) && Directory.Exists(path)) Directory.Delete(path, true);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                Layer8Log.GetLogger(typeof(Utility)).Warn("Couldn't delete the temporary folder " + path + ": " + ex.Message);
+            }
+        }
+
         public static void Copy(string sourceDir, string targetDir, bool overwrite = false)
         {
             if (!Directory.Exists(targetDir) || overwrite)
