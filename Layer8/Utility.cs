@@ -720,6 +720,24 @@ namespace Layer8
         }
 
         /// <summary>
+        /// text as one file or folder name: anything a name can't hold (\ / : * ? " &lt; &gt; | and control characters)
+        /// turns into a dash, and spaces and dots at the end go, as Windows drops them. A name that's empty or only
+        /// dots comes back as "-", so the result is never "." or "..". For names that come from a device or a
+        /// vendor's catalog and become one folder in a path.
+        /// </summary>
+        public static string SafeName(string text)
+        {
+            string name = (text ?? string.Empty).Trim();
+            foreach (char invalid in Path.GetInvalidFileNameChars()) name = name.Replace(invalid, '-');
+            name = name.TrimEnd(' ', '.');
+            return name.Length == 0 ? "-" : name;
+        }
+
+        /// <summary>Whether name is one plain file name: no folder, no drive, no wildcard, and not "." or "..".</summary>
+        public static bool IsPlainFileName(string name) =>
+            !string.IsNullOrWhiteSpace(name) && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 && name.Trim('.', ' ').Length > 0;
+
+        /// <summary>
         /// Whether path is inside root once both are full paths, with "." and ".." resolved. root itself counts only
         /// when allowRoot is set. Both have to be rooted (a drive or a UNC share): a relative path would resolve
         /// against the console's working folder. Every delete or write whose path comes from a device, a vendor's
