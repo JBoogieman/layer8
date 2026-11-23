@@ -115,6 +115,12 @@ namespace Layer8.DriverManager
                 flag = false;
                 sb.AppendLine("Access denied to legacy package folder");
             }
+            else if (Layer8.DriverManager.Package.FoldersOverlap(registry.ReadString("DriverSourceFolder"), registry.ReadString("LegacyPackageFolder")))
+            {
+                // Each package's folder is emptied before the copy: in the same folder, that deletes the driver source.
+                flag = false;
+                sb.AppendLine("The legacy package folder and the driver source folder overlap: give the legacy packages a folder of their own");
+            }
 
             ((SmsWizardPage)Parent).WizardForm.EnableButton(ButtonType.Next, flag);
 

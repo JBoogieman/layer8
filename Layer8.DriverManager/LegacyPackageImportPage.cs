@@ -55,17 +55,30 @@ namespace Layer8.DriverManager
 
                 List<LegacyPackage> legacyPackages = (List<LegacyPackage>)UserData["LegacyPackageItems"];
                 int totalPackages = legacyPackages.Count;
+                string legacyFolder = registry.ReadString("LegacyPackageFolder");
 
                 foreach (LegacyPackage package in legacyPackages)
                 {
                     int startProgress = num * 100 / totalPackages;
                     worker.ReportProgress(startProgress, string.Format("Importing Package: {0}", package.Name));
 
-                    if (Directory.Exists(package.Target))
-                        Directory.Delete(package.Target, true);
+                    // The package's folder is emptied before the copy, so it has to be a folder of its own.
+                    string problem = Layer8.DriverManager.Package.TargetProblem(legacyFolder, package.Source, package.Target);
+                    if (problem != null)
+                    {
+                        package.Exception.Add(new InvalidOperationException(problem));
+                        ++num;
+                        continue;
+                    }
 
                     if (package.Create())
                     {
+                        // Emptied once the package exists: a create that failed used to leave the package's
+                        // folder already deleted.
+                        if (Directory.Exists(package.Target))
+                            Directory.Delete(package.Target, true);
+                        Directory.CreateDirectory(package.Target);
+
                         importProgresPercent = 100 / stepCount / totalPackages * 1;
 
                         if (registry.ReadBool("LegacyPackageZipContent"))
