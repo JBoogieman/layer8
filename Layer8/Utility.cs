@@ -719,6 +719,30 @@ namespace Layer8
             return GetFileSize(new Uri(url)); 
         }
 
+        /// <summary>
+        /// Whether path is inside root once both are full paths, with "." and ".." resolved. root itself counts only
+        /// when allowRoot is set. Both have to be rooted (a drive or a UNC share): a relative path would resolve
+        /// against the console's working folder. Every delete or write whose path comes from a device, a vendor's
+        /// catalog or a setting checks this first, so an odd value can't steer it outside the folder it belongs in.
+        /// </summary>
+        public static bool IsInside(string root, string path, bool allowRoot = false)
+        {
+            if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(path)) return false;
+            string fullRoot, fullPath;
+            try
+            {
+                if (!Path.IsPathRooted(root) || !Path.IsPathRooted(path)) return false;
+                fullRoot = Path.GetFullPath(root).TrimEnd('\\', '/');
+                fullPath = Path.GetFullPath(path).TrimEnd('\\', '/');
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException || ex is System.Security.SecurityException)
+            {
+                return false;
+            }
+            if (string.Equals(fullRoot, fullPath, StringComparison.OrdinalIgnoreCase)) return allowRoot;
+            return fullPath.StartsWith(fullRoot + "\\", StringComparison.OrdinalIgnoreCase);
+        }
+
         public static void Copy(string sourceDir, string targetDir, bool overwrite = false)
         {
             if (!Directory.Exists(targetDir) || overwrite)

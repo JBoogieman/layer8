@@ -195,9 +195,17 @@ namespace Layer8.Device
                 {
                     // get the wmi object
                     ManagementObject managementObject = (ManagementObject)item.Tag;
-                    // create location string
-                    string str = (managementObject["Location"] as string).Replace(':', '$');
-                    string path = string.Format(@"\\{0}\{1}", PropertyManager["Name"].StringValue, str);
+                    // Only a folder directly in the client's cache folder: the path comes from the device's WMI.
+                    string location = managementObject["Location"] as string;
+                    string cacheFolder = cacheConfig?["Location"] as string;
+                    string path = ClientActions.CacheItemShare(PropertyManager["Name"].StringValue, cacheFolder, location);
+                    if (path == null)
+                    {
+                        log.WarnFormat("Client Cache on {0}: didn't delete {1}: it isn't a folder directly in the cache folder {2}", PropertyManager["Name"].StringValue, location, cacheFolder);
+                        System.Windows.MessageBox.Show(string.Format("Layer8 won't delete {0}: it isn't a folder directly in the client's cache folder ({1}).", location, cacheFolder),
+                            "Configuration Manager", MessageBoxButton.OK, MessageBoxImage.Hand);
+                        continue;
+                    }
                     // check if cached content exists and we have persmissions to remove it
                     if (Directory.Exists(path) && Utility.CheckFolderPermissions(path, FileSystemRights.Delete))
                     {
