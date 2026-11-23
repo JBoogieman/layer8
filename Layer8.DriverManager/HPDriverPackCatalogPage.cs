@@ -412,6 +412,9 @@ namespace Layer8.DriverManager
                 {
                     try
                     {
+                        // The folder names come from the vendor's catalog: never delete or fill a folder outside the two it belongs in.
+                        if (!Utility.IsInside(sourceFolderPath, destinationFolder) || !Utility.IsInside(Path.Combine(tempFolderPath, "extract"), tempFolder))
+                            throw new InvalidOperationException(string.Format("{0} isn't a folder inside {1}, so Layer8 won't replace it", package.FolderName, sourceFolderPath));
                         // The SoftPaq runs elevated, so only one HP signed: not a file tampered with on the way,
                         // or one left in the download folder under the same name.
                         Authenticode.RequireSignedBy(data.Value, Authenticode.HPSigner, "HP");

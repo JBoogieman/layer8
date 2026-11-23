@@ -77,11 +77,17 @@ namespace Layer8.DriverManager
             return null;
         }
 
+        /// <summary>
+        /// The pack's folder under the driver source folder. The model comes from the vendor's catalog, so each part
+        /// is one plain name (Utility.SafeName): a "\\", "/" or ".." in a catalog name would otherwise move the
+        /// folder, and with Wipe Source on the recursive delete, outside the vendor's folder.
+        /// </summary>
         public string GenerateModelFolderName(string os, string structure)
         {
+            string vendor = Utility.SafeName(Vendor), model = Utility.SafeName(Model), release = Utility.SafeName(os);
             return FolderName = (string.IsNullOrEmpty(structure) ? false : Convert.ToBoolean(structure))
-                ? string.Format(@"{0}\{1}\{2}", Vendor, Model, os)
-                : string.Format(@"{0}-{1}-{2}", Vendor, Model, os);
+                ? string.Format(@"{0}\{1}\{2}", vendor, model, release)
+                : string.Format(@"{0}-{1}-{2}", vendor, model, release);
         }
     }
 }

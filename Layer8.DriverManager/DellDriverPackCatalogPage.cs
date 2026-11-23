@@ -402,6 +402,9 @@ namespace Layer8.DriverManager
 
                 try
                 {
+                    // The folder names come from the vendor's catalog: never delete or fill a folder outside the two it belongs in.
+                    if (!Utility.IsInside(sourceFolderPath, destinationFolder) || !Utility.IsInside(Path.Combine(tempFolderPath, "extract"), tempFolder))
+                        throw new InvalidOperationException(string.Format("{0} isn't a folder inside {1}, so Layer8 won't replace it", package.FolderName, sourceFolderPath));
                     Utility.ExtractCab(data.Value, tempFolder);
 
                     // update my best friend the progress bar
