@@ -311,43 +311,35 @@ namespace Layer8
             return text;
         }
 
+        /// <summary>
+        /// A hash of a folder's files (every file below it but .hash and .version files): each one's path inside the
+        /// folder, size and last write time, so a file that changed changes the hash even when its name didn't. Null
+        /// when the folder has no files. Before 1.1.1.20 the "size" was the length of the file's path, so only a
+        /// renamed, added or removed file changed the hash; every package's hash changes once with this.
+        /// </summary>
         public static string CreateHashForFolder(string path)
         {
-            // assuming you want to include nested folders
             var exts = new[] { ".hash", ".version" };
             List<string> files = Directory
                 .GetFiles(path, "*.*", SearchOption.AllDirectories)
                 .Where(file => !exts.Any(x => file.EndsWith(x, StringComparison.OrdinalIgnoreCase)))
-                .OrderBy(p => p).ToList();
-            // create a temp file with all the files as content
-            string tempHashFile = Path.Combine(Path.GetTempPath(), RandomString(16, false) + ".hash");
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
+            if (files.Count == 0) return null;
 
-            string hash = null;
-
+            // Hashed in memory: this used to go through a temporary file in %TEMP% for no reason.
+            StringBuilder list = new StringBuilder();
+            foreach (string file in files)
+            {
+                FileInfo info = new FileInfo(file);
+                list.Append(file.Substring(path.Length).TrimStart('\\', '/'))
+                    .Append(' ').Append(info.Length.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                    .Append(' ').Append(info.LastWriteTimeUtc.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                    .Append('\n');
+            }
             using (SHA256 shaHash = SHA256.Create())
             {
-                if (files.Count > 0)
-                {
-                    // create a new file     
-                    using (FileStream fs = File.Create(tempHashFile))
-                    {
-                        StreamWriter writer = new StreamWriter(fs);
-                        for (int i = 0; i < files.Count; i++)
-                        {
-                            string file = files[i];
-                            string content = file + " " + file.Length + Environment.NewLine;
-                            writer.Write(content);
-                        }
-                        writer.Close();
-                    }
-                    shaHash.ComputeHash(Encoding.UTF8.GetBytes(File.ReadAllText(tempHashFile)));
-                    hash = BitConverter.ToString(shaHash.Hash).Replace("-", "");
-
-                    File.Delete(tempHashFile);
-                }
+                return BitConverter.ToString(shaHash.ComputeHash(Encoding.UTF8.GetBytes(list.ToString()))).Replace("-", "");
             }
-
-            return hash;
         }
 
         public static ManagementScope GetWMIScope(string host, string space, string username = null, string password = null)
