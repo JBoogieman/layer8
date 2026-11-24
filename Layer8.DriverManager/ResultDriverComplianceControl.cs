@@ -17,6 +17,8 @@ namespace Layer8.DriverManager.PropertiesDialog
     public partial class ResultDriverComplianceControl : SmsPageControl
     {
         private BackgroundWorker backgroundWorker;
+        // The package picked with Browse: the box shows its display name (name and version), which no query matches.
+        private string selectedPackageId;
 
         public ResultDriverComplianceControl(SmsPageData pageData)
           : base(pageData)
@@ -52,7 +54,7 @@ namespace Layer8.DriverManager.PropertiesDialog
             backgroundWorker.WorkerSupportsCancellation = false;
             backgroundWorker.WorkerReportsProgress = false;
             buttonRefresh.Enabled = false;
-            backgroundWorker.RunWorkerAsync(textBoxDriverPackage.Text);
+            backgroundWorker.RunWorkerAsync(selectedPackageId);
         }
 
         // What the background read found. The worker only collects; the UI thread fills the tab, because WinForms
@@ -65,7 +67,7 @@ namespace Layer8.DriverManager.PropertiesDialog
 
         private void InfoWorker_DoWork(object sender, DoWorkEventArgs e)
         {
-            string packageName = e.Argument as string;
+            string packageId = e.Argument as string;
             string host = Utility.ComputerName(PropertyManager["Name"].StringValue);
             if (!Utility.CheckFolderPermissions(string.Format(@"\\{0}\admin$", host), FileSystemRights.ReadData))
             {
@@ -78,12 +80,12 @@ namespace Layer8.DriverManager.PropertiesDialog
 
             List<IResultObject> driverObjects = new List<IResultObject>();
 
-            if (!string.IsNullOrEmpty(packageName))
+            if (!string.IsNullOrEmpty(packageId))
             {
-                string query2 = string.Format("SELECT * FROM SMS_DriverPackage WHERE NAME = '{0}'", Utility.WqlText(packageName));
+                string query2 = string.Format("SELECT * FROM SMS_DriverPackage WHERE PackageID = '{0}'", Utility.WqlText(packageId));
                 IResultObject packageObject = Utility.GetFirstWMIInstance(ConnectionManager, query2);
                 if (packageObject == null)
-                    throw new InvalidOperationException(string.Format("There's no driver package named {0}.", packageName));
+                    throw new InvalidOperationException(string.Format("Driver package {0} isn't there any more. Pick it again with Browse.", packageId));
                 driverObjects = Utility.SearchWMIToList(ConnectionManager, string.Format("SELECT * FROM SMS_Driver WHERE CI_ID IN (SELECT DC.CI_ID FROM SMS_DriverContainer AS DC WHERE DC.PackageID = '{0}') ORDER BY LocalizedDisplayName", Utility.WqlText(packageObject["PackageID"].StringValue)));
             }
 
@@ -101,7 +103,7 @@ namespace Layer8.DriverManager.PropertiesDialog
                         if (provider == "Microsoft" || DriverExists(result.Rows, description, oeminf))
                             continue;
 
-                        if (!string.IsNullOrEmpty(packageName))
+                        if (!string.IsNullOrEmpty(packageId))
                         {
                             // The device names its INF file; anything but a plain file name would read another file.
                             if (!Utility.IsPlainFileName(oeminf)) continue;
@@ -204,6 +206,7 @@ namespace Layer8.DriverManager.PropertiesDialog
                 if (browsePackageExtend.ShowDialog(this) != DialogResult.OK)
                     return;
 
+                selectedPackageId = browsePackageExtend.BrowsePackageObject["PackageID"].StringValue;
                 textBoxDriverPackage.Text = BrowsePackageExtend.GetPackageDisplayName(browsePackageExtend.BrowsePackageObject, string.Empty);
             }
             finally
