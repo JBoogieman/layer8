@@ -119,7 +119,7 @@ namespace Layer8.DriverManager
             {
                 // Each package's folder is emptied before the copy: in the same folder, that deletes the driver source.
                 flag = false;
-                sb.AppendLine("The legacy package folder and the driver source folder overlap: give the legacy packages a folder of their own");
+                sb.AppendLine("The legacy package folder overlaps the driver source folder");
             }
 
             ((SmsWizardPage)Parent).WizardForm.EnableButton(ButtonType.Next, flag);
