@@ -35,16 +35,15 @@ namespace Layer8
                             )
                     );
 
-                SaveFileDialog saveFileDialog1 = new SaveFileDialog
+                using (SaveFileDialog saveFileDialog1 = new SaveFileDialog
                 {
                     Filter = "XML files(.xml)|*.xml",
-                    Title = "Export Task Sequnce to XML",
+                    Title = "Export Task Sequence to XML",
                     FileName = selectedResultObjects["PackageID"].StringValue
-                };
-                saveFileDialog1.ShowDialog();
-
-                if (saveFileDialog1.FileName != "")
+                })
                 {
+                    // FileName starts out as the package ID, so a cancelled dialog still has one: only Save writes the file.
+                    if (saveFileDialog1.ShowDialog() != DialogResult.OK) return;
                     taskSequencePackage.Save(saveFileDialog1.FileName);
                 }
             }
