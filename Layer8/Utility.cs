@@ -330,13 +330,37 @@ namespace Layer8
             return null;
         }
 
+        /// <summary>
+        /// Text for inside a quoted WQL string compared with = (WHERE Name = '...'): backslashes and quotes escaped,
+        /// WQL's way, so a name with a quote in it is looked up as that name and can't change the query.
+        /// </summary>
+        public static string WqlText(string text)
+        {
+            return (text ?? string.Empty).Replace("\\", "\\\\").Replace("'", "\\'");
+        }
+
+        /// <summary>
+        /// Text for inside a WQL LIKE '...': the wildcards % and _ and the bracket [ taken literally, backslashes and
+        /// quotes escaped. Before 1.1.3 it doubled quotes instead, which isn't WQL's escape.
+        /// </summary>
         public static string WqlEscapeString(string text)
         {
             if (string.IsNullOrEmpty(text))
                 return text;
-            text = text.Replace("_", "[_]");
-            text = text.Replace("'", "''");
-            return text;
+            StringBuilder escaped = new StringBuilder();
+            foreach (char c in text)
+            {
+                switch (c)
+                {
+                    case '[': escaped.Append("[[]"); break;
+                    case '%': escaped.Append("[%]"); break;
+                    case '_': escaped.Append("[_]"); break;
+                    case '\\': escaped.Append(@"\\"); break;
+                    case '\'': escaped.Append(@"\'"); break;
+                    default: escaped.Append(c); break;
+                }
+            }
+            return escaped.ToString();
         }
 
         /// <summary>

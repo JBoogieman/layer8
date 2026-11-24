@@ -216,7 +216,7 @@ namespace Layer8.Device
 
         private static IEnumerable<string> CollectionMemberNames(IResultObject collection)
         {
-            string query = string.Format("SELECT Name FROM SMS_FullCollectionMembership WHERE CollectionID = '{0}'", Utility.WqlEscapeString(collection["CollectionID"].StringValue));
+            string query = string.Format("SELECT Name FROM SMS_FullCollectionMembership WHERE CollectionID = '{0}'", Utility.WqlText(collection["CollectionID"].StringValue));
             using (IResultObject members = collection.ConnectionManager.QueryProcessor.ExecuteQuery(query))
             {
                 foreach (IResultObject member in members)

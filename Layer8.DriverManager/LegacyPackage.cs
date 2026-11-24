@@ -39,7 +39,7 @@ namespace Layer8.DriverManager
 
         private bool CreatePackge()
         {
-            string query = string.Format("SELECT * FROM SMS_Package WHERE NAME = '{0}'", Name);
+            string query = string.Format("SELECT * FROM SMS_Package WHERE NAME = '{0}'", Utility.WqlText(Name));
             packageObject = Utility.GetFirstWMIInstance(connectionManager, query);
 
             if (packageObject == null)
@@ -107,7 +107,7 @@ namespace Layer8.DriverManager
 
         private bool GetPackageVersion()
         {
-            string query = string.Format("SELECT * FROM SMS_Package WHERE NAME = '{0}'", Name);
+            string query = string.Format("SELECT * FROM SMS_Package WHERE NAME = '{0}'", Utility.WqlText(Name));
             IResultObject packageObject = Utility.GetFirstWMIInstance(connectionManager, query);
 
             if (packageObject != null)

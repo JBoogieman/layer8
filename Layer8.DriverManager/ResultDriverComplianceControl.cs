@@ -70,7 +70,7 @@ namespace Layer8.DriverManager.PropertiesDialog
 
             if (!string.IsNullOrEmpty(textBoxDriverPackage.Text))
             {
-                string query2 = string.Format("SELECT * FROM SMS_DriverPackage WHERE NAME = '{0}'", textBoxDriverPackage.Text);
+                string query2 = string.Format("SELECT * FROM SMS_DriverPackage WHERE NAME = '{0}'", Utility.WqlText(textBoxDriverPackage.Text));
                 IResultObject packageObject = Utility.GetFirstWMIInstance(ConnectionManager, query2);
                 driverObjects = Utility.SearchWMIToList(ConnectionManager, string.Format("SELECT * FROM SMS_Driver WHERE CI_ID IN (SELECT DC.CI_ID FROM SMS_DriverContainer AS DC WHERE DC.PackageID = '{0}') ORDER BY LocalizedDisplayName", packageObject["PackageID"].StringValue));
             }
