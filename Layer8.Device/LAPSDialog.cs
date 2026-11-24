@@ -280,9 +280,11 @@ namespace Layer8.Device
                 }
                 byte[] plain = new byte[size];
                 Marshal.Copy(data, plain, 0, plain.Length);
-                // Don't leave the password lying in freed memory.
+                // Don't leave the password lying in freed memory, or in this copy of it once it's read.
                 Marshal.Copy(new byte[size], 0, data, (int)size);
-                FromJson(Encoding.Unicode.GetString(plain).TrimEnd('\0'), laps);
+                string json = Encoding.Unicode.GetString(plain).TrimEnd('\0');
+                Array.Clear(plain, 0, plain.Length);
+                FromJson(json, laps);
             }
             finally
             {
