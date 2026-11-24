@@ -642,7 +642,8 @@ $libraryChecks = {
         $lenovoSigner = $authenticode.GetField('LenovoSigner', $flags).GetValue($null)
         $hpSigner = $authenticode.GetField('HPSigner', $flags).GetValue($null)
         function Test-Signed([string]$Path, $Signer, [string]$Vendor) {
-            try { [void]$require.Invoke($null, @($Path, $Signer, $Vendor)); $null } catch { Get-Message $_.Exception }
+            # Every parameter, the optional refusal text too: reflection doesn't fill in defaults.
+            try { [void]$require.Invoke($null, @($Path, $Signer, $Vendor, 'run it')); $null } catch { Get-Message $_.Exception }
         }
         $signedFile = Join-Path $ConsoleBin 'Microsoft.ConfigurationManagement.exe'
         $signature = Get-AuthenticodeSignature -LiteralPath $signedFile
@@ -992,7 +993,8 @@ $libraryChecks = {
             $bytes[$middle] = [byte]($bytes[$middle] -bxor 0xFF)
             [string]$changedCab = Join-Path $Work "changed-$($vendor[1])"
             [IO.File]::WriteAllBytes($changedCab, $bytes)
-            try { [void]$extractSigned.Invoke($null, [object[]]@($changedCab, (Join-Path $Work "$($vendor[0])-changed"), $vendor[2], $vendor[0])); $refused = $null } catch { $refused = Get-Message $_.Exception }
+            [string]$changedFolder = Join-Path $Work "$($vendor[0])-changed"
+            try { [void]$extractSigned.Invoke($null, [object[]]@($changedCab, $changedFolder, $vendor[2], $vendor[0])); $refused = $null } catch { $refused = Get-Message $_.Exception }
             Test-Text "$($vendor[0]) catalog: a changed copy is refused" $refused "isn't validly signed (WinVerifyTrust 0x"
             if ($vendor[0] -eq 'Dell' -and $files) {
                 $packageType = $driver.GetType('Layer8.DriverManager.DellDriverPackage', $true)
@@ -1013,6 +1015,8 @@ $libraryChecks = {
         # Ctrl+C in a list, and a failure with no message.
         Add-Type -AssemblyName System.Windows.Forms
         $list = New-Object Windows.Forms.ListView
+        # Selection is only kept once the list has a window handle, as it always has in the console.
+        [void]$list.Handle
         foreach ($row in @(@('Contoso', 'Driver A', '1.0'), @('Fabrikam', 'Driver B', '2.0'))) { [void]$list.Items.Add((New-Object Windows.Forms.ListViewItem -ArgumentList (, [string[]]$row))) }
         $rowsText = Get-Method $utility 'SelectedRowsText'
         Test-Same 'List copy: nothing selected copies nothing' '' $rowsText.Invoke($null, [object[]]@($list.PSObject.BaseObject))
