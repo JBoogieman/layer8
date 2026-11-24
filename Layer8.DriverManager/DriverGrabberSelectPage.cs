@@ -52,7 +52,9 @@ namespace Layer8.DriverManager
         {
             try
             {
-                Dictionary<string, string> error = new Dictionary<string, string>();
+                // A list, not a dictionary keyed by the message: two items failing with the same message threw
+                // ArgumentException there, and the rest of the run was skipped.
+                List<KeyValuePair<string, string>> error = new List<KeyValuePair<string, string>>();
                 List<string> successful = new List<string>();
 
                 var parser = new FileIniDataParser();
@@ -158,7 +160,7 @@ namespace Layer8.DriverManager
                     }
                     catch (Exception ex)
                     {
-                        error.Add("Could not capture driver: " + ex.Message, driver["DeviceName"].ToString());
+                        error.Add(new KeyValuePair<string, string>("Could not capture driver: " + ex.Message, driver["DeviceName"]?.ToString()));
                     }
 
                     num++;
@@ -205,7 +207,7 @@ namespace Layer8.DriverManager
                 AddActionDetailMessage("DriverInformation", driver["DeviceName"].ToString());
         }
 
-        private void PrepareCompletion(List<string> successful, Dictionary<string, string> error)
+        private void PrepareCompletion(List<string> successful, List<KeyValuePair<string, string>> error)
         {
             RemoveAllSummary();
 

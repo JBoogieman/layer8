@@ -101,7 +101,9 @@ namespace Layer8.SoftwareUpdates
         {
             try
             {
-                Dictionary<string, string> error = new Dictionary<string, string>();
+                // A list, not a dictionary keyed by the message: two items failing with the same message threw
+                // ArgumentException there, and the rest of the run was skipped.
+                List<KeyValuePair<string, string>> error = new List<KeyValuePair<string, string>>();
                 List<string> successSUG = new List<string>();
                 List<string> successDP = new List<string>();
                 List<IResultObject> updates = (List<IResultObject>)UserData["UpdateItems"];
@@ -130,7 +132,7 @@ namespace Layer8.SoftwareUpdates
                         }
                         catch (SmsQueryException ex)
                         {
-                            error.Add("Could not remove updates: " + Utility.ProviderError(ex), groupObject["LocalizedDisplayName"].StringValue);
+                            error.Add(new KeyValuePair<string, string>("Could not remove updates: " + Utility.ProviderError(ex), groupObject["LocalizedDisplayName"].StringValue));
                             er = true;
                         }
 
@@ -190,7 +192,7 @@ namespace Layer8.SoftwareUpdates
                         }
                         catch (SmsQueryException ex)
                         {
-                            error.Add("Could not remove content: " + Utility.ProviderError(ex), package["Name"].StringValue);
+                            error.Add(new KeyValuePair<string, string>("Could not remove content: " + Utility.ProviderError(ex), package["Name"].StringValue));
                             er = true;
                         }
 
@@ -266,7 +268,7 @@ namespace Layer8.SoftwareUpdates
             return shared;
         }
 
-        private void PrepareCompletion(List<string> successSUG, List<string> successDP, Dictionary<string, string> error)
+        private void PrepareCompletion(List<string> successSUG, List<string> successDP, List<KeyValuePair<string, string>> error)
         {
             RemoveAllSummary();
 

@@ -103,7 +103,9 @@ namespace Layer8
             try
             {
                 int num = 0;
-                Dictionary<string, string> error = new Dictionary<string, string>();
+                // A list, not a dictionary keyed by the message: two items failing with the same message threw
+                // ArgumentException there, and the rest of the run was skipped.
+                List<KeyValuePair<string, string>> error = new List<KeyValuePair<string, string>>();
                 List<string> success = new List<string>();
                 List<IResultObject> applications = (List<IResultObject>)UserData["ApplicationItems"];
                 List<int> applicationsList = applications.Select(x => x["CI_ID"].IntegerValue).Distinct().ToList();
@@ -131,7 +133,7 @@ namespace Layer8
                         }
                         catch (SmsQueryException ex)
                         {
-                            error.Add("Could not remove content: " + Utility.ProviderError(ex), value[0]["LocalizedDisplayName"].StringValue);
+                            error.Add(new KeyValuePair<string, string>("Could not remove content: " + Utility.ProviderError(ex), value[0]["LocalizedDisplayName"].StringValue));
                             er = true;
                         }
 
@@ -195,7 +197,7 @@ namespace Layer8
                 AddActionDetailMessage("ApplicationInformation", application["LocalizedDisplayName"].StringValue);
         }
 
-        private void PrepareCompletion(List<string> success, Dictionary<string, string> error)
+        private void PrepareCompletion(List<string> success, List<KeyValuePair<string, string>> error)
         {
             RemoveAllSummary();
 

@@ -99,7 +99,9 @@ namespace Layer8.CollectionManagement
             try
             {
                 int num = 0;
-                Dictionary<string, IResultObject> error = new Dictionary<string, IResultObject>();
+                // A list, not a dictionary keyed by the message: two items failing with the same message threw
+                // ArgumentException there, and the rest of the run was skipped.
+                List<KeyValuePair<string, IResultObject>> error = new List<KeyValuePair<string, IResultObject>>();
                 List<string> success = new List<string>();
                 List<IResultObject> collections = (List<IResultObject>)UserData["CollectionItems"];
                 foreach (IResultObject collection in collections)
@@ -116,7 +118,7 @@ namespace Layer8.CollectionManagement
                     }
                     catch (SmsQueryException ex)
                     {
-                        error.Add("Could not disabled incremental updates: " + Utility.ProviderError(ex), collection);
+                        error.Add(new KeyValuePair<string, IResultObject>("Could not disable incremental updates: " + Utility.ProviderError(ex), collection));
                         er = true;
                     }
 
@@ -180,7 +182,7 @@ namespace Layer8.CollectionManagement
             }
         }
 
-        private void PrepareCompletion(List<string> success, Dictionary<string, IResultObject> error)
+        private void PrepareCompletion(List<string> success, List<KeyValuePair<string, IResultObject>> error)
         {
             RemoveAllSummary();
 
