@@ -129,6 +129,7 @@ namespace Layer8.Device
             private readonly List<RecoveryKey> keys;
             private readonly ListView list;
             private readonly TextBox filter;
+            private readonly Label info;
             private readonly Button copy;
 
             public KeyDialog(string computerName, string computerPath, List<RecoveryKey> keys)
@@ -145,7 +146,7 @@ namespace Layer8.Device
                 ShowInTaskbar = false;
                 MinimizeBox = false;
 
-                Label info = new Label
+                info = new Label
                 {
                     AutoSize = false,
                     Location = new Point(12, 10),
@@ -217,7 +218,9 @@ namespace Layer8.Device
             {
                 string password = SelectedPassword();
                 if (password == null) return;
-                Clipboard.SetDataObject(password, true, 10, 100);
+                // Kept out of clipboard history and the cloud clipboard, and cleared after a while.
+                Utility.CopySecret(password);
+                info.Text = string.Format("Copied. Layer8 clears it from the clipboard in {0} seconds, and it stays out of clipboard history.", Utility.SecretClipboardSeconds);
             }
         }
     }

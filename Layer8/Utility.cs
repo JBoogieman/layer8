@@ -627,6 +627,64 @@ namespace Layer8
             }
         }
 
+        /// <summary>How long a copied secret stays on the clipboard before Layer8 clears it.</summary>
+        public const int SecretClipboardSeconds = 45;
+
+        private static System.Windows.Forms.Timer secretTimer;
+        private static string secretOnClipboard;
+
+        /// <summary>
+        /// Puts a secret (a LAPS password, a BitLocker recovery password) on the clipboard the way password managers
+        /// do: marked so Windows leaves it out of clipboard history (Win+V) and doesn't sync it to the user's other
+        /// devices, and cleared after SecretClipboardSeconds unless something else has been copied since. A plain
+        /// copy stayed on the clipboard after the console closed, in history, and on every synced device.
+        /// </summary>
+        public static void CopySecret(string secret)
+        {
+            if (string.IsNullOrEmpty(secret)) return;
+            Clipboard.SetDataObject(SecretDataObject(secret), true, 10, 100);
+
+            secretTimer?.Dispose();
+            secretOnClipboard = secret;
+            secretTimer = new System.Windows.Forms.Timer { Interval = SecretClipboardSeconds * 1000 };
+            secretTimer.Tick += (s, e) => ClearSecret();
+            secretTimer.Start();
+        }
+
+        /// <summary>
+        /// The clipboard data for a secret: the text, plus the formats Windows reads to keep it out of clipboard
+        /// history and the cloud clipboard, and to tell clipboard monitors to ignore it.
+        /// https://learn.microsoft.com/windows/win32/dataxchg/clipboard-formats#cloud-clipboard-and-clipboard-history-formats
+        /// </summary>
+        public static DataObject SecretDataObject(string secret)
+        {
+            DataObject data = new DataObject();
+            data.SetData(DataFormats.UnicodeText, secret);
+            data.SetData("ExcludeClipboardContentFromMonitorProcessing", new System.IO.MemoryStream(new byte[] { 1, 0, 0, 0 }));
+            data.SetData("CanIncludeInClipboardHistory", new System.IO.MemoryStream(BitConverter.GetBytes(0)));
+            data.SetData("CanUploadToCloudClipboard", new System.IO.MemoryStream(BitConverter.GetBytes(0)));
+            return data;
+        }
+
+        /// <summary>Clears the clipboard if it still holds the secret Layer8 put there, and forgets the secret.</summary>
+        public static void ClearSecret()
+        {
+            secretTimer?.Dispose();
+            secretTimer = null;
+            try
+            {
+                if (secretOnClipboard != null && Clipboard.ContainsText() && Clipboard.GetText() == secretOnClipboard) Clipboard.Clear();
+            }
+            catch (System.Runtime.InteropServices.ExternalException)
+            {
+                // Another program has the clipboard open; it's only a clean-up, so don't stop for it.
+            }
+            finally
+            {
+                secretOnClipboard = null;
+            }
+        }
+
         public static void CopyToClipboard(ListView listView)
         {
             StringBuilder buffer = new StringBuilder();
