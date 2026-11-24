@@ -782,21 +782,6 @@ namespace Layer8
             return string.Join("\r\n", rows);
         }
 
-        public static string RandomString(int size, bool lowerCase)
-        {
-            StringBuilder builder = new StringBuilder();
-            Random random = new Random();
-            char ch;
-            for (int i = 0; i < size; i++)
-            {
-                ch = Convert.ToChar(Convert.ToInt32(Math.Floor(26 * random.NextDouble() + 65)));
-                builder.Append(ch);
-            }
-            if (lowerCase)
-                return builder.ToString().ToLower();
-            return builder.ToString();
-        }
-
         public static bool InclusiveBetween(IComparable a, IComparable b, IComparable c)
         {
             return a.CompareTo(b) >= 0 && a.CompareTo(c) <= 0;
