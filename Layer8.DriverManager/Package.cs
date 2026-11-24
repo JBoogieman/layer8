@@ -51,7 +51,8 @@ namespace Layer8.DriverManager
                 {
                     File.Delete(file);
                 }
-                File.Create(Path.Combine(Source, Hash + ".hash"));
+                // Closed straight away: left open, the handle kept the file locked on the share until garbage collection.
+                File.Create(Path.Combine(Source, Hash + ".hash")).Dispose();
             }
             catch
             {
