@@ -36,8 +36,14 @@ namespace Layer8.Device
             }
 
             Cursor.Current = Cursors.WaitCursor;
-            List<RecoveryKey> keys = FindKeys(name, out string computerPath);
+            List<RecoveryKey> keys = FindKeys(name, out string computerPath, out string problem);
             Cursor.Current = Cursors.Default;
+            if (problem != null)
+            {
+                log.Warn("BitLocker keys for " + name + ": " + problem);
+                MessageBox.Show(problem, "BitLocker Recovery Key", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
             // Counts only: the passwords themselves never go to the log.
             log.InfoFormat("BitLocker keys for {0}: {1}", name, keys == null ? "computer not found in AD" : keys.Count + " found");
@@ -55,14 +61,17 @@ namespace Layer8.Device
             public string Password;
         }
 
-        /// <summary>The device's recovery keys, newest first; null when the computer isn't in Active Directory.</summary>
-        internal static List<RecoveryKey> FindKeys(string computerName, out string computerPath)
+        /// <summary>
+        /// The device's recovery keys, newest first; null when the computer isn't in Active Directory, or when
+        /// <paramref name="problem"/> says why Layer8 won't pick one.
+        /// </summary>
+        internal static List<RecoveryKey> FindKeys(string computerName, out string computerPath, out string problem)
         {
             computerPath = null;
-            using (DirectorySearcher computerSearch = new DirectorySearcher(string.Format("(&(objectCategory=computer)(cn={0}))", LdapEscape(computerName))))
+            using (DirectorySearcher computerSearch = new DirectorySearcher())
             {
                 computerSearch.PropertiesToLoad.Add("distinguishedName");
-                SearchResult computer = computerSearch.FindOne();
+                SearchResult computer = FindComputer(computerSearch, computerName, out problem);
                 if (computer == null) return null;
                 computerPath = computer.Properties["distinguishedName"].Count > 0 ? computer.Properties["distinguishedName"][0] as string : computer.Path;
 
@@ -86,6 +95,52 @@ namespace Layer8.Device
                 keys.Sort((a, b) => Nullable.Compare(b.Stored, a.Stored));
                 return keys;
             }
+        }
+
+        /// <summary>
+        /// The computer object for a device name: the one whose account name (sAMAccountName, the name and $) is
+        /// the name, which is unique in a domain, or failing that the one named that (cn). A cn is only unique in
+        /// its OU, so two computers in different OUs can share one; then Layer8 says so rather than pick one, which
+        /// would show another computer's keys or password. Null when there's none, or with
+        /// <paramref name="problem"/> set when there's more than one.
+        /// </summary>
+        internal static SearchResult FindComputer(DirectorySearcher search, string computerName, out string problem)
+        {
+            problem = null;
+            string name = LdapEscape(computerName);
+            search.Filter = string.Format("(&(objectCategory=computer)(objectClass=computer)(|(sAMAccountName={0}$)(cn={0})))", name);
+            if (!search.PropertiesToLoad.Contains("distinguishedName")) search.PropertiesToLoad.Add("distinguishedName");
+            if (!search.PropertiesToLoad.Contains("sAMAccountName")) search.PropertiesToLoad.Add("sAMAccountName");
+
+            List<SearchResult> all = new List<SearchResult>();
+            using (SearchResultCollection results = search.FindAll())
+            {
+                foreach (SearchResult result in results) all.Add(result);
+            }
+            List<int> matches = Matching(all.ConvertAll(result => First(result, "sAMAccountName") as string), computerName);
+            if (matches.Count <= 1) return matches.Count == 1 ? all[matches[0]] : null;
+
+            List<string> names = matches.ConvertAll(index => First(all[index], "distinguishedName") as string ?? all[index].Path);
+            problem = string.Format("{0} computer objects in Active Directory match {1}: {2}. Layer8 won't guess which one is this device.",
+                                    matches.Count, computerName, string.Join("; ", names));
+            return null;
+        }
+
+        /// <summary>
+        /// Which of the objects found (by their account names) are the device: the ones whose account name is the
+        /// name and $, or all of them when none is. More than one means Layer8 can't tell. Internal so it can be tested.
+        /// </summary>
+        internal static List<int> Matching(IList<string> accountNames, string computerName)
+        {
+            List<int> byAccount = new List<int>();
+            for (int i = 0; i < accountNames.Count; i++)
+            {
+                if (string.Equals(accountNames[i], computerName + "$", StringComparison.OrdinalIgnoreCase)) byAccount.Add(i);
+            }
+            if (byAccount.Count > 0) return byAccount;
+            List<int> all = new List<int>();
+            for (int i = 0; i < accountNames.Count; i++) all.Add(i);
+            return all;
         }
 
         private static object First(SearchResult result, string property)
