@@ -117,8 +117,10 @@ namespace Layer8.SoftwareUpdates
 
                     worker.ReportProgress(33, string.Format("Removing update(s) from software update group: {0}", groupObject["LocalizedDisplayName"].StringValue));
 
-                    List<int> compare = updateList.Except(groupObject["Updates"].IntegerArrayValue).ToList();
-                    List<int> keep = groupObject["Updates"].IntegerArrayValue.Except(updateList).ToList();
+                    // A group with no updates in it can come back with no array at all.
+                    int[] groupUpdates = groupObject["Updates"].IntegerArrayValue ?? new int[0];
+                    List<int> compare = updateList.Except(groupUpdates).ToList();
+                    List<int> keep = groupUpdates.Except(updateList).ToList();
 
                     bool er = false;
 
@@ -175,6 +177,12 @@ namespace Layer8.SoftwareUpdates
 
                         query = string.Format("SELECT * FROM SMS_SoftwareUpdatesPackage WHERE PackageID = '{0}'", item.Key);
                         IResultObject package = Utility.GetFirstWMIInstance(ConnectionManager, query);
+                        if (package == null)
+                        {
+                            // Deleted since the list was read: report it and go on with the other packages.
+                            error.Add(new KeyValuePair<string, string>("Could not remove content: the deployment package isn't there any more", item.Key));
+                            continue;
+                        }
 
                         worker.ReportProgress(66, string.Format("Removing content from deployment package: {0}", package["Name"].StringValue));
 

@@ -128,7 +128,16 @@ namespace Layer8
                             query = string.Format("SELECT * FROM SMS_ContentPackage WHERE PackageID='{0}'", value[1]["PackageID"].StringValue);
                             using (IResultObject package = Utility.GetFirstWMIInstance(ConnectionManager, query))
                             {
-                                package.Delete();
+                                if (package != null)
+                                {
+                                    package.Delete();
+                                }
+                                else
+                                {
+                                    // Gone since the list was read: report it and go on with the other applications.
+                                    error.Add(new KeyValuePair<string, string>("Could not remove content: its content package isn't there any more", value[0]["LocalizedDisplayName"].StringValue));
+                                    er = true;
+                                }
                             }
                         }
                         catch (SmsQueryException ex)
