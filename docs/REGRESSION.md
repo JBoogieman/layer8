@@ -140,10 +140,12 @@ Files: `Layer8.Device/Device.cs`, `Extensions/Actions/*/Layer8Devices.xml`, `Ext
 
 Files: `Layer8.Device/BitLockerKeys.cs`, `Layer8.Device/LAPSDialog.cs`, `Extensions/Actions/*/Layer8Devices.xml`
 
-Check that the fields are there. Don't copy or screenshot the key or the password.
+Check that the fields are there. Don't copy or screenshot a real key or password; the lab's fake key (111111-222222-...) is the only one to copy.
 
 - [ ] **No keys:** BitLocker Recovery Key on a device with none says so.
 - [ ] **The fake key:** with the lab script's fake key (adding it **changes Active Directory**), the key is found, and the Key ID filter finds it by 4C415938.
+- [ ] **Hidden until asked for:** the fake key's password shows as dots in eight groups of six; ticking Show passwords shows the digits, and unticking hides them again.
+- [ ] **Copying a secret:** Copy Password on the fake key. The dialog says it's copied and clears in 45 seconds; Win+V (clipboard history) doesn't list it; pasting into Notepad straight away gives the password, and 45 seconds later gives nothing. LAPS Password's Copy uses the same code: check only that it says it's copied, without pasting a real password anywhere.
 - [ ] **LAPS Password:** on the second client it decrypts and shows the account, when the password changed and when it expires.
 - [ ] **Changes something** (Active Directory, and the client's password): Expire Now. The dialog says the expiry is set, and Layer8's Group Policy Update on the client has it set a new password straight away.
 
