@@ -15,6 +15,8 @@ namespace Layer8.SoftwareUpdates
 {
     public partial class CleanSoftwareUpdatesPage : SmsPageControl
     {
+        private static readonly Layer8.Logger log = Layer8.Layer8Log.GetLogger(typeof(CleanSoftwareUpdatesPage));
+
         private SmsBackgroundWorker backgroundWorker;
 
         public CleanSoftwareUpdatesPage(SmsPageData pageData)
@@ -158,8 +160,17 @@ namespace Layer8.SoftwareUpdates
                         }
                     }
 
+                    // An update file can belong to more than one update. One that an update outside the selection still
+                    // uses stays in the package: removing it would take it away from that update too.
+                    HashSet<int> shared = SharedContent(packages.Values.SelectMany(ids => ids).Distinct().ToList(), updateList);
+                    if (shared.Count > 0)
+                        log.InfoFormat("Clean Software Updates: kept {0} update file(s) that updates outside the selection still use", shared.Count);
+
                     foreach(KeyValuePair<string, List<int>> item in packages)
                     {
+                        int[] contentIds = item.Value.Where(id => !shared.Contains(id)).ToArray();
+                        if (contentIds.Length == 0) continue;
+
                         query = string.Format("SELECT * FROM SMS_SoftwareUpdatesPackage WHERE PackageID = '{0}'", item.Key);
                         IResultObject package = Utility.GetFirstWMIInstance(ConnectionManager, query);
 
@@ -168,7 +179,7 @@ namespace Layer8.SoftwareUpdates
                         Dictionary<string, object> methodParameters = new Dictionary<string, object>
                         {
                             { "bRefreshDPs", true },
-                            { "ContentIDs", item.Value.ToArray() }
+                            { "ContentIDs", contentIds }
                         };
 
                         bool er = false;
@@ -236,6 +247,23 @@ namespace Layer8.SoftwareUpdates
 
             foreach (IResultObject update in list)
                 AddActionDetailMessage("UpdateInformation", update["LocalizedDisplayName"].StringValue);
+        }
+
+        /// <summary>The update files (ContentIDs) among contentIds that an update outside selected also uses (SMS_CIToContent).</summary>
+        private HashSet<int> SharedContent(List<int> contentIds, List<int> selected)
+        {
+            HashSet<int> shared = new HashSet<int>();
+            if (contentIds.Count == 0) return shared;
+            HashSet<int> selectedUpdates = new HashSet<int>(selected);
+            string query = string.Format("SELECT CI_ID, ContentID FROM SMS_CIToContent WHERE ContentID IN ({0})", string.Join(",", contentIds));
+            foreach (IResultObject link in Utility.SearchWMIToList(ConnectionManager, query))
+            {
+                using (link)
+                {
+                    if (!selectedUpdates.Contains(link["CI_ID"].IntegerValue)) shared.Add(link["ContentID"].IntegerValue);
+                }
+            }
+            return shared;
         }
 
         private void PrepareCompletion(List<string> successSUG, List<string> successDP, Dictionary<string, string> error)

@@ -205,10 +205,18 @@ namespace Layer8.Device
             }
         }
 
-        /// <summary>One CSV field: quoted when it holds a comma, quote or line break, with quotes doubled.</summary>
+        private static readonly System.Text.RegularExpressions.Regex PlainNumber = new System.Text.RegularExpressions.Regex(@"^[-+]?\d+([.,]\d+)?$");
+
+        /// <summary>
+        /// One CSV field: quoted when it holds a comma, quote or line break, with quotes doubled. A field that starts
+        /// with = + - @, a tab or a carriage return gets a ' in front, so Excel shows it as text instead of running it
+        /// as a formula: program, service and driver names come from the device, and anyone who can name a program
+        /// there could otherwise put a formula in the file. A plain number such as -5 is left as it is.
+        /// </summary>
         internal static string CsvField(string value)
         {
             value = value ?? string.Empty;
+            if (value.Length > 0 && "=+-@\t\r".IndexOf(value[0]) >= 0 && !PlainNumber.IsMatch(value)) value = "'" + value;
             return value.IndexOfAny(new[] { ',', '"', '\r', '\n' }) < 0 ? value : "\"" + value.Replace("\"", "\"\"") + "\"";
         }
 

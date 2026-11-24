@@ -1068,6 +1068,45 @@ namespace Layer8.Device
             }
         }
 
+        /// <summary>The client's cache folder (CacheConfig.Location, such as C:\Windows\ccmcache), or null when it doesn't say.</summary>
+        internal static string CacheFolder(ManagementScope scope)
+        {
+            using (ManagementObject config = Utility.GetFirstWMIInstance(scope, "SELECT * FROM CacheConfig WHERE ConfigKey='Cache'"))
+            {
+                return config?["Location"] as string;
+            }
+        }
+
+        /// <summary>
+        /// The admin-share path of one cached item's folder (\\host\C$\Windows\ccmcache\1a), or null when the
+        /// folder the device reports isn't a folder directly inside its cache folder. The delete trusts nothing else
+        /// the device says: a Location of "C:" used to become \\host\C$ and the recursive delete started on the whole
+        /// drive. Every cached item is a folder directly in the cache folder, so that's all this lets through.
+        /// </summary>
+        internal static string CacheItemShare(string host, string cacheFolder, string location)
+        {
+            if (string.IsNullOrWhiteSpace(host) || !IsLocalFolder(cacheFolder) || !IsLocalFolder(location)) return null;
+            string root, item;
+            try
+            {
+                root = Path.GetFullPath(cacheFolder).TrimEnd('\\');
+                item = Path.GetFullPath(location).TrimEnd('\\');
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException)
+            {
+                return null;
+            }
+            // A cache folder at the root of a drive would let an item be any folder on it.
+            if (root.Length <= 2) return null;
+            if (!Utility.IsInside(root, item)) return null;
+            if (!string.Equals(Path.GetDirectoryName(item), root, StringComparison.OrdinalIgnoreCase)) return null;
+            return string.Format(@"\\{0}\{1}${2}", host, item[0], item.Substring(2));
+        }
+
+        // A local folder on the device, as WMI gives it: a drive letter, a colon and a backslash (C:\...).
+        private static bool IsLocalFolder(string path) =>
+            path != null && path.Length >= 3 && char.IsLetter(path[0]) && path[1] == ':' && path[2] == '\\';
+
         /// <summary>
         /// Deletes the client's cached content (folders and CacheInfoEx entries), the same way the Client Cache
         /// window does, but for every device at once. Content marked to persist in the cache stays; content in use
@@ -1077,8 +1116,13 @@ namespace Layer8.Device
         {
             string host = resultObject["Name"].StringValue;
             ManagementScope scope = Utility.GetWMIScope(host, @"ccm\SoftMgmtAgent");
-            int cleared = 0, kept = 0, skipped = 0;
+            int cleared = 0, kept = 0, skipped = 0, outside = 0;
             double freedKilobytes = 0;
+            string cacheFolder = CacheFolder(scope);
+            if (string.IsNullOrEmpty(cacheFolder))
+            {
+                return "The client didn't say where its cache folder is (CacheConfig), so nothing was deleted";
+            }
             foreach (ManagementObject item in Utility.SearchWMIToList(scope, "SELECT * FROM CacheInfoEx"))
             {
                 using (item)
@@ -1093,7 +1137,14 @@ namespace Layer8.Device
                     {
                         if (!string.IsNullOrEmpty(location))
                         {
-                            string share = string.Format(@"\\{0}\{1}", host, location.Replace(':', '$'));
+                            string share = CacheItemShare(host, cacheFolder, location);
+                            if (share == null)
+                            {
+                                // Not one folder in the cache: leave the folder and its CacheInfoEx entry alone.
+                                outside++;
+                                log.WarnFormat("ClearClientCache on {0}: kept {1}: it isn't a folder directly in the cache folder {2}", host, location, cacheFolder);
+                                continue;
+                            }
                             if (Directory.Exists(share)) Directory.Delete(share, true);
                         }
                         item.Delete();
@@ -1108,10 +1159,11 @@ namespace Layer8.Device
                 }
             }
 
-            if (cleared == 0 && skipped == 0) return kept > 0 ? string.Format("Nothing to clear ({0} item(s) kept on purpose)", kept) : "Cache already empty";
+            if (cleared == 0 && skipped == 0 && outside == 0) return kept > 0 ? string.Format("Nothing to clear ({0} item(s) kept on purpose)", kept) : "Cache already empty";
             string result = string.Format("Cleared {0} item(s), {1} freed", cleared, Utility.FormatBytes(freedKilobytes * Utility.BytesPerKilobyte, "0.#"));
             if (kept > 0) result += string.Format("; {0} kept on purpose", kept);
             if (skipped > 0) result += string.Format("; {0} in use or access denied", skipped);
+            if (outside > 0) result += string.Format("; {0} left alone: the client gave a folder outside its cache folder", outside);
             return result;
         }
 

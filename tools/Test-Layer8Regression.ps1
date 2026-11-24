@@ -19,8 +19,10 @@
                  leaves LAPS, BitLockerKeys and RestartComputer out of a copy of the cab: none of their menu items
                  left, every other item kept, no stray separators, the manifest's hashes right.
       Library    In 32-bit PowerShell, as the console runs: Error Lookup's parsing and its text from the console's
-                 catalog, the signature check on HP and Lenovo downloads, and the Lenovo catalog's signature check on
-                 a good copy and on changed ones.
+                 catalog, the signature check on HP and Lenovo downloads, the Lenovo catalog's signature check on
+                 a good copy and on changed ones, and the checks behind deletes and writes whose paths come from a
+                 device or a catalog (Client Cache, Driver Grabber, driver packs, legacy packages), the driver
+                 importers' folder hash and Export's formula guard.
       Settings   Layer8 Settings at their defaults (HKCU\SOFTWARE\Layer8).
       Devices    Every member of the collection, read from the same places the Health Dashboard reads: what each
                  column should show, each device's issues and the tile counts.
@@ -739,6 +741,120 @@ $libraryChecks = {
                 catch { Add-Check SKIP $resign[0] "couldn't sign the test copy: $(Get-Message $_.Exception)"; continue }
                 Test-Text $resign[0] (Test-Catalog $path) $resign[2]
             }
+        }
+
+        # The checks behind every delete or write whose path comes from a device, a vendor's catalog or a setting
+        # (the deletes and overwrites scan, 1.1.1.20): Client Cache, Driver Grabber, the driver packs, legacy packages.
+        $layer8 = [Reflection.Assembly]::LoadFrom((Join-Path $BuildDir 'Layer8.dll'))
+        $utility = $layer8.GetType('Layer8.Utility', $true)
+        function Test-Same([string]$Check, $Expected, $Actual) {
+            if ("$Expected" -ceq "$Actual") { Add-Check PASS $Check $(if ($null -eq $Actual) { '(none)' } else { "$Actual" }) }
+            else { Add-Check FAIL $Check "expected '$Expected', got '$Actual'" }
+        }
+
+        $isInside = Get-Method $utility 'IsInside'
+        foreach ($case in @(
+                @('C:\Windows\ccmcache', 'C:\Windows\ccmcache\1a', $false, $true, 'a folder in it'),
+                @('C:\Windows\ccmcache', 'C:\Windows\ccmcache\', $false, $false, 'the folder itself'),
+                @('C:\Windows\ccmcache', 'C:\Windows\ccmcache', $true, $true, 'the folder itself, when allowed'),
+                @('C:\Windows\ccmcache', 'C:\Windows\ccmcache\..\System32', $false, $false, 'climbing out with ..'),
+                @('C:\Windows\ccmcache', 'C:\Windows\ccmcacheOld\1a', $false, $false, 'a folder whose name starts the same'),
+                @('\\CM01\Drivers', '\\cm01\drivers\Dell\Latitude', $false, $true, 'a share, in another case'),
+                @('\\CM01\Drivers', 'D:\Drivers', $false, $false, 'another drive'),
+                @('\\CM01\Drivers', 'Dell\Latitude', $false, $false, 'a relative path'),
+                @('\\CM01\Drivers', 'C:\Bad:Name', $false, $false, 'a path Windows refuses'))) {
+            Test-Same "Path check: $($case[4])" $case[3] $isInside.Invoke($null, [object[]]@($case[0], $case[1], $case[2]))
+        }
+
+        $safeName = Get-Method $utility 'SafeName'
+        foreach ($case in @(
+                @('Latitude 7450', 'Latitude 7450', 'a plain name stays'),
+                @('..\..\Windows', '..-..-Windows', 'separators become dashes'),
+                @('C:\Users\Public', 'C--Users-Public', 'a rooted name becomes one name'),
+                @('..', '-', '".." becomes a dash'),
+                @('EliteBook 840 G7 / 850 G7', 'EliteBook 840 G7 - 850 G7', 'a slash in a model name'),
+                @('Name. ', 'Name', 'trailing dots and spaces go'),
+                @($null, '-', 'nothing becomes a dash'))) {
+            Test-Same "Folder name: $($case[2])" $case[1] $safeName.Invoke($null, [object[]]@($case[0]))
+        }
+
+        $plainFile = Get-Method $utility 'IsPlainFileName'
+        foreach ($case in @(
+                @('oem12.inf', $true, 'an INF name'),
+                @('..\..\evil.dll', $false, 'a name with ..'),
+                @('C:\Users\Public\x.bat', $false, 'a rooted name'),
+                @('*.cat', $false, 'a wildcard'),
+                @('..', $false, '".."'),
+                @('', $false, 'nothing'))) {
+            Test-Same "Plain file name: $($case[2])" $case[1] $plainFile.Invoke($null, [object[]]@($case[0]))
+        }
+
+        $cacheShare = Get-Method ($device.GetType('Layer8.Device.ClientActions', $true)) 'CacheItemShare'
+        foreach ($case in @(
+                @('C:\Windows\ccmcache', 'C:\Windows\ccmcache\1a', '\\DEV02\C$\Windows\ccmcache\1a', 'an item in the cache'),
+                @('D:\ccmcache', 'D:\ccmcache\b', '\\DEV02\D$\ccmcache\b', 'a cache on another drive'),
+                @('C:\Windows\ccmcache', 'C:', $null, 'a Location of C: is refused'),
+                @('C:\Windows\ccmcache', 'C:\', $null, 'the root of C: is refused'),
+                @('C:\Windows\ccmcache', 'C:\Windows\ccmcache', $null, 'the cache folder itself is refused'),
+                @('C:\Windows\ccmcache', 'C:\Windows\ccmcache\1a\sub', $null, 'a folder two down is refused'),
+                @('C:\Windows\ccmcache', 'C:\Windows\ccmcache\..\System32', $null, 'climbing out with .. is refused'),
+                @('C:\', 'C:\Users', $null, 'a cache folder at the root of a drive is refused'),
+                @('C:\Windows\ccmcache', '\\CM01\Share\x', $null, 'a share is refused'),
+                @($null, 'C:\Windows\ccmcache\1a', $null, 'no cache folder: refused'))) {
+            Test-Same "Client Cache delete: $($case[3])" $case[2] $cacheShare.Invoke($null, [object[]]@('DEV02', $case[0], $case[1]))
+        }
+
+        $package = $driver.GetType('Layer8.DriverManager.Package', $true)
+        $targetProblem = Get-Method $package 'TargetProblem'
+        Test-Same 'Legacy package folder: a folder of its own passes' $null $targetProblem.Invoke($null, [object[]]@('\\CM01\Legacy', '\\CM01\Drivers\Dell-Latitude-x64', '\\CM01\Legacy\Dell-Latitude-x64'))
+        Test-Text 'Legacy package folder: the same as the source is refused' $targetProblem.Invoke($null, [object[]]@('\\CM01\Drivers', '\\CM01\Drivers\Dell-Latitude-x64', '\\CM01\Drivers\Dell-Latitude-x64')) 'overlap'
+        Test-Text 'Legacy package folder: outside the setting is refused' $targetProblem.Invoke($null, [object[]]@('\\CM01\Legacy', '\\CM01\Drivers\x', '\\CM01\Other\x')) "isn't inside the package folder"
+        $pack = [Activator]::CreateInstance($package, $true)
+        $package.GetProperty('Vendor').SetValue($pack, 'Dell')
+        $package.GetProperty('Model').GetSetMethod($true).Invoke($pack, [object[]]@('..\..\Windows')) | Out-Null
+        Test-Same 'Driver pack folder: a catalog name with ..\ stays one folder' 'Dell\..-..-Windows\Windows 11' $package.GetMethod('GenerateModelFolderName').Invoke($pack, [object[]]@('Windows 11', 'True'))
+
+        # The hash the driver importers compare: a file that changes size changes it, and it no longer goes through %TEMP%.
+        # [string]: a cmdlet's output is a PSObject, and reflection's Invoke won't turn that into a string.
+        [string]$hashFolder = Join-Path $Work 'hash'
+        New-Item -ItemType Directory -Path $hashFolder | Out-Null
+        [string]$hashFile = Join-Path $hashFolder 'driver.inf'
+        $hash = Get-Method $utility 'CreateHashForFolder'
+        Test-Same 'Folder hash: an empty folder has none' $null $hash.Invoke($null, [object[]]@($hashFolder))
+        [IO.File]::WriteAllText($hashFile, 'DriverVer=1')
+        [IO.File]::SetLastWriteTimeUtc($hashFile, [datetime]'2026-01-01')
+        $first = $hash.Invoke($null, [object[]]@($hashFolder))
+        [IO.File]::WriteAllText($hashFile, 'DriverVer=1.2')
+        [IO.File]::SetLastWriteTimeUtc($hashFile, [datetime]'2026-01-01')
+        $second = $hash.Invoke($null, [object[]]@($hashFolder))
+        if ($first -and $second -and $first -ne $second) { Add-Check PASS 'Folder hash: a file that changed size changes it' "$($first.Substring(0, 12))... to $($second.Substring(0, 12))..." }
+        else { Add-Check FAIL 'Folder hash: a file that changed size changes it' "the same hash before and after: $first" }
+        [IO.File]::WriteAllText((Join-Path $hashFolder 'version.version'), '')
+        Test-Same 'Folder hash: .version files are left out' $second $hash.Invoke($null, [object[]]@($hashFolder))
+
+        # A pack that fails deletes its temp folder, but only inside the download folder's extract folder.
+        $deleteTemp = Get-Method $utility 'DeleteTempFolder'
+        [string]$extract = Join-Path $Work 'extract'
+        [string]$inside = Join-Path $extract 'Dell-Latitude-Windows 11'
+        [string]$outside = Join-Path $Work 'not-temp'
+        New-Item -ItemType Directory -Path $inside, $outside | Out-Null
+        [void]$deleteTemp.Invoke($null, [object[]]@($extract, $outside))
+        if (Test-Path -LiteralPath $outside) { Add-Check PASS 'Temp cleanup: a folder outside the extract folder stays' $outside }
+        else { Add-Check FAIL 'Temp cleanup: a folder outside the extract folder stays' "$outside was deleted" }
+        [void]$deleteTemp.Invoke($null, [object[]]@($extract, $inside))
+        if (-not (Test-Path -LiteralPath $inside)) { Add-Check PASS 'Temp cleanup: a pack''s temp folder goes' $inside }
+        else { Add-Check FAIL 'Temp cleanup: a pack''s temp folder goes' "$inside is still there" }
+
+        $csvField = Get-Method ($device.GetType('Layer8.Device.DeviceProgressDialog', $true)) 'CsvField'
+        foreach ($case in @(
+                @('=1+2', "'=1+2", 'a formula becomes text'),
+                @('@SUM(A1)', "'@SUM(A1)", 'an @ formula becomes text'),
+                @('-2+3', "'-2+3", 'a minus formula becomes text'),
+                @('=HYPERLINK("x")', '"''=HYPERLINK(""x"")"', 'a formula with quotes'),
+                @('-5', '-5', 'a negative number stays'),
+                @('Notepad++', 'Notepad++', 'a plus at the end stays'),
+                @('a,b', '"a,b"', 'a comma is quoted'))) {
+            Test-Same "Export field: $($case[2])" $case[1] $csvField.Invoke($null, [object[]]@($case[0]))
         }
     }
     catch {

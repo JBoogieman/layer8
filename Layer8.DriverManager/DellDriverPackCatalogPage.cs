@@ -402,7 +402,12 @@ namespace Layer8.DriverManager
 
                 try
                 {
-                    Utility.ExtractCab(data.Value, tempFolder);
+                    // The folder names come from the vendor's catalog: never delete or fill a folder outside the two it belongs in.
+                    if (!Utility.IsInside(sourceFolderPath, destinationFolder) || !Utility.IsInside(Path.Combine(tempFolderPath, "extract"), tempFolder))
+                        throw new InvalidOperationException(string.Format("{0} isn't a folder inside {1}, so Layer8 won't replace it", package.FolderName, sourceFolderPath));
+                    // Emptied first: a run that failed halfway left its files here, and they were copied in with
+                    // this pack, old .version files among them.
+                    Utility.ExtractCab(data.Value, tempFolder, clearDestination: true);
 
                     // update my best friend the progress bar
                     backgroundWorker.ReportProgress(Convert.ToInt32(50 + ((80 / totalPacks * extracted) * 0.5)), string.Format("Processing {0} : moving to destination folder", currentModel));
@@ -435,6 +440,7 @@ namespace Layer8.DriverManager
                 catch (Exception ex)
                 {
                     error.Add(package.Model, "Cannot extract driver pack: " + ex.Message);
+                    Utility.DeleteTempFolder(Path.Combine(tempFolderPath, "extract"), tempFolder);
 
                     CheckExtractQueueCompleted();
 

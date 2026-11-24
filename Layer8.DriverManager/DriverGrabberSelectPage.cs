@@ -87,11 +87,18 @@ namespace Layer8.DriverManager
 
                     try
                     {
-                        string driverFolder = Path.Combine(destinationFolder, driver["DeviceClass"].ToString(), driver["DeviceName"].ToString(), driver["DriverVersion"].ToString());
+                        // Every name below comes from the device (its WMI and its INF file), so each one becomes a
+                        // single plain name: a rooted or ".." name used to put the copies anywhere this account can write.
+                        string driverFolder = Path.Combine(destinationFolder, Utility.SafeName(driver["DeviceClass"]?.ToString()),
+                            Utility.SafeName(driver["DeviceName"]?.ToString()), Utility.SafeName(driver["DriverVersion"]?.ToString()));
+                        if (!Utility.IsInside(destinationFolder, driverFolder))
+                            throw new InvalidOperationException("the driver's folder would be outside " + destinationFolder);
                         if (!Directory.Exists(driverFolder))
                             Directory.CreateDirectory(driverFolder);
 
-                        string infFile = driver["InfName"].ToString();
+                        string infFile = driver["InfName"]?.ToString();
+                        if (!Utility.IsPlainFileName(infFile))
+                            throw new InvalidOperationException(string.Format("the device gave '{0}' as its INF file, which isn't a plain file name", infFile));
 
                         string remoteFolder = string.Format(@"\\{0}\admin$", PropertyManager["Name"].StringValue);
 
@@ -105,6 +112,11 @@ namespace Layer8.DriverManager
                         IniData iniData = parser.ReadFile(inf);
 
                         string catalogFile = GetCatalog(iniData);
+                        // The catalog's name is a search pattern below: a wildcard would copy the whole driver store.
+                        if (!Utility.IsPlainFileName(catalogFile))
+                            throw new InvalidOperationException(string.IsNullOrEmpty(catalogFile)
+                                ? "the INF doesn't name a catalog file"
+                                : string.Format("the INF names '{0}' as its catalog, which isn't a plain file name", catalogFile));
 
                         foreach (string file in Directory.GetFiles(Path.Combine(remoteFolder, @"System32\DriverStore\FileRepository"), catalogFile, SearchOption.AllDirectories))
                         {
@@ -124,7 +136,7 @@ namespace Layer8.DriverManager
 
                             foreach (KeyData key in sourceDisksFiles)
                             {
-                                if (key.KeyName.Split('.').Length > 1)
+                                if (key.KeyName.Split('.').Length > 1 && Utility.IsPlainFileName(key.KeyName))
                                 {
                                     string copyFile = Path.Combine(fileInfo.DirectoryName.ToString(), key.KeyName);
                                     if (File.Exists(copyFile) && !File.Exists(Path.Combine(driverFolder, key.KeyName)))

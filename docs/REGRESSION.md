@@ -164,6 +164,7 @@ Files: `Layer8.Device/ClientCache.cs`, `Layer8.Device/ResultCacheControl*`, `Lay
 
 - [ ] **Changes something:** Clear Client Cache on both clients. On the second client it frees the test app's content.
 - [ ] **Client Cache:** opens and cancels.
+- [ ] **Changes something: Client Cache delete** on the second client: delete one item. It goes from the list and from `C:\Windows\ccmcache`, and Layer8.log has no "didn't delete" line. Clear Client Cache's result never says "left alone" on a healthy client.
 - [ ] **Client Cache sorting** (issue #3): Size sorts by size both ways (3 KB below 8 MB below 670 MB, whatever the decimal separator), and Last Used by date, not by day of the month. The arrow follows the sorted column.
 
 ### J. Deployments: Retry, Copy Failed, Delete, Redistribute
@@ -223,7 +224,7 @@ The script checks the parsing and the text from the console's catalog (its Libra
 
 Files: `Layer8.DriverManager/*`, `Extensions/Actions/0ae7814c-*/*`, `Extensions/Actions/3ad39fd0-*/*`, `Extensions/Forms/Layer8*Driver*.xml`, `Extensions/Forms/Layer8Options.xml`
 
-The script checks Lenovo's catalog signature and the signature check on downloads (its Library section).
+The script checks Lenovo's catalog signature, the signature check on downloads, and the folder names and path checks the packs, Driver Grabber and the legacy importer use (its Library section).
 
 - [ ] **Dell:** the catalog downloads, and lists Windows 11 and 10.
 - [ ] **Lenovo Driver Pack:**
@@ -231,6 +232,8 @@ The script checks Lenovo's catalog signature and the signature check on download
   - The ThinkCentre M70A Gen 6 pack for Windows 11 25H2 shows Downloaded.
   - Options shows the Lenovo catalog link and the folder prefix.
 - [ ] **Open and cancel:** the Driver Package Importer, the Driver Legacy Package Importer, Driver Grabber, and the Dell and HP driver packs.
+- [ ] **Changes something: Driver Grabber** on the second client, into a test folder: one driver lands in `<folder>\<class>\<device name>\<version>` with its INF and catalog.
+- [ ] **Legacy Package Importer with overlapping folders:** set Legacy Package Folder to the driver source folder. The first page says the folders overlap and Next stays off. Set it back.
 
 ### P. Packaging: the cab, the MSI and leaving features out
 

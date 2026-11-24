@@ -311,43 +311,35 @@ namespace Layer8
             return text;
         }
 
+        /// <summary>
+        /// A hash of a folder's files (every file below it but .hash and .version files): each one's path inside the
+        /// folder, size and last write time, so a file that changed changes the hash even when its name didn't. Null
+        /// when the folder has no files. Before 1.1.1.20 the "size" was the length of the file's path, so only a
+        /// renamed, added or removed file changed the hash; every package's hash changes once with this.
+        /// </summary>
         public static string CreateHashForFolder(string path)
         {
-            // assuming you want to include nested folders
             var exts = new[] { ".hash", ".version" };
             List<string> files = Directory
                 .GetFiles(path, "*.*", SearchOption.AllDirectories)
                 .Where(file => !exts.Any(x => file.EndsWith(x, StringComparison.OrdinalIgnoreCase)))
-                .OrderBy(p => p).ToList();
-            // create a temp file with all the files as content
-            string tempHashFile = Path.Combine(Path.GetTempPath(), RandomString(16, false) + ".hash");
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
+            if (files.Count == 0) return null;
 
-            string hash = null;
-
+            // Hashed in memory: this used to go through a temporary file in %TEMP% for no reason.
+            StringBuilder list = new StringBuilder();
+            foreach (string file in files)
+            {
+                FileInfo info = new FileInfo(file);
+                list.Append(file.Substring(path.Length).TrimStart('\\', '/'))
+                    .Append(' ').Append(info.Length.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                    .Append(' ').Append(info.LastWriteTimeUtc.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                    .Append('\n');
+            }
             using (SHA256 shaHash = SHA256.Create())
             {
-                if (files.Count > 0)
-                {
-                    // create a new file     
-                    using (FileStream fs = File.Create(tempHashFile))
-                    {
-                        StreamWriter writer = new StreamWriter(fs);
-                        for (int i = 0; i < files.Count; i++)
-                        {
-                            string file = files[i];
-                            string content = file + " " + file.Length + Environment.NewLine;
-                            writer.Write(content);
-                        }
-                        writer.Close();
-                    }
-                    shaHash.ComputeHash(Encoding.UTF8.GetBytes(File.ReadAllText(tempHashFile)));
-                    hash = BitConverter.ToString(shaHash.Hash).Replace("-", "");
-
-                    File.Delete(tempHashFile);
-                }
+                return BitConverter.ToString(shaHash.ComputeHash(Encoding.UTF8.GetBytes(list.ToString()))).Replace("-", "");
             }
-
-            return hash;
         }
 
         public static ManagementScope GetWMIScope(string host, string space, string username = null, string password = null)
@@ -717,6 +709,64 @@ namespace Layer8
         public static long GetFileSize(string url)
         {
             return GetFileSize(new Uri(url)); 
+        }
+
+        /// <summary>
+        /// text as one file or folder name: anything a name can't hold (\ / : * ? " &lt; &gt; | and control characters)
+        /// turns into a dash, and spaces and dots at the end go, as Windows drops them. A name that's empty or only
+        /// dots comes back as "-", so the result is never "." or "..". For names that come from a device or a
+        /// vendor's catalog and become one folder in a path.
+        /// </summary>
+        public static string SafeName(string text)
+        {
+            string name = (text ?? string.Empty).Trim();
+            foreach (char invalid in Path.GetInvalidFileNameChars()) name = name.Replace(invalid, '-');
+            name = name.TrimEnd(' ', '.');
+            return name.Length == 0 ? "-" : name;
+        }
+
+        /// <summary>Whether name is one plain file name: no folder, no drive, no wildcard, and not "." or "..".</summary>
+        public static bool IsPlainFileName(string name) =>
+            !string.IsNullOrWhiteSpace(name) && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 && name.Trim('.', ' ').Length > 0;
+
+        /// <summary>
+        /// Whether path is inside root once both are full paths, with "." and ".." resolved. root itself counts only
+        /// when allowRoot is set. Both have to be rooted (a drive or a UNC share): a relative path would resolve
+        /// against the console's working folder. Every delete or write whose path comes from a device, a vendor's
+        /// catalog or a setting checks this first, so an odd value can't steer it outside the folder it belongs in.
+        /// </summary>
+        public static bool IsInside(string root, string path, bool allowRoot = false)
+        {
+            if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(path)) return false;
+            string fullRoot, fullPath;
+            try
+            {
+                if (!Path.IsPathRooted(root) || !Path.IsPathRooted(path)) return false;
+                fullRoot = Path.GetFullPath(root).TrimEnd('\\', '/');
+                fullPath = Path.GetFullPath(path).TrimEnd('\\', '/');
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException || ex is System.Security.SecurityException)
+            {
+                return false;
+            }
+            if (string.Equals(fullRoot, fullPath, StringComparison.OrdinalIgnoreCase)) return allowRoot;
+            return fullPath.StartsWith(fullRoot + "\\", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Deletes a temporary folder Layer8 owns, if it's there and inside root (never root itself or anything
+        /// outside it). A folder that's in use is left for next time.
+        /// </summary>
+        public static void DeleteTempFolder(string root, string path)
+        {
+            try
+            {
+                if (IsInside(root, path) && Directory.Exists(path)) Directory.Delete(path, true);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                Layer8Log.GetLogger(typeof(Utility)).Warn("Couldn't delete the temporary folder " + path + ": " + ex.Message);
+            }
         }
 
         public static void Copy(string sourceDir, string targetDir, bool overwrite = false)

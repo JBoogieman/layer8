@@ -95,9 +95,12 @@ $manifest = Join-Path $manifestFolder 'install-manifest.txt'
 New-Item $manifestFolder -ItemType Directory -Force | Out-Null
 # Clean up anything an earlier install placed that this build no longer ships.
 if (Test-Path $manifest) {
-    foreach ($old in Get-Content $manifest) {
-        if (-not $old -or $placed -contains $old) { continue }
-        if (-not $old.StartsWith($console + '\', [StringComparison]::OrdinalIgnoreCase)) { continue }
+    foreach ($line in Get-Content $manifest) {
+        if (-not $line -or $placed -contains $line) { continue }
+        # Compared as a full path: "...\AdminConsole\..\..\Windows\x" starts with the console's folder but isn't in it.
+        $old = $null
+        try { $old = [IO.Path]::GetFullPath($line) } catch { }
+        if (-not $old -or -not $old.StartsWith($console + '\', [StringComparison]::OrdinalIgnoreCase)) { continue }
         if (Test-Path $old) { Remove-Item $old -Force; Write-Host "Removed leftover from an earlier install: $old" }
     }
 }

@@ -37,9 +37,12 @@ if (-not (Test-Path $manifest)) { throw "No manifest at $manifest, so there's no
 
 $removed = 0
 $folders = New-Object System.Collections.Generic.HashSet[string]
-foreach ($file in Get-Content $manifest) {
-    if (-not $file.StartsWith($console + '\', [StringComparison]::OrdinalIgnoreCase)) {
-        Write-Warning "Skipping a path outside the console folder: $file"
+foreach ($line in Get-Content $manifest) {
+    # Compared as a full path: "...\AdminConsole\..\..\Windows\x" starts with the console's folder but isn't in it.
+    $file = $null
+    try { $file = [IO.Path]::GetFullPath($line) } catch { }
+    if (-not $file -or -not $file.StartsWith($console + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        Write-Warning "Skipping a path outside the console folder: $line"
         continue
     }
     if (Test-Path $file) {
