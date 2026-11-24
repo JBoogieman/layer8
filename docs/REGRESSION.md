@@ -80,6 +80,8 @@ Files: `Layer8/Layer8Settings.cs`, `Layer8/OptionsControl*`, `Layer8/HealthDashb
 
 Open it from a collection's Client Actions menu. Every change below is set back afterwards; the script's `-Since` run warns about one left changed.
 
+- [ ] **Open Log Folder** (General): Explorer opens Layer8's log folder.
+
 - [ ] **Tabs:** General and Health Dashboard. Health Dashboard shows the defaults (10 GB, 14 days, 7 days, 14 days, 14 days, build 26100), and Apply lights up after a change.
 - [ ] **Long uptime:** set below the console's computer's uptime, the next dashboard counts that computer under Long uptime and not the second client. The page shows the new number when opened again. Set back to 14, the tile goes back to 0.
 - [ ] **Not reporting:** 3 saves and shows 3 when opened again. Set back to 7.
@@ -226,9 +228,11 @@ The script checks the parsing and the text from the console's catalog (its Libra
 
 Files: `Layer8.DriverManager/*`, `Extensions/Actions/0ae7814c-*/*`, `Extensions/Actions/3ad39fd0-*/*`, `Extensions/Forms/Layer8*Driver*.xml`, `Extensions/Forms/Layer8Options.xml`
 
-The script checks Lenovo's catalog signature, the signature check on downloads, and the folder names and path checks the packs, Driver Grabber and the legacy importer use (its Library section).
+The script checks Lenovo's catalog signature, the signature check on downloads, the lock on a pack while it's checked and run, the Dell pack hash check, Dell's and HP's catalog signatures on the copies their wizards keep (open each wizard once first), and the folder names and path checks the packs, Driver Grabber and the legacy importer use (its Library section).
 
 - [ ] **Dell:** the catalog downloads, and lists Windows 11 and 10.
+- [ ] **HP:** the catalog downloads, and lists Windows 11.
+- [ ] **Driver Compliance tab** on the second client: lists its non-Microsoft drivers and its make and model. With a driver package name that doesn't exist typed in, Refresh says there's no driver package with that name.
 - [ ] **Lenovo Driver Pack:**
   - Releases are listed newest first, with Windows 11 IoT after Windows 11, and IoT 25H2 lists its 8 packs.
   - The ThinkCentre M70A Gen 6 pack for Windows 11 25H2 shows Downloaded.
@@ -260,10 +264,13 @@ The script checks:
 
 ### Q. Inherited tools: open and cancel
 
-Files: `Layer8/IncrementalCollectionsPage*`, `Layer8/RemoveRetiredContentPage*`, `Layer8/CleanSoftwareUpdatesPage*`, `Layer8/QuickDeployment*`, `Layer8/CollevalStatisticsDialog*`, `Layer8/TaskSequenceImportExport.cs`, `Layer8/DataGridViewCalendarColumn.cs`, `Layer8.Device/ResultCollectionsControl*`, `Layer8.Device/ResultMaintenanceWindowsControl*`, `Layer8.Device/TrackBarWithoutFocus*`, `Extensions/Forms/CollectionResource.xml`, `Extensions/Forms/Layer8IncrementalCollectionsWizard.xml`, `Extensions/Forms/Layer8RemoveRetiredContentWizard.xml`, `Extensions/Forms/Layer8CleanSoftwareUpdatesWizard.xml`, `Extensions/Forms/Layer8QuickDeploymentWizard.xml`
+Files: `Layer8.Device/ResultClientHealthControl*`, `Layer8/IncrementalCollectionsPage*`, `Layer8/RemoveRetiredContentPage*`, `Layer8/CleanSoftwareUpdatesPage*`, `Layer8/QuickDeployment*`, `Layer8/CollevalStatisticsDialog*`, `Layer8/TaskSequenceImportExport.cs`, `Layer8/DataGridViewCalendarColumn.cs`, `Layer8.Device/ResultCollectionsControl*`, `Layer8.Device/ResultMaintenanceWindowsControl*`, `Layer8.Device/TrackBarWithoutFocus*`, `Extensions/Forms/CollectionResource.xml`, `Extensions/Forms/Layer8IncrementalCollectionsWizard.xml`, `Extensions/Forms/Layer8RemoveRetiredContentWizard.xml`, `Extensions/Forms/Layer8CleanSoftwareUpdatesWizard.xml`, `Extensions/Forms/Layer8QuickDeploymentWizard.xml`
 
 - [ ] **Open and cancel, with nothing changed:** the device properties tabs, Client Cache, Driver Grabber, Incremental Collections, Remove Retired Content, Clean Software Update Groups, the driver package importers, and the Dell and HP driver packs.
 - [ ] **Collection Evaluation statistics sorting:** Evaluation Time sorts by the seconds both ways (9.5 below 12), and the arrow follows the sorted column.
+- [ ] **Client Health tab** on the second client: lists CcmEvalReport.xml's checks and the last evaluation time.
+- [ ] **Ctrl+C in a list:** in the Collections tab, with nothing selected nothing happens; with two rows selected, Notepad gets two lines, columns separated by tabs.
+- [ ] **Task sequence export:** Cancel in the save dialog writes no file; Save writes the XML where it was asked to.
 
 ### Z. Shared code: run every section
 
@@ -288,7 +295,7 @@ The release is batched: every section above once, on the release build, plus the
   4. Approve it and enable notifications.
   5. On the console, Uninstall, then Install.
   6. Check: the menus are back, Quick Status works, and the cab's SHA-256 matches what the build printed.
-- [ ] **The release copy of Customize-Layer8Cab.ps1:** from the release folder, run from a downloads folder with a space in its name, on the release cab, signing in the same step. Imported, its left-out items are gone and everything else is there.
+- [ ] **The release copy of Customize-Layer8Cab.ps1:** from the release folder, run from a downloads folder with a space and [brackets] in its name, on the release cab, signing in the same step. Imported, its left-out items are gone and everything else is there.
 - [ ] **Changes something:** Layer8.msi upgrading the last release's MSI. There's one Programs entry before and after, Layer8.dll goes from the old version to the new, and the number of menu files is the same.
 
 ## Not repeated
@@ -338,3 +345,9 @@ Files: `Layer8.Device/SystemInfo.cs`
 Files: `Layer8.Device/ApplicationInstall.cs`
 
 It was a standalone copy of the list, for the hang fixed in 0.9.3.
+
+### X9. A Dell and an HP pack, downloaded and extracted (1.1.2.24)
+
+Files: `Layer8.DriverManager/DellDriverPack*`, `Layer8.DriverManager/HPDriverPack*`, `Layer8.DriverManager/Authenticode.cs`
+
+The smallest Windows 11 pack of each, into a test source folder: the Dell pack passes the hash from Dell's catalog, the HP SoftPaq runs elevated while Layer8 holds it locked, and both land in the folder with their .version file. A gigabyte or more each, so once, and again when their code changes.
