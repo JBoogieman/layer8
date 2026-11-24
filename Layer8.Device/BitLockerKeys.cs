@@ -129,6 +129,8 @@ namespace Layer8.Device
             private readonly List<RecoveryKey> keys;
             private readonly ListView list;
             private readonly TextBox filter;
+            private readonly CheckBox show;
+            private readonly Label info;
             private readonly Button copy;
 
             public KeyDialog(string computerName, string computerPath, List<RecoveryKey> keys)
@@ -145,7 +147,7 @@ namespace Layer8.Device
                 ShowInTaskbar = false;
                 MinimizeBox = false;
 
-                Label info = new Label
+                info = new Label
                 {
                     AutoSize = false,
                     Location = new Point(12, 10),
@@ -158,6 +160,9 @@ namespace Layer8.Device
                 Label filterLabel = new Label { AutoSize = true, Location = new Point(12, 40), Text = "Key ID from the recovery screen:" };
                 filter = new TextBox { Location = new Point(190, 37), Size = new Size(220, 20) };
                 filter.TextChanged += (s, e) => Fill();
+                // Hidden until asked for, as LAPS Password does: the dialog used to open with every recovery password on screen.
+                show = new CheckBox { Text = "Show passwords", Location = new Point(422, 39), AutoSize = true };
+                show.CheckedChanged += (s, e) => Fill();
 
                 list = new ListView
                 {
@@ -179,7 +184,7 @@ namespace Layer8.Device
                 copy.Click += (s, e) => CopySelected();
                 Button close = new Button { Text = "Close", DialogResult = DialogResult.Cancel, Location = new Point(633, 280), Size = new Size(75, 23), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
 
-                Controls.AddRange(new Control[] { info, filterLabel, filter, list, copy, close });
+                Controls.AddRange(new Control[] { info, filterLabel, filter, show, list, copy, close });
                 CancelButton = close;
                 ResumeLayout(false);
                 PerformLayout();
@@ -197,7 +202,7 @@ namespace Layer8.Device
                     if (wanted.Length > 0 && !HexOnly(key.KeyId).StartsWith(wanted, StringComparison.Ordinal)) continue;
                     ListViewItem item = new ListViewItem(key.Stored.HasValue ? key.Stored.Value.ToString("g") : "(unknown)") { Tag = key };
                     item.SubItems.Add(key.KeyId);
-                    item.SubItems.Add(key.Password ?? "(you can't read this key)");
+                    item.SubItems.Add(key.Password == null ? "(you can't read this key)" : show.Checked ? key.Password : Mask(key.Password));
                     list.Items.Add(item);
                 }
                 // One match is the usual case when a Key ID is typed: select it, ready to copy.
@@ -206,6 +211,14 @@ namespace Layer8.Device
                 if (list.Items.Count > 0) list.AutoResizeColumn(2, ColumnHeaderAutoResizeStyle.ColumnContent);
                 list.EndUpdate();
                 copy.Enabled = SelectedPassword() != null;
+            }
+
+            /// <summary>The password with every digit as a dot, so its shape (eight groups of six) still shows.</summary>
+            internal static string Mask(string password)
+            {
+                StringBuilder masked = new StringBuilder(password.Length);
+                foreach (char c in password) masked.Append(char.IsDigit(c) ? '\u25CF' : c);
+                return masked.ToString();
             }
 
             private string SelectedPassword()
@@ -217,7 +230,9 @@ namespace Layer8.Device
             {
                 string password = SelectedPassword();
                 if (password == null) return;
-                Clipboard.SetDataObject(password, true, 10, 100);
+                // Kept out of clipboard history and the cloud clipboard, and cleared after a while.
+                Utility.CopySecret(password);
+                info.Text = string.Format("Copied. Layer8 clears it from the clipboard in {0} seconds, and it stays out of clipboard history.", Utility.SecretClipboardSeconds);
             }
         }
     }

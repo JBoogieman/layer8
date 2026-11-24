@@ -22,7 +22,8 @@
                  catalog, the signature check on HP and Lenovo downloads, the Lenovo catalog's signature check on
                  a good copy and on changed ones, and the checks behind deletes and writes whose paths come from a
                  device or a catalog (Client Cache, Driver Grabber, driver packs, legacy packages), the driver
-                 importers' folder hash and Export's formula guard.
+                 importers' folder hash, Export's formula guard, and how a copied LAPS or BitLocker password goes
+                 onto the clipboard.
       Settings   Layer8 Settings at their defaults (HKCU\SOFTWARE\Layer8).
       Devices    Every member of the collection, read from the same places the Health Dashboard reads: what each
                  column should show, each device's issues and the tile counts.
@@ -856,6 +857,21 @@ $libraryChecks = {
                 @('a,b', '"a,b"', 'a comma is quoted'))) {
             Test-Same "Export field: $($case[2])" $case[1] $csvField.Invoke($null, [object[]]@($case[0]))
         }
+
+        # Secrets on the clipboard (the secrets pass, 1.1.2.23): a copied LAPS or BitLocker password carries the
+        # formats that keep it out of clipboard history and the cloud clipboard, and BitLocker passwords are hidden.
+        $secret = '111111-222222'
+        $secretData = (Get-Method $utility 'SecretDataObject').Invoke($null, [object[]]@($secret))
+        Test-Same 'Copied secret: the text is the secret' $secret $secretData.GetData('UnicodeText')
+        foreach ($format in 'ExcludeClipboardContentFromMonitorProcessing', 'CanIncludeInClipboardHistory', 'CanUploadToCloudClipboard') {
+            Test-Same "Copied secret: marked $format" $true $secretData.GetDataPresent($format)
+        }
+        foreach ($format in 'CanIncludeInClipboardHistory', 'CanUploadToCloudClipboard') {
+            Test-Same "Copied secret: $format is 0 (no)" 0 ([BitConverter]::ToInt32($secretData.GetData($format).ToArray(), 0))
+        }
+        $mask = Get-Method ($device.GetType('Layer8.Device.BitLockerKeys+KeyDialog', $true)) 'Mask'
+        $dots = ([string][char]0x25CF) * 6
+        Test-Same 'BitLocker password hidden: digits become dots, the groups stay' "$dots-$dots" $mask.Invoke($null, [object[]]@($secret))
     }
     catch {
         Add-Check FAIL 'The library checks stopped' "script error: $(Get-Message $_.Exception)"

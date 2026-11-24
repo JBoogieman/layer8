@@ -29,6 +29,7 @@ namespace Layer8.Device
         private readonly CheckBox show;
         private readonly Button copy, expireNow;
         private LapsPassword found;
+        private string lookupMessage = string.Empty;
 
         /// <summary>Console entry point: runs ShowCore behind Layer8's crash guard.</summary>
         public static void Show(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObject, PropertyDataUpdated dataUpdatedDelegate, Status status)
@@ -78,7 +79,7 @@ namespace Layer8.Device
             CancelButton = close;
 
             show.CheckedChanged += (s, e) => password.UseSystemPasswordChar = !show.Checked;
-            copy.Click += (s, e) => { if (!string.IsNullOrEmpty(found?.Password)) Clipboard.SetText(found.Password); };
+            copy.Click += (s, e) => CopyPassword();
             expireNow.Click += (s, e) => ExpireNow();
             Shown += (s, e) => Lookup();
             ResumeLayout(false);
@@ -113,6 +114,7 @@ namespace Layer8.Device
                 source.Text = found.Source;
                 message.Text = found.Message;
                 if (expired) message.Text = (string.IsNullOrEmpty(message.Text) ? string.Empty : message.Text + "\r\n") + computer + " changes the password at its next LAPS check: within the hour, or right after a gpupdate on it.";
+                lookupMessage = message.Text;
                 copy.Enabled = !string.IsNullOrEmpty(found.Password);
                 expireNow.Enabled = found.ExpirationAttribute != null;
                 log.InfoFormat("LAPS Password for {0}: {1}", computer, found.Source ?? found.Message);
@@ -126,6 +128,18 @@ namespace Layer8.Device
             {
                 UseWaitCursor = false;
             }
+        }
+
+        /// <summary>
+        /// Copies the password kept out of clipboard history and the cloud clipboard, and cleared after
+        /// Utility.SecretClipboardSeconds; the dialog says so.
+        /// </summary>
+        private void CopyPassword()
+        {
+            if (string.IsNullOrEmpty(found?.Password)) return;
+            Utility.CopySecret(found.Password);
+            message.Text = (string.IsNullOrEmpty(lookupMessage) ? string.Empty : lookupMessage + "\r\n") +
+                string.Format("Copied. Layer8 clears it from the clipboard in {0} seconds, and it stays out of clipboard history.", Utility.SecretClipboardSeconds);
         }
 
         /// <summary>
@@ -266,9 +280,11 @@ namespace Layer8.Device
                 }
                 byte[] plain = new byte[size];
                 Marshal.Copy(data, plain, 0, plain.Length);
-                // Don't leave the password lying in freed memory.
+                // Don't leave the password lying in freed memory, or in this copy of it once it's read.
                 Marshal.Copy(new byte[size], 0, data, (int)size);
-                FromJson(Encoding.Unicode.GetString(plain).TrimEnd('\0'), laps);
+                string json = Encoding.Unicode.GetString(plain).TrimEnd('\0');
+                Array.Clear(plain, 0, plain.Length);
+                FromJson(json, laps);
             }
             finally
             {
