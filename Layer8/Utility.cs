@@ -41,6 +41,34 @@ namespace Layer8
         }
 
         /// <summary>
+        /// Reads an XML file with no DTD processing and nothing fetched from outside it, the way Lenovo's catalog is
+        /// read. XElement.Load on its own processes DTDs, and these files come from vendors' web sites and from
+        /// devices: a file built to pull in another file, or to expand an entity into gigabytes, is refused.
+        /// </summary>
+        public static System.Xml.Linq.XElement LoadXml(Stream stream)
+        {
+            System.Xml.XmlReaderSettings settings = new System.Xml.XmlReaderSettings
+            {
+                DtdProcessing = System.Xml.DtdProcessing.Prohibit,
+                XmlResolver = null,
+                IgnoreWhitespace = true
+            };
+            using (System.Xml.XmlReader reader = System.Xml.XmlReader.Create(stream, settings))
+            {
+                return System.Xml.Linq.XElement.Load(reader);
+            }
+        }
+
+        /// <summary>LoadXml on a file: a local path or one on a device's share.</summary>
+        public static System.Xml.Linq.XElement LoadXml(string path)
+        {
+            using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                return LoadXml(stream);
+            }
+        }
+
+        /// <summary>
         /// Extracts every file in a .cab into destinationFolder, keeping the cab's own folders, with the expand.exe
         /// that's part of Windows. Returns the files that are in destinationFolder afterwards.
         /// clearDestination empties the folder first, for temporary folders Layer8 owns.

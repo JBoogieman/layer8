@@ -299,7 +299,7 @@ namespace Layer8.DriverManager
             {
                 using (Stream stream = File.OpenRead(catalogFile))
                 {
-                    XElement catalog = XElement.Load(stream);
+                    XElement catalog = Utility.LoadXml(stream);
 
                     comboBoxOS.Items.Clear();
 

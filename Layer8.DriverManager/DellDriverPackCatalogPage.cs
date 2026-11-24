@@ -221,7 +221,7 @@ namespace Layer8.DriverManager
             {
                 using (Stream stream = File.OpenRead(catalogFile))
                 {
-                    catalog = XElement.Load(stream);
+                    catalog = Utility.LoadXml(stream);
                     XNamespace ns = catalog.GetDefaultNamespace();
                     // Get download base location from DriverPackCatalog.xml 
                     UserData["baseLocation"] = catalog.Attribute("baseLocation").Value;

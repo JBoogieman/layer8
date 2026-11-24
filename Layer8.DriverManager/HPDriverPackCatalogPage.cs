@@ -222,7 +222,7 @@ namespace Layer8.DriverManager
             {
                 using (Stream stream = File.OpenRead(catalogFile))
                 {
-                    catalog = XElement.Load(stream);
+                    catalog = Utility.LoadXml(stream);
 
                     IEnumerable<XElement> nodeList = catalog.Element("HPClientDriverPackCatalog").Element("ProductOSDriverPackList").Elements("ProductOSDriverPack").Where(
                         x => x.Element("OSName").Value == UserData["OS"].ToString()

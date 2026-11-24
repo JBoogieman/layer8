@@ -72,7 +72,8 @@ namespace Layer8.Device.PropertiesDialog
                 string lastEvaluation;
                 if (File.Exists(clientHealthFile))
                 {
-                    XElement clientHealth = XElement.Load(clientHealthFile);
+                    // The device writes this file, so it's read without DTDs.
+                    XElement clientHealth = Utility.LoadXml(clientHealthFile);
                     XNamespace ns = clientHealth.GetDefaultNamespace();
 
                     foreach (XElement node in clientHealth.Descendants(ns + "HealthCheck"))
