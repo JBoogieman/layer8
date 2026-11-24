@@ -63,9 +63,9 @@ namespace Layer8.Device.PropertiesDialog
 
             try
             {
-                netCache.Add(new Uri(string.Format(@"\\{0}", PropertyManager["Name"].StringValue)), "Digest", CredentialCache.DefaultNetworkCredentials);
+                netCache.Add(new Uri(string.Format(@"\\{0}", Utility.ComputerName(PropertyManager["Name"].StringValue))), "Digest", CredentialCache.DefaultNetworkCredentials);
 
-                string clientHealthFile = string.Format(@"\\{0}\admin$\CCM\CcmEvalReport.xml", PropertyManager["Name"].StringValue);
+                string clientHealthFile = string.Format(@"\\{0}\admin$\CCM\CcmEvalReport.xml", Utility.ComputerName(PropertyManager["Name"].StringValue));
 
                 // Read on this background thread; RunWorkerCompleted fills the tab on the UI thread.
                 List<ListViewItem> rows = new List<ListViewItem>();
@@ -103,7 +103,8 @@ namespace Layer8.Device.PropertiesDialog
             }
             finally
             {
-                netCache.Remove(new Uri(string.Format(@"\\{0}", PropertyManager["Name"].StringValue)), "Digest");
+                if (Utility.IsComputerName(PropertyManager["Name"].StringValue))
+                    netCache.Remove(new Uri(string.Format(@"\\{0}", PropertyManager["Name"].StringValue)), "Digest");
             }
         }
 
@@ -139,7 +140,7 @@ namespace Layer8.Device.PropertiesDialog
 
             try
             {
-                ManagementClass clientaction = new ManagementClass(string.Format(@"\\{0}\root\cimv2:Win32_Process", PropertyManager["Name"].StringValue));
+                ManagementClass clientaction = new ManagementClass(string.Format(@"\\{0}\root\cimv2:Win32_Process", Utility.ComputerName(PropertyManager["Name"].StringValue)));
                 object[] methodArgs = { @"C:\WINDOWS\CCM\ccmeval.exe" };
                 clientaction.InvokeMethod("Create", methodArgs);
             }

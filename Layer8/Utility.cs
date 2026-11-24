@@ -394,6 +394,29 @@ namespace Layer8
             }
         }
 
+        // Letters, digits, dots, hyphens and underscores: a NetBIOS name or an FQDN, never a path or a command line.
+        private static readonly System.Text.RegularExpressions.Regex ComputerNamePattern =
+            new System.Text.RegularExpressions.Regex(@"^[A-Za-z0-9][A-Za-z0-9.\-_]{0,254}$");
+
+        /// <summary>
+        /// True for names that can be a computer name. ConfigMgr also lists placeholder records such as
+        /// "x64 Unknown Computer (x64 Unknown Computer)", which aren't machines and mustn't reach a path.
+        /// </summary>
+        public static bool IsComputerName(string name)
+        {
+            return name != null && ComputerNamePattern.IsMatch(name);
+        }
+
+        /// <summary>
+        /// The name, checked, for a \\name\... path or a WMI connection: a name with a \ or .. in it would point
+        /// somewhere else. Throws for anything that isn't a computer name.
+        /// </summary>
+        public static string ComputerName(string name)
+        {
+            if (!IsComputerName(name)) throw new ArgumentException(string.Format("\"{0}\" isn't a computer name, so Layer8 won't connect to it.", name), nameof(name));
+            return name;
+        }
+
         public static ManagementScope GetWMIScope(string host, string space, string username = null, string password = null)
         {
             // TODO update to have all the wmi connection catch here, so we can remove it from the other places
@@ -410,7 +433,7 @@ namespace Layer8
                 options.Password = password;
             }
 
-            ManagementScope scope = new ManagementScope(string.Format(@"\\{0}\root\{1}", host, space), options);
+            ManagementScope scope = new ManagementScope(string.Format(@"\\{0}\root\{1}", ComputerName(host), space), options);
             scope.Connect();
 
             if (scope.IsConnected == true)

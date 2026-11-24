@@ -21,9 +21,6 @@ namespace Layer8.Device
         // Opening a window per device gets out of hand quickly; ask first above this many.
         private const int ConfirmAbove = 5;
 
-        // Device names go straight onto command lines, so only accept what a computer name can contain.
-        private static readonly Regex ValidName = new Regex(@"^[A-Za-z0-9][A-Za-z0-9.\-_]{0,254}$");
-
         /// <summary>Console entry point: runs OpenCore behind Layer8's crash guard.</summary>
         public static void Open(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedResultObjects, PropertyDataUpdated dataUpdatedDelegate, Status status)
         {
@@ -146,7 +143,9 @@ namespace Layer8.Device
         /// </summary>
         public static bool IsComputerName(string name)
         {
-            return name != null && ValidName.IsMatch(name);
+            // Device names go straight onto command lines, so only what a computer name can contain: the same
+            // rule Utility uses for paths and WMI connections.
+            return Utility.IsComputerName(name);
         }
 
         /// <summary>The program and arguments for one tool against one device. Public so it can be tested.</summary>

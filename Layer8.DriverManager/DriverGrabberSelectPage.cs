@@ -102,7 +102,7 @@ namespace Layer8.DriverManager
                         if (!Utility.IsPlainFileName(infFile))
                             throw new InvalidOperationException(string.Format("the device gave '{0}' as its INF file, which isn't a plain file name", infFile));
 
-                        string remoteFolder = string.Format(@"\\{0}\admin$", PropertyManager["Name"].StringValue);
+                        string remoteFolder = string.Format(@"\\{0}\admin$", Utility.ComputerName(PropertyManager["Name"].StringValue));
 
                         string remoteINFFile = Path.Combine(remoteFolder, "inf", infFile);
 

@@ -57,12 +57,13 @@ namespace Layer8.DriverManager.PropertiesDialog
 
         private void InfoWorker_DoWork(object sender, DoWorkEventArgs e)
         {
-            if (!Utility.CheckFolderPermissions(string.Format(@"\\{0}\admin$", PropertyManager["Name"].StringValue), FileSystemRights.ReadData))
+            string host = Utility.ComputerName(PropertyManager["Name"].StringValue);
+            if (!Utility.CheckFolderPermissions(string.Format(@"\\{0}\admin$", host), FileSystemRights.ReadData))
             {
                 throw new InvalidOperationException("Access Denied");
             }
 
-            ManagementScope scope = Utility.GetWMIScope(PropertyManager["Name"].StringValue, @"cimv2");
+            ManagementScope scope = Utility.GetWMIScope(host, @"cimv2");
             ObjectQuery query = new ObjectQuery("SELECT * FROM Win32_PnPSignedDriver WHERE DriverProviderName IS NOT NULL");
             List<ManagementObject> signedDriver = Utility.SearchWMIToList(scope, query);
 
@@ -90,7 +91,7 @@ namespace Layer8.DriverManager.PropertiesDialog
 
                         if (!string.IsNullOrEmpty(textBoxDriverPackage.Text))
                         {
-                            string remoteINFFile = string.Format(@"\\{0}\admin$\inf\{1}", PropertyManager["Name"].StringValue, oeminf);
+                            string remoteINFFile = string.Format(@"\\{0}\admin$\inf\{1}", host, oeminf);
                             Driver iniDriver = new Driver(remoteINFFile);
 
                             IResultObject driver = driverObjects?.Where(x => x.Properties["LocalizedDisplayName"].StringValue.Equals(iniDriver.Model)).FirstOrDefault();
