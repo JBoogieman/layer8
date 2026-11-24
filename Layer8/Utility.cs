@@ -760,20 +760,26 @@ namespace Layer8
             }
         }
 
+        /// <summary>
+        /// Ctrl+C in a list: the selected rows, columns separated by tabs and rows by line breaks, the way a
+        /// spreadsheet pastes them. Nothing selected copies nothing (it used to throw).
+        /// </summary>
         public static void CopyToClipboard(ListView listView)
         {
-            StringBuilder buffer = new StringBuilder();
+            string text = SelectedRowsText(listView);
+            if (text.Length == 0) return;
+            Clipboard.SetText(text);
+        }
+
+        /// <summary>The text CopyToClipboard puts on the clipboard. Public so it can be tested.</summary>
+        public static string SelectedRowsText(ListView listView)
+        {
+            List<string> rows = new List<string>();
             foreach (ListViewItem item in listView.SelectedItems)
             {
-                foreach (ListViewItem.ListViewSubItem subitem in item.SubItems)
-                {
-                    buffer.Append(subitem.Text);
-                    buffer.Append("\t");
-                }
-                buffer.AppendLine();
+                rows.Add(string.Join("\t", item.SubItems.Cast<ListViewItem.ListViewSubItem>().Select(subitem => subitem.Text)));
             }
-            buffer.Remove(buffer.Length - 1, 1);
-            Clipboard.SetData(DataFormats.Text, buffer.ToString());
+            return string.Join("\r\n", rows);
         }
 
         public static string RandomString(int size, bool lowerCase)
