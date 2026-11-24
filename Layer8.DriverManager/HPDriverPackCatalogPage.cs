@@ -205,7 +205,20 @@ namespace Layer8.DriverManager
             string prefix = string.IsNullOrEmpty(registry.ReadString("HPFolderPrefix")) ? "HP" : registry.ReadString("HPFolderPrefix");
 
             string tempFile = Path.Combine(Path.GetTempPath(), "HPClientDriverPackCatalog.cab");
-            foreach (string catalogFile in Utility.ExtractCab(tempFile, Path.Combine(Path.GetTempPath(), "Layer8", "HPClientDriverPackCatalog"), clearDestination: true))
+            string[] catalogFiles;
+            try
+            {
+                // The packs come from the catalog: only HP's.
+                catalogFiles = Authenticode.ExtractSignedCab(tempFile, Path.Combine(Path.GetTempPath(), "Layer8", "HPClientDriverPackCatalog"), Authenticode.HPSigner, "HP");
+            }
+            catch (InvalidOperationException ex)
+            {
+                Authenticode.Discard(tempFile);
+                Layer8.Layer8Log.GetLogger(GetType()).Warn("HP's catalog wasn't used: " + ex.Message);
+                MessageBox.Show(this, ex.Message + "\r\n\r\nGo back and click the Windows version box to download it again.", "HP Driver Packs", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            foreach (string catalogFile in catalogFiles)
             {
                 using (Stream stream = File.OpenRead(catalogFile))
                 {

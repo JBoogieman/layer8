@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 
@@ -15,6 +16,9 @@ namespace Layer8.DriverManager
     {
         /// <summary>HP signs its SoftPaqs as "HP Inc." (older ones "Hewlett-Packard Company").</summary>
         public static readonly Regex HPSigner = new Regex(@"^(HP Inc\.?|HP Development Company.*|Hewlett[- ]Packard.*)$", RegexOptions.IgnoreCase);
+
+        /// <summary>Dell signs its catalog as "Dell Inc" (or another Dell company name).</summary>
+        public static readonly Regex DellSigner = new Regex(@"^Dell\b.*$", RegexOptions.IgnoreCase);
 
         /// <summary>Lenovo signs its driver packs as "Lenovo" (or a Lenovo company such as "Lenovo (United States) Inc.").</summary>
         public static readonly Regex LenovoSigner = new Regex(@"^Lenovo\b.*$", RegexOptions.IgnoreCase);
@@ -32,14 +36,14 @@ namespace Layer8.DriverManager
         /// <summary>
         /// Throws unless Windows trusts the file's signature and its signer's name matches <paramref name="signer"/>.
         /// </summary>
-        public static void RequireSignedBy(string path, Regex signer, string vendor)
+        public static void RequireSignedBy(string path, Regex signer, string vendor, string refusal = "run it")
         {
             int result = Verify(path);
             if (result != 0)
             {
                 throw new InvalidOperationException(string.Format(
-                    "{0} isn't validly signed (WinVerifyTrust 0x{1:X8}), so Layer8 won't run it. Delete it and download it again.",
-                    path, result));
+                    "{0} isn't validly signed (WinVerifyTrust 0x{1:X8}), so Layer8 won't {2}. Delete it and download it again.",
+                    path, result, refusal));
             }
 
             string name;
@@ -52,12 +56,58 @@ namespace Layer8.DriverManager
             }
             catch (System.Security.Cryptography.CryptographicException ex)
             {
-                throw new InvalidOperationException(path + " has no readable signature, so Layer8 won't run it: " + ex.Message, ex);
+                throw new InvalidOperationException(path + " has no readable signature, so Layer8 won't " + refusal + ": " + ex.Message, ex);
             }
             if (!signer.IsMatch(name ?? string.Empty))
             {
                 throw new InvalidOperationException(string.Format(
-                    "{0} is signed by \"{1}\", not {2}, so Layer8 won't run it.", path, name, vendor));
+                    "{0} is signed by \"{1}\", not {2}, so Layer8 won't {3}.", path, name, vendor, refusal));
+            }
+        }
+
+        /// <summary>
+        /// Unpacks a vendor's catalog .cab once its signature checks out: the list of packs, and for Dell the hash
+        /// each pack is checked against, come from it. Locked between the check and the unpacking.
+        /// </summary>
+        public static string[] ExtractSignedCab(string cabPath, string destinationFolder, Regex signer, string vendor)
+        {
+            using (Lock(cabPath))
+            {
+                RequireSignedBy(cabPath, signer, vendor, "use it");
+                return Utility.ExtractCab(cabPath, destinationFolder, clearDestination: true);
+            }
+        }
+
+        /// <summary>
+        /// Deletes a catalog copy that failed its check, so the wizard downloads it again next time instead of
+        /// finding the same copy.
+        /// </summary>
+        public static void Discard(string path)
+        {
+            try { File.Delete(path); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+
+        /// <summary>
+        /// Compares a download with the hash in the vendor's catalog: SHA-256 (64 hex digits) or MD5 (32). A catalog
+        /// entry without a hash passes unless <paramref name="required"/>, for packs nothing else checks.
+        /// </summary>
+        public static void RequireHash(string path, string expected, string vendor, bool required)
+        {
+            expected = (expected ?? string.Empty).Trim();
+            HashAlgorithm algorithm = expected.Length == 64 ? (HashAlgorithm)SHA256.Create() : expected.Length == 32 ? MD5.Create() : null;
+            if (algorithm == null)
+            {
+                if (required) throw new InvalidOperationException(string.Format("{0}'s catalog has no hash for {1}, so Layer8 can't check it and won't use it.", vendor, path));
+                return;
+            }
+            using (algorithm)
+            using (FileStream file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                string actual = BitConverter.ToString(algorithm.ComputeHash(file)).Replace("-", string.Empty);
+                if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(string.Format("{0} doesn't match the hash in {1}'s catalog, so Layer8 won't use it. Delete it and download it again.", path, vendor));
+                }
             }
         }
 

@@ -414,7 +414,7 @@ namespace Layer8.DriverManager
                     int exitCode;
                     using (Authenticode.Lock(data.Value))
                     {
-                        CheckHash(data.Value, package.Crc);
+                        Authenticode.RequireHash(data.Value, package.Crc, "Lenovo", required: false);
                         Authenticode.RequireSignedBy(data.Value, Authenticode.LenovoSigner, "Lenovo");
 
                         if (Directory.Exists(tempFolder)) Directory.Delete(tempFolder, true);
@@ -465,26 +465,6 @@ namespace Layer8.DriverManager
 
             successful.Add(currentModel);
             CheckExtractQueueCompleted();
-        }
-
-        /// <summary>
-        /// Compares the download with the hash in Lenovo's catalog: SHA-256 (64 hex digits) or MD5 (32). A catalog
-        /// entry without a hash is left to the signature check.
-        /// </summary>
-        private static void CheckHash(string path, string expected)
-        {
-            expected = (expected ?? string.Empty).Trim();
-            HashAlgorithm algorithm = expected.Length == 64 ? (HashAlgorithm)SHA256.Create() : expected.Length == 32 ? MD5.Create() : null;
-            if (algorithm == null) return;
-            using (algorithm)
-            using (FileStream file = File.OpenRead(path))
-            {
-                string actual = BitConverter.ToString(algorithm.ComputeHash(file)).Replace("-", string.Empty);
-                if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new InvalidOperationException(string.Format("{0} doesn't match the hash in Lenovo's catalog, so Layer8 won't run it. Delete it and download it again.", path));
-                }
-            }
         }
 
         private void CheckExtractQueueCompleted()
