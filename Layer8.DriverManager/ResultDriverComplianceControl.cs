@@ -52,11 +52,20 @@ namespace Layer8.DriverManager.PropertiesDialog
             backgroundWorker.WorkerSupportsCancellation = false;
             backgroundWorker.WorkerReportsProgress = false;
             buttonRefresh.Enabled = false;
-            backgroundWorker.RunWorkerAsync();
+            backgroundWorker.RunWorkerAsync(textBoxDriverPackage.Text);
+        }
+
+        // What the background read found. The worker only collects; the UI thread fills the tab, because WinForms
+        // controls may only be changed from the thread that created them.
+        private sealed class ComplianceResult
+        {
+            public List<ListViewItem> Rows = new List<ListViewItem>();
+            public string Manufacturer, Model;
         }
 
         private void InfoWorker_DoWork(object sender, DoWorkEventArgs e)
         {
+            string packageName = e.Argument as string;
             string host = Utility.ComputerName(PropertyManager["Name"].StringValue);
             if (!Utility.CheckFolderPermissions(string.Format(@"\\{0}\admin$", host), FileSystemRights.ReadData))
             {
@@ -69,13 +78,16 @@ namespace Layer8.DriverManager.PropertiesDialog
 
             List<IResultObject> driverObjects = new List<IResultObject>();
 
-            if (!string.IsNullOrEmpty(textBoxDriverPackage.Text))
+            if (!string.IsNullOrEmpty(packageName))
             {
-                string query2 = string.Format("SELECT * FROM SMS_DriverPackage WHERE NAME = '{0}'", Utility.WqlText(textBoxDriverPackage.Text));
+                string query2 = string.Format("SELECT * FROM SMS_DriverPackage WHERE NAME = '{0}'", Utility.WqlText(packageName));
                 IResultObject packageObject = Utility.GetFirstWMIInstance(ConnectionManager, query2);
-                driverObjects = Utility.SearchWMIToList(ConnectionManager, string.Format("SELECT * FROM SMS_Driver WHERE CI_ID IN (SELECT DC.CI_ID FROM SMS_DriverContainer AS DC WHERE DC.PackageID = '{0}') ORDER BY LocalizedDisplayName", packageObject["PackageID"].StringValue));
+                if (packageObject == null)
+                    throw new InvalidOperationException(string.Format("There's no driver package named {0}.", packageName));
+                driverObjects = Utility.SearchWMIToList(ConnectionManager, string.Format("SELECT * FROM SMS_Driver WHERE CI_ID IN (SELECT DC.CI_ID FROM SMS_DriverContainer AS DC WHERE DC.PackageID = '{0}') ORDER BY LocalizedDisplayName", Utility.WqlText(packageObject["PackageID"].StringValue)));
             }
 
+            ComplianceResult result = new ComplianceResult();
             foreach (ManagementObject item in signedDriver)
             {
                 try
@@ -86,11 +98,13 @@ namespace Layer8.DriverManager.PropertiesDialog
 
                     if (provider.Length > 0 && description.Length > 0)
                     {
-                        if (provider == "Microsoft" || DriverExists(description, oeminf))
+                        if (provider == "Microsoft" || DriverExists(result.Rows, description, oeminf))
                             continue;
 
-                        if (!string.IsNullOrEmpty(textBoxDriverPackage.Text))
+                        if (!string.IsNullOrEmpty(packageName))
                         {
+                            // The device names its INF file; anything but a plain file name would read another file.
+                            if (!Utility.IsPlainFileName(oeminf)) continue;
                             string remoteINFFile = string.Format(@"\\{0}\admin$\inf\{1}", host, oeminf);
                             Driver iniDriver = new Driver(remoteINFFile);
 
@@ -99,7 +113,7 @@ namespace Layer8.DriverManager.PropertiesDialog
                             string driverVersion = driver?["DriverVersion"].StringValue;
                             Color textColor = driverVersion == null ? Color.Black : driverVersion == item["DriverVersion"].ToString() ? Color.Green : Color.Red;
 
-                            listViewDrivers.Items.Add(new ListViewItem()
+                            result.Rows.Add(new ListViewItem()
                             {
                                 Text = provider,
                                 SubItems = {
@@ -113,7 +127,7 @@ namespace Layer8.DriverManager.PropertiesDialog
                         }
                         else
                         {
-                            listViewDrivers.Items.Add(new ListViewItem()
+                            result.Rows.Add(new ListViewItem()
                             {
                                 Text = provider,
                                 SubItems = {
@@ -131,8 +145,9 @@ namespace Layer8.DriverManager.PropertiesDialog
             query = new ObjectQuery("SELECT * FROM Win32_ComputerSystem");
             ManagementObject computerSystem = Utility.GetFirstWMIInstance(scope, query);
 
-            labelManufacturer.Text = (string)computerSystem["Manufacturer"];
-            labelProductName.Text = (string)computerSystem["Model"];
+            result.Manufacturer = computerSystem?["Manufacturer"] as string;
+            result.Model = computerSystem?["Model"] as string;
+            e.Result = result;
         }
 
         private void InfoWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
@@ -141,6 +156,12 @@ namespace Layer8.DriverManager.PropertiesDialog
             {
                 if (e.Error != null)
                     SccmExceptionDialog.ShowDialog(this, e.Error, "Error");
+                else if (e.Result is ComplianceResult result)
+                {
+                    listViewDrivers.Items.AddRange(result.Rows.ToArray());
+                    labelManufacturer.Text = result.Manufacturer;
+                    labelProductName.Text = result.Model;
+                }
             }
             finally
             {
@@ -156,11 +177,13 @@ namespace Layer8.DriverManager.PropertiesDialog
             }
         }
 
-        private bool DriverExists(string desc, string oeminf)
+        /// <summary>True when a row for the same device (its description) or the same INF file is already there.</summary>
+        private static bool DriverExists(List<ListViewItem> rows, string desc, string oeminf)
         {
-            foreach (ListViewItem item in listViewDrivers.Items)
+            foreach (ListViewItem item in rows)
             {
-                if (item.SubItems[0].Text == desc || (string)item.Tag == oeminf)
+                // SubItems[0] is the provider; the description is the second column.
+                if (item.SubItems[1].Text == desc || (string)item.Tag == oeminf)
                     return true;
             }
 
