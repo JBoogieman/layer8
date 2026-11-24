@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
@@ -17,6 +18,16 @@ namespace Layer8.DriverManager
 
         /// <summary>Lenovo signs its driver packs as "Lenovo" (or a Lenovo company such as "Lenovo (United States) Inc.").</summary>
         public static readonly Regex LenovoSigner = new Regex(@"^Lenovo\b.*$", RegexOptions.IgnoreCase);
+
+        /// <summary>
+        /// Opens the file so that nothing can change, replace, rename or delete it until the handle is closed. Other
+        /// programs can still read and run it. Held from the checks until the vendor's program has finished, so the
+        /// file that runs is the one that was checked, even in a download folder other accounts can write to.
+        /// </summary>
+        public static FileStream Lock(string path)
+        {
+            return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        }
 
         /// <summary>
         /// Throws unless Windows trusts the file's signature and its signer's name matches <paramref name="signer"/>.

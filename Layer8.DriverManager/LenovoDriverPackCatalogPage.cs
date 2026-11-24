@@ -410,21 +410,26 @@ namespace Layer8.DriverManager
                         throw new InvalidOperationException(string.Format("{0} isn't a folder inside {1}, so Layer8 won't replace it", package.FolderName, sourceFolderPath));
                     // The pack runs elevated, so it has to be the file Lenovo's catalog describes and signed by Lenovo:
                     // not a file tampered with on the way, or one left in the download folder under the same name.
-                    CheckHash(data.Value, package.Crc);
-                    Authenticode.RequireSignedBy(data.Value, Authenticode.LenovoSigner, "Lenovo");
+                    // Locked from the checks until it has finished, so the file that runs is the one that was checked.
+                    int exitCode;
+                    using (Authenticode.Lock(data.Value))
+                    {
+                        CheckHash(data.Value, package.Crc);
+                        Authenticode.RequireSignedBy(data.Value, Authenticode.LenovoSigner, "Lenovo");
 
-                    if (Directory.Exists(tempFolder)) Directory.Delete(tempFolder, true);
+                        if (Directory.Exists(tempFolder)) Directory.Delete(tempFolder, true);
 
-                    // Lenovo's packs are Inno Setup self-extractors: /EXTRACT=YES unpacks the drivers into /DIR.
-                    extractProcess.StartInfo.FileName = data.Value;
-                    extractProcess.StartInfo.Arguments = string.Format("/VERYSILENT /DIR=\"{0}\" /EXTRACT=YES", tempFolder);
-                    extractProcess.StartInfo.CreateNoWindow = true;
-                    extractProcess.StartInfo.UseShellExecute = true;
-                    extractProcess.StartInfo.Verb = "RunAs";
-                    extractProcess.Start();
-                    extractProcess.WaitForExit();
-                    int exitCode = extractProcess.ExitCode;
-                    extractProcess.Close();
+                        // Lenovo's packs are Inno Setup self-extractors: /EXTRACT=YES unpacks the drivers into /DIR.
+                        extractProcess.StartInfo.FileName = data.Value;
+                        extractProcess.StartInfo.Arguments = string.Format("/VERYSILENT /DIR=\"{0}\" /EXTRACT=YES", tempFolder);
+                        extractProcess.StartInfo.CreateNoWindow = true;
+                        extractProcess.StartInfo.UseShellExecute = true;
+                        extractProcess.StartInfo.Verb = "RunAs";
+                        extractProcess.Start();
+                        extractProcess.WaitForExit();
+                        exitCode = extractProcess.ExitCode;
+                        extractProcess.Close();
+                    }
 
                     backgroundWorker.ReportProgress(Convert.ToInt32(50 + ((100.0 / totalPacks * extracted) * 0.5) - 1), string.Format("Processing {0} : moving to destination folder", currentModel));
 

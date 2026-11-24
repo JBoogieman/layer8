@@ -416,21 +416,25 @@ namespace Layer8.DriverManager
                         if (!Utility.IsInside(sourceFolderPath, destinationFolder) || !Utility.IsInside(Path.Combine(tempFolderPath, "extract"), tempFolder))
                             throw new InvalidOperationException(string.Format("{0} isn't a folder inside {1}, so Layer8 won't replace it", package.FolderName, sourceFolderPath));
                         // The SoftPaq runs elevated, so only one HP signed: not a file tampered with on the way,
-                        // or one left in the download folder under the same name.
-                        Authenticode.RequireSignedBy(data.Value, Authenticode.HPSigner, "HP");
+                        // or one left in the download folder under the same name. Locked from the check until it
+                        // has finished, so the file that runs is the one that was checked.
+                        using (Authenticode.Lock(data.Value))
+                        {
+                            Authenticode.RequireSignedBy(data.Value, Authenticode.HPSigner, "HP");
 
-                        // Emptied first: a run that failed halfway left its files here, and they were copied in with
-                        // this pack, old .version files among them.
-                        if (Directory.Exists(tempFolder)) Directory.Delete(tempFolder, true);
+                            // Emptied first: a run that failed halfway left its files here, and they were copied in with
+                            // this pack, old .version files among them.
+                            if (Directory.Exists(tempFolder)) Directory.Delete(tempFolder, true);
 
-                        extractProcess.StartInfo.FileName = data.Value;
-                        extractProcess.StartInfo.Arguments = string.Format("-pdf -f \"{0}\" -s -e", tempFolder);
-                        extractProcess.StartInfo.CreateNoWindow = true;
-                        extractProcess.StartInfo.UseShellExecute = true;
-                        extractProcess.StartInfo.Verb = "RunAs";
-                        extractProcess.Start();
-                        extractProcess.WaitForExit();
-                        extractProcess.Close();
+                            extractProcess.StartInfo.FileName = data.Value;
+                            extractProcess.StartInfo.Arguments = string.Format("-pdf -f \"{0}\" -s -e", tempFolder);
+                            extractProcess.StartInfo.CreateNoWindow = true;
+                            extractProcess.StartInfo.UseShellExecute = true;
+                            extractProcess.StartInfo.Verb = "RunAs";
+                            extractProcess.Start();
+                            extractProcess.WaitForExit();
+                            extractProcess.Close();
+                        }
 
                         // update my best friend the progress bar
                         backgroundWorker.ReportProgress(Convert.ToInt32(50 + ((100 / totalPacks * extracted) * 0.5) - 1), string.Format("Processing {0} : moving to destination folder", currentModel));
