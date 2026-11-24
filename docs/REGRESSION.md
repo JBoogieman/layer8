@@ -232,7 +232,7 @@ The script checks Lenovo's catalog signature, the signature check on downloads, 
 
 - [ ] **Dell:** the catalog downloads, and lists Windows 11 and 10.
 - [ ] **HP:** the catalog downloads, and lists Windows 11.
-- [ ] **Driver Compliance tab** on the second client: lists its non-Microsoft drivers and its make and model. With a driver package name that doesn't exist typed in, Refresh says there's no driver package with that name.
+- [ ] **Driver Compliance tab** on the second client: lists its non-Microsoft drivers and its make and model. With a driver package picked with Browse, Refresh compares against it without an error (the box shows the package's name and version; the lookup uses its package ID).
 - [ ] **Lenovo Driver Pack:**
   - Releases are listed newest first, with Windows 11 IoT after Windows 11, and IoT 25H2 lists its 8 packs.
   - The ThinkCentre M70A Gen 6 pack for Windows 11 25H2 shows Downloaded.
