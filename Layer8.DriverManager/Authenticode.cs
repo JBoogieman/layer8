@@ -159,7 +159,10 @@ namespace Layer8.DriverManager
         private const uint WTD_STATEACTION_VERIFY = 1;
         private const uint WTD_STATEACTION_CLOSE = 2;
 
+        // From System32 only. The default search looks in the console's folder and Layer8's own first, so a
+        // wintrust.dll put there would be the one that decides whether a download is trusted.
         [DllImport("wintrust.dll", CharSet = CharSet.Unicode)]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         private static extern int WinVerifyTrust(IntPtr hwnd, [MarshalAs(UnmanagedType.LPStruct)] Guid pgActionID, ref WINTRUST_DATA pWVTData);
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]

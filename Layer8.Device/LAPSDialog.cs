@@ -354,13 +354,18 @@ namespace Layer8.Device
         {
             public const uint NCRYPT_SILENT_FLAG = 0x40;
 
+            // From System32 only. The default search looks in the console's folder and Layer8's own first, and the
+            // decrypted password passes through these.
             [DllImport("ncrypt.dll")]
+            [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
             public static extern int NCryptUnprotectSecret(out IntPtr phDescriptor, uint dwFlags, byte[] pbProtectedBlob, uint cbProtectedBlob, IntPtr pMemPara, IntPtr hWnd, out IntPtr ppbData, out uint pcbData);
 
             [DllImport("ncrypt.dll")]
+            [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
             public static extern int NCryptCloseProtectionDescriptor(IntPtr hDescriptor);
 
             [DllImport("kernel32.dll")]
+            [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
             public static extern IntPtr LocalFree(IntPtr hMem);
         }
     }
