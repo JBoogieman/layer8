@@ -194,16 +194,27 @@ namespace Layer8.Device
 
         private static DeviceAction Cycle(string name, string schedule, bool full = false) => new DeviceAction(name, null, schedule, full);
 
-        /// <summary>What a tile's Fix button offers: the button's words, and the client actions (two or more make a menu).</summary>
+        /// <summary>
+        /// What a tile's Fix button offers: the button's words, and the client actions (two or more make a menu), or
+        /// the Windows Security window for one device, which only reads until something in it is clicked.
+        /// </summary>
         private sealed class TileFix
         {
-            public TileFix(string label, params DeviceAction[] actions)
+            public TileFix(string label, params DeviceAction[] actions) : this(label, false, actions)
+            {
+            }
+
+            private TileFix(string label, bool opensWindowsSecurity, DeviceAction[] actions)
             {
                 Label = label;
+                OpensWindowsSecurity = opensWindowsSecurity;
                 Actions = actions;
             }
 
+            public static TileFix ForWindowsSecurity() => new TileFix("Windows Security", true, new DeviceAction[0]);
+
             public readonly string Label;
+            public readonly bool OpensWindowsSecurity;
             public readonly DeviceAction[] Actions;
         }
 
@@ -370,10 +381,12 @@ namespace Layer8.Device
             // Workstations only: a server's restart should be meant, from the right-click menu.
             restartTile.Fix = new TileFix("Restart", Named("Restart Computer"));
             AddIssueTile(HealthIssue.LowDisk, string.Format("Less than {0} GB free on C:", lowDiskGB));
-            AddIssueTile(HealthIssue.BitLockerOff, "C: isn't protected by BitLocker: off, or protection suspended");
+            AddIssueTile(HealthIssue.BitLockerOff, "C: isn't protected by BitLocker: off, or protection suspended")
+                .Fix = TileFix.ForWindowsSecurity();
             AddIssueTile(HealthIssue.Defender, string.Format(
                 "Microsoft Defender antivirus or real-time protection is off, or its signatures are more than {0} days old. Not counted when Defender is passive behind another antivirus",
-                HealthCheck.DefenderSignatureDays));
+                HealthCheck.DefenderSignatureDays))
+                .Fix = TileFix.ForWindowsSecurity();
             AddIssueTile(HealthIssue.BlueScreen, string.Format(
                 "Windows wrote a crash dump (a blue screen) in the last {0} days. Read from C:\\Windows\\Minidump: a blue screen whose dump was turned off or cleaned up doesn't show", blueScreenDays));
             AddIssueTile(HealthIssue.MissingUpdates, "Deployed software updates the client reports as missing");
@@ -418,6 +431,7 @@ namespace Layer8.Device
 
             ContextMenuStrip menu = new ContextMenuStrip();
             ToolStripMenuItem systemInfo = new ToolStripMenuItem("System Information...", null, (s, e) => OpenSystemInfo());
+            ToolStripMenuItem windowsSecurity = new ToolStripMenuItem("Windows Security...", null, (s, e) => SafeAction.Run("Windows Security", () => OpenWindowsSecurity(null)));
             ToolStripMenuItem checkAgain = new ToolStripMenuItem("Check Again", null, (s, e) => CheckAgain());
             ToolStripMenuItem copySelected = new ToolStripMenuItem("Copy", null, (s, e) => CopyRows(true));
             // Find something, fix it here: the console's client actions, on the selected devices.
@@ -431,7 +445,7 @@ namespace Layer8.Device
                     clientActions.DropDownItems.Add(new ToolStripMenuItem(chosen.Name, null, (s, e) => SafeAction.Run(chosen.Name, () => RunDeviceAction(chosen, SelectedDevices()))));
                 }
             }
-            menu.Items.AddRange(new ToolStripItem[] { systemInfo, checkAgain, clientActions, new ToolStripSeparator(), copySelected });
+            menu.Items.AddRange(new ToolStripItem[] { systemInfo, windowsSecurity, checkAgain, clientActions, new ToolStripSeparator(), copySelected });
             menu.Opening += (s, e) =>
             {
                 int selectedCount = list.SelectedItems.Count;
@@ -441,6 +455,7 @@ namespace Layer8.Device
                     return;
                 }
                 systemInfo.Enabled = selectedCount == 1;
+                windowsSecurity.Enabled = selectedCount == 1;
                 checkAgain.Enabled = !running;
                 checkAgain.Text = selectedCount == 1 ? "Check Again" : string.Format("Check These {0} Again", selectedCount);
                 clientActions.Enabled = SelectedDevices().Count > 0;
@@ -1121,6 +1136,15 @@ namespace Layer8.Device
             TileFix fix = activeTile?.Fix;
             fixButton.Visible = fix != null;
             if (fix == null) return;
+            if (fix.OpensWindowsSecurity)
+            {
+                // Read only until something in it is clicked, so it opens during a check too.
+                const string securityTip = "Opens Windows Security (Defender, Firewall and BitLocker) for the selected device, or the only one shown. Opening it only reads; Suspend and Quick Scan in it ask first";
+                if (fixButton.Text != "Windows Security...") fixButton.Text = "Windows Security...";
+                if (!fixButton.Enabled) fixButton.Enabled = true;
+                if (tips.GetToolTip(fixButton) != securityTip) tips.SetToolTip(fixButton, securityTip);
+                return;
+            }
             List<Row> targets = FixTargets(activeTile, out string leftOut);
             string text = string.Format("{0} ({1})...", fix.Label, targets.Count.ToString("N0"));
             string tip = running
@@ -1179,6 +1203,11 @@ namespace Layer8.Device
         {
             Tile tile = activeTile;
             TileFix fix = tile?.Fix;
+            if (fix != null && fix.OpensWindowsSecurity)
+            {
+                OpenWindowsSecurity(tile.Caption);
+                return;
+            }
             if (fix == null || running) return;
             List<Row> targets = FixTargets(tile, out string leftOut);
             if (targets.Count == 0)
@@ -1267,6 +1296,24 @@ namespace Layer8.Device
             {
                 dialog.ShowDialog(this);
             }
+        }
+
+        /// <summary>
+        /// Windows Security for one device: the selected row, or the only one the grid shows. From a tile's Fix button
+        /// (tile names it, for the log) or the right-click menu (null).
+        /// </summary>
+        private void OpenWindowsSecurity(string tile)
+        {
+            ListViewItem item = list.SelectedItems.Count == 1 ? list.SelectedItems[0] : list.Items.Count == 1 ? list.Items[0] : null;
+            if (item == null)
+            {
+                MessageBox.Show(this, "Windows Security opens for one device at a time. Select one in the grid, then click again.", "Windows Security",
+                                MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            string host = ((Row)item.Tag).Host;
+            log.InfoFormat("{0} on {1}: {2}Windows Security on {3}", title, scope, tile == null ? string.Empty : "tile " + tile + ": ", host);
+            WindowsSecurity.ShowFor(host, this);
         }
 
         /// <summary>The selected rows that are machines: placeholder records (Unknown Computer and the like) are left out.</summary>
