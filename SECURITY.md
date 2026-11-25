@@ -12,6 +12,10 @@ Use **Report a vulnerability** on this repository's **Security** tab. Please don
 - LAPS passwords or BitLocker recovery keys shown to someone who shouldn't see them, or written to Layer8's log or anywhere else.
 - Injection through device names, log names or other text Layer8 puts into command lines, WMI queries or LDAP filters.
 
+## What to expect
+
+Reports are handled in spare time. I'll reply as soon as I can, fix the serious ones first, and credit you in the release notes if you'd like. There's no guaranteed response time.
+
 ## Supported versions
 
 The latest release.

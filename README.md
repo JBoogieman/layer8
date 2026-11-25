@@ -98,6 +98,10 @@ The Health Dashboard's thresholds, low disk (10 GB), long uptime (14 days), not 
 
 The log rolls over to `Layer8.lo_` at 2 MB, the same way ConfigMgr's own logs do.
 
+## A spare-time project
+
+Layer8 is built and tested by one person in spare time. It's free and provided as is, without warranty (see [LICENSE](LICENSE)), and there's no promised support or timeline. Issues and pull requests are welcome and get read: see [CONTRIBUTING.md](CONTRIBUTING.md) and the [roadmap](docs/ROADMAP.md). Layer8 acts with your ConfigMgr and Active Directory rights, so try each release in a lab or on a small collection before rolling it out.
+
 ## Credits and license
 
 Based on ConfigMgr Quick Tools by Peter Szalatnay. Released under the MIT license; see [LICENSE](LICENSE).

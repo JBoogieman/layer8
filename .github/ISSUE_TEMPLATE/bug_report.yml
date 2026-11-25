@@ -11,7 +11,7 @@ body:
     attributes:
       label: What happened
       description: What you clicked and what Layer8 did. A screenshot helps.
-      placeholder: Right-click a collection, Client Actions, Quick Status. The window...
+      placeholder: Right-click a collection, Layer8, Status, Quick Status. The window...
     validations:
       required: true
   - type: textarea
@@ -34,7 +34,7 @@ body:
     attributes:
       label: Layer8 version
       description: The first line of each console session in %LOCALAPPDATA%\Layer8\Logs\Layer8.log shows it.
-      placeholder: 0.8.1
+      placeholder: 1.1.3
     validations:
       required: true
   - type: dropdown
