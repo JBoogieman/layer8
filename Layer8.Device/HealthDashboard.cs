@@ -399,7 +399,7 @@ namespace Layer8.Device
                 foreach (DeviceAction deviceAction in group)
                 {
                     DeviceAction chosen = deviceAction;
-                    clientActions.DropDownItems.Add(new ToolStripMenuItem(chosen.Name, null, (s, e) => SafeAction.Run(chosen.Name, () => RunDeviceAction(chosen))));
+                    clientActions.DropDownItems.Add(new ToolStripMenuItem(chosen.Name, null, (s, e) => SafeAction.Run(chosen.Name, () => RunDeviceAction(chosen, SelectedDevices()))));
                 }
             }
             menu.Items.AddRange(new ToolStripItem[] { systemInfo, checkAgain, clientActions, new ToolStripSeparator(), copySelected });
@@ -1135,13 +1135,12 @@ namespace Layer8.Device
         }
 
         /// <summary>
-        /// Runs a client action on the selected devices, with the same questions and in the same progress window as
-        /// the console's Client Actions menu. The grid doesn't change by itself: check the devices again once the
-        /// action has had time to work.
+        /// Runs a client action on these devices (the selected rows, from the right-click menu), with the same
+        /// questions and in the same progress window as the console's Client Actions menu. The grid doesn't change by
+        /// itself: check the devices again once the action has had time to work.
         /// </summary>
-        private void RunDeviceAction(DeviceAction chosen)
+        private void RunDeviceAction(DeviceAction chosen, List<Row> targets)
         {
-            List<Row> targets = SelectedDevices();
             if (targets.Count == 0) return;
 
             string actionTitle = chosen.Name.TrimEnd('.');
