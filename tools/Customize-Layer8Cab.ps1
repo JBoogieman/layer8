@@ -86,7 +86,12 @@ $Exclude = @($Exclude | Where-Object { $_ })
 if (-not $Exclude -and -not $CertificateThumbprint) {
     throw "Nothing to do: give -Exclude (features to leave out: $(@($Layer8Features.Keys) -join ', ')), -CertificateThumbprint, or both."
 }
-$cab = (Resolve-Path -LiteralPath $Path).ProviderPath
+# Not Resolve-Path: in Windows PowerShell 5.1, a relative -LiteralPath under a folder with [ ] in its name resolves to
+# a path with the brackets escaped (`[), which expand.exe can't open. The location's provider path is the real one.
+$cab = $Path
+if (-not [IO.Path]::IsPathRooted($cab)) { $cab = [IO.Path]::Combine((Get-Location -PSProvider FileSystem).ProviderPath, $cab) }
+$cab = [IO.Path]::GetFullPath($cab)
+if (-not [IO.File]::Exists($cab)) { throw "There's no file at $cab." }
 
 # Checked before anything is unpacked, so a typo fails fast.
 $items = $null
@@ -113,7 +118,7 @@ function Set-Layer8Signature([string]$file) {
 }
 function Get-Sha256([string]$file) { (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash }
 
-$folder = Split-Path -LiteralPath $cab
+$folder = [IO.Path]::GetDirectoryName($cab)
 $baseName = [IO.Path]::GetFileNameWithoutExtension($cab)
 $work = Join-Path $folder "$baseName-customizing"
 # -LiteralPath throughout: a folder name with [ ] in it is a wildcard pattern to plain -Path, which could match
