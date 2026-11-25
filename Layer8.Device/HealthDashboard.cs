@@ -383,7 +383,7 @@ namespace Layer8.Device
                 row => row.State == RowState.Offline);
             changedTile = AddTile("Changed", string.Empty, Tone.Info, row => row.Change != null);
             restartTile = AddIssueTile(HealthIssue.RestartPending, "ConfigMgr, Windows servicing or Windows Update is waiting on a restart");
-            // Workstations only: a server's restart should be meant, from the right-click menu.
+            // Workstations only, and not this one: a server's restart, or the console's own, should be meant, from the right-click menu.
             restartTile.Fix = new TileFix("Restart", Named("Restart Computer"));
             AddIssueTile(HealthIssue.LowDisk, string.Format("Less than {0} GB free on C:", lowDiskGB));
             AddIssueTile(HealthIssue.BitLockerOff, "C: isn't protected by BitLocker: off, or protection suspended")
@@ -1179,7 +1179,7 @@ namespace Layer8.Device
         private List<Row> FixTargets(Tile tile, out string leftOut)
         {
             List<Row> targets = new List<Row>();
-            string[] reasons = { "not a computer name", "offline", "couldn't be checked", "not checked yet", "no client", "server", "couldn't tell if it's a server" };
+            string[] reasons = { "not a computer name", "offline", "couldn't be checked", "not checked yet", "no client", "this computer (the console's)", "server", "couldn't tell if it's a server" };
             int[] counts = new int[reasons.Length];
             foreach (Row row in rows.Where(Matches))
             {
@@ -1189,8 +1189,10 @@ namespace Layer8.Device
                 else if (row.State == RowState.Failed) reason = 2;
                 else if (row.State != RowState.Checked || row.Report == null) reason = 3;
                 else if (tile == clientTile && row.Report.NoClient) reason = 4;
-                else if (tile == restartTile && row.Report.IsServer == true) reason = 5;
-                else if (tile == restartTile && row.Report.IsServer == null) reason = 6;
+                // The computer the console runs on: restarting it from a tile would close the console mid-work.
+                else if (tile == restartTile && Utility.IsThisComputer(row.Host)) reason = 5;
+                else if (tile == restartTile && row.Report.IsServer == true) reason = 6;
+                else if (tile == restartTile && row.Report.IsServer == null) reason = 7;
                 else
                 {
                     targets.Add(row);

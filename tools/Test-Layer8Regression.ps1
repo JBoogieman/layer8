@@ -37,7 +37,8 @@
                  Restart reads against Windows' own.
       Log        With -Since: the errors, warnings and slow steps Layer8 logged since then, each fix run from a
                  Health Dashboard tile (the right action for its tile, a restart on 50 devices at most and never on
-                 a server), and the last Health Dashboard run on the collection compared with the Devices section.
+                 a server or this computer), and the last Health Dashboard run on the collection compared with the
+                 Devices section.
       Changes    The files changed since the last commit that changed docs\STATUS.md (the last recorded run), and
                  the sections of docs\REGRESSION.md whose Files lines name them.
 
@@ -2274,6 +2275,7 @@ function Test-TileFixes($Entries) {
             $count = 1
             if ($fix.Target -match '^(\d+) devices$') { $count = [int]$Matches[1] }
             if ($count -gt $restartCap) { Add-Result FAIL $label "a restart from a tile ran on $count devices, over $restartCap"; continue }
+            if ($count -eq 1 -and ($fix.Target -split '\.')[0] -eq $env:COMPUTERNAME) { Add-Result FAIL $label "a restart from a tile ran on $($fix.Target), the computer the console runs on"; continue }
             if ($count -eq 1 -and $script:expected) {
                 $row = $script:expected.Rows | Where-Object Device -eq $fix.Target | Select-Object -First 1
                 if ($row -and [string]$row.Windows -like 'Server*') { Add-Result FAIL $label "a restart from a tile ran on $($fix.Target), a server ($($row.Windows))"; continue }
