@@ -25,11 +25,11 @@ namespace Layer8.Device
         }
 
         /// <summary>Opens the window for one device by name: the console's menu, and the Health Dashboard's BitLocker off and Defender tiles.</summary>
-        internal static void ShowFor(string name, IWin32Window owner = null)
+        internal static void ShowFor(string name, IWin32Window parent = null)
         {
             if (!RemoteTools.IsComputerName(name))
             {
-                MessageBox.Show(owner, name + " isn't a computer name.", "Windows Security", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(parent, name + " isn't a computer name.", "Windows Security", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             using (SystemInfoDialog dialog = new SystemInfoDialog(name, "Windows Security"))
@@ -49,7 +49,7 @@ namespace Layer8.Device
                     int? restarts = AskRestarts(owner, host);
                     return restarts.HasValue ? (Func<string>)(() => WindowsSecurityReader.SuspendBitLocker(host, restarts.Value)) : null;
                 });
-                dialog.ShowDialog(owner);
+                dialog.ShowDialog(parent);
             }
         }
 
