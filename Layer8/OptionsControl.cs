@@ -116,7 +116,9 @@ namespace Layer8
             SafeAction.Run("Open Log Folder", () =>
             {
                 Directory.CreateDirectory(Layer8Log.LogFolder);
-                using (Process.Start("explorer.exe", "\"" + Layer8Log.LogFolder + "\"")) { }
+                // The full path, rather than leave Windows to search the working folder and PATH for explorer.exe.
+                string explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+                using (Process.Start(explorer, "\"" + Layer8Log.LogFolder + "\"")) { }
             });
         }
     }

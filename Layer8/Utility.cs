@@ -41,6 +41,34 @@ namespace Layer8
         }
 
         /// <summary>
+        /// Reads an XML file with no DTD processing and nothing fetched from outside it, the way Lenovo's catalog is
+        /// read. XElement.Load on its own processes DTDs, and these files come from vendors' web sites and from
+        /// devices: a file built to pull in another file, or to expand an entity into gigabytes, is refused.
+        /// </summary>
+        public static System.Xml.Linq.XElement LoadXml(Stream stream)
+        {
+            System.Xml.XmlReaderSettings settings = new System.Xml.XmlReaderSettings
+            {
+                DtdProcessing = System.Xml.DtdProcessing.Prohibit,
+                XmlResolver = null,
+                IgnoreWhitespace = true
+            };
+            using (System.Xml.XmlReader reader = System.Xml.XmlReader.Create(stream, settings))
+            {
+                return System.Xml.Linq.XElement.Load(reader);
+            }
+        }
+
+        /// <summary>LoadXml on a file: a local path or one on a device's share.</summary>
+        public static System.Xml.Linq.XElement LoadXml(string path)
+        {
+            using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                return LoadXml(stream);
+            }
+        }
+
+        /// <summary>
         /// Extracts every file in a .cab into destinationFolder, keeping the cab's own folders, with the expand.exe
         /// that's part of Windows. Returns the files that are in destinationFolder afterwards.
         /// clearDestination empties the folder first, for temporary folders Layer8 owns.
@@ -302,13 +330,37 @@ namespace Layer8
             return null;
         }
 
+        /// <summary>
+        /// Text for inside a quoted WQL string compared with = (WHERE Name = '...'): backslashes and quotes escaped,
+        /// WQL's way, so a name with a quote in it is looked up as that name and can't change the query.
+        /// </summary>
+        public static string WqlText(string text)
+        {
+            return (text ?? string.Empty).Replace("\\", "\\\\").Replace("'", "\\'");
+        }
+
+        /// <summary>
+        /// Text for inside a WQL LIKE '...': the wildcards % and _ and the bracket [ taken literally, backslashes and
+        /// quotes escaped. Before 1.1.3 it doubled quotes instead, which isn't WQL's escape.
+        /// </summary>
         public static string WqlEscapeString(string text)
         {
             if (string.IsNullOrEmpty(text))
                 return text;
-            text = text.Replace("_", "[_]");
-            text = text.Replace("'", "''");
-            return text;
+            StringBuilder escaped = new StringBuilder();
+            foreach (char c in text)
+            {
+                switch (c)
+                {
+                    case '[': escaped.Append("[[]"); break;
+                    case '%': escaped.Append("[%]"); break;
+                    case '_': escaped.Append("[_]"); break;
+                    case '\\': escaped.Append(@"\\"); break;
+                    case '\'': escaped.Append(@"\'"); break;
+                    default: escaped.Append(c); break;
+                }
+            }
+            return escaped.ToString();
         }
 
         /// <summary>
@@ -342,6 +394,29 @@ namespace Layer8
             }
         }
 
+        // Letters, digits, dots, hyphens and underscores: a NetBIOS name or an FQDN, never a path or a command line.
+        private static readonly System.Text.RegularExpressions.Regex ComputerNamePattern =
+            new System.Text.RegularExpressions.Regex(@"^[A-Za-z0-9][A-Za-z0-9.\-_]{0,254}$");
+
+        /// <summary>
+        /// True for names that can be a computer name. ConfigMgr also lists placeholder records such as
+        /// "x64 Unknown Computer (x64 Unknown Computer)", which aren't machines and mustn't reach a path.
+        /// </summary>
+        public static bool IsComputerName(string name)
+        {
+            return name != null && ComputerNamePattern.IsMatch(name);
+        }
+
+        /// <summary>
+        /// The name, checked, for a \\name\... path or a WMI connection: a name with a \ or .. in it would point
+        /// somewhere else. Throws for anything that isn't a computer name.
+        /// </summary>
+        public static string ComputerName(string name)
+        {
+            if (!IsComputerName(name)) throw new ArgumentException(string.Format("\"{0}\" isn't a computer name, so Layer8 won't connect to it.", name), nameof(name));
+            return name;
+        }
+
         public static ManagementScope GetWMIScope(string host, string space, string username = null, string password = null)
         {
             // TODO update to have all the wmi connection catch here, so we can remove it from the other places
@@ -358,7 +433,7 @@ namespace Layer8
                 options.Password = password;
             }
 
-            ManagementScope scope = new ManagementScope(string.Format(@"\\{0}\root\{1}", host, space), options);
+            ManagementScope scope = new ManagementScope(string.Format(@"\\{0}\root\{1}", ComputerName(host), space), options);
             scope.Connect();
 
             if (scope.IsConnected == true)
@@ -685,35 +760,26 @@ namespace Layer8
             }
         }
 
+        /// <summary>
+        /// Ctrl+C in a list: the selected rows, columns separated by tabs and rows by line breaks, the way a
+        /// spreadsheet pastes them. Nothing selected copies nothing (it used to throw).
+        /// </summary>
         public static void CopyToClipboard(ListView listView)
         {
-            StringBuilder buffer = new StringBuilder();
-            foreach (ListViewItem item in listView.SelectedItems)
-            {
-                foreach (ListViewItem.ListViewSubItem subitem in item.SubItems)
-                {
-                    buffer.Append(subitem.Text);
-                    buffer.Append("\t");
-                }
-                buffer.AppendLine();
-            }
-            buffer.Remove(buffer.Length - 1, 1);
-            Clipboard.SetData(DataFormats.Text, buffer.ToString());
+            string text = SelectedRowsText(listView);
+            if (text.Length == 0) return;
+            Clipboard.SetText(text);
         }
 
-        public static string RandomString(int size, bool lowerCase)
+        /// <summary>The text CopyToClipboard puts on the clipboard. Public so it can be tested.</summary>
+        public static string SelectedRowsText(ListView listView)
         {
-            StringBuilder builder = new StringBuilder();
-            Random random = new Random();
-            char ch;
-            for (int i = 0; i < size; i++)
+            List<string> rows = new List<string>();
+            foreach (ListViewItem item in listView.SelectedItems)
             {
-                ch = Convert.ToChar(Convert.ToInt32(Math.Floor(26 * random.NextDouble() + 65)));
-                builder.Append(ch);
+                rows.Add(string.Join("\t", item.SubItems.Cast<ListViewItem.ListViewSubItem>().Select(subitem => subitem.Text)));
             }
-            if (lowerCase)
-                return builder.ToString().ToLower();
-            return builder.ToString();
+            return string.Join("\r\n", rows);
         }
 
         public static bool InclusiveBetween(IComparable a, IComparable b, IComparable c)

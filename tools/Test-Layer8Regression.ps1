@@ -22,11 +22,14 @@
                  catalog, the signature check on HP and Lenovo downloads, the Lenovo catalog's signature check on
                  a good copy and on changed ones, and the checks behind deletes and writes whose paths come from a
                  device or a catalog (Client Cache, Driver Grabber, driver packs, legacy packages), the driver
-                 importers' folder hash, Export's formula guard, and how a copied LAPS or BitLocker password goes
-                 onto the clipboard.
+                 importers' folder hash, Export's formula guard, how a copied LAPS or BitLocker password goes
+                 onto the clipboard, WQL escaping, the computer-name check, picking a computer object, XML read
+                 without DTDs, the hash and lock on driver packs, Dell's and HP's catalog signatures on the copies
+                 their wizards keep (and that every Dell pack has a hash), the list copy and an empty error.
       Settings   Layer8 Settings at their defaults (HKCU\SOFTWARE\Layer8).
-      Devices    Every member of the collection, read from the same places the Health Dashboard reads: what each
-                 column should show, each device's issues and the tile counts.
+      Devices    That the SMS Provider reads names escaped the way Layer8 escapes them. Every member of the
+                 collection, read from the same places the Health Dashboard reads: what each column should show,
+                 each device's issues and the tile counts.
       Tools      In 32-bit PowerShell, as the console runs them: Online Status, Quick Status, Client Info, Check
                  Pending Restart, BitLocker Status, Defender Status and List Missing Updates on every member of the
                  collection, through the code the Client Tools menu and its progress window use. Each answer is
@@ -639,7 +642,8 @@ $libraryChecks = {
         $lenovoSigner = $authenticode.GetField('LenovoSigner', $flags).GetValue($null)
         $hpSigner = $authenticode.GetField('HPSigner', $flags).GetValue($null)
         function Test-Signed([string]$Path, $Signer, [string]$Vendor) {
-            try { [void]$require.Invoke($null, @($Path, $Signer, $Vendor)); $null } catch { Get-Message $_.Exception }
+            # Every parameter, the optional refusal text too: reflection doesn't fill in defaults.
+            try { [void]$require.Invoke($null, @($Path, $Signer, $Vendor, 'run it')); $null } catch { Get-Message $_.Exception }
         }
         $signedFile = Join-Path $ConsoleBin 'Microsoft.ConfigurationManagement.exe'
         $signature = Get-AuthenticodeSignature -LiteralPath $signedFile
@@ -872,6 +876,157 @@ $libraryChecks = {
         $mask = Get-Method ($device.GetType('Layer8.Device.BitLockerKeys+KeyDialog', $true)) 'Mask'
         $dots = ([string][char]0x25CF) * 6
         Test-Same 'BitLocker password hidden: digits become dots, the groups stay' "$dots-$dots" $mask.Invoke($null, [object[]]@($secret))
+
+        # The security pass (1.1.2.24). WQL text, as every query with a name in it escapes it. The SMS Provider
+        # side is checked in the Devices section, with the same escaping.
+        $wqlText = Get-Method $utility 'WqlText'
+        foreach ($case in @(
+                @("O'Brien", "O\'Brien", 'a quote'),
+                @('C:\Drivers', 'C:\\Drivers', 'a backslash'),
+                @("x' OR Name LIKE '%", "x\' OR Name LIKE \'%", 'a name built to change the query'),
+                @('Layer8_Test', 'Layer8_Test', 'an underscore stays as it is'))) {
+            Test-Same "WQL text: $($case[2])" $case[1] $wqlText.Invoke($null, [object[]]@($case[0]))
+        }
+        Test-Same 'WQL text: nothing' '' $wqlText.Invoke($null, [object[]]@($null))
+        $wqlLike = Get-Method $utility 'WqlEscapeString'
+        foreach ($case in @(
+                @('50%_[x]', '50[%][_][[]x]', 'wildcards and a bracket taken literally'),
+                @("O'Brien\", "O\'Brien\\", 'a quote and a backslash'))) {
+            Test-Same "WQL LIKE text: $($case[2])" $case[1] $wqlLike.Invoke($null, [object[]]@($case[0]))
+        }
+
+        # Device names before a \\name path or a WMI connection.
+        $isComputer = Get-Method $utility 'IsComputerName'
+        foreach ($case in @(
+                @('DEV02', $true, 'a NetBIOS name'),
+                @('dev02.lab.local', $true, 'an FQDN'),
+                @('..\evil', $false, 'a name with ..\'),
+                @('\\CM01\Share', $false, 'a share'),
+                @('x64 Unknown Computer (x64 Unknown Computer)', $false, 'an unknown computer record'),
+                @($null, $false, 'nothing'))) {
+            Test-Same "Computer name: $($case[2])" $case[1] $isComputer.Invoke($null, [object[]]@($case[0]))
+        }
+        $getWmiScope = Get-Method $utility 'GetWMIScope'
+        try { [void]$getWmiScope.Invoke($null, [object[]]@('..\..\evil', 'cimv2', $null, $null)); $refused = $null } catch { $refused = Get-Message $_.Exception }
+        Test-Text 'WMI connection: a name that isn''t a computer name is refused' $refused "isn't a computer name"
+
+        # LAPS and BitLocker: which of the computer objects found is the device.
+        $matching = Get-Method ($device.GetType('Layer8.Device.BitLockerKeys', $true)) 'Matching'
+        foreach ($case in @(
+                @([string[]]@('DEV02$'), '0', 'one object'),
+                @([string[]]@('DEV02-OLD$', 'DEV02$'), '1', 'the one whose account name is the name'),
+                @([string[]]@('DEV02$', 'dev02$'), '0,1', 'two with the account name: both, so neither is shown'),
+                @([string[]]@('PC1$', 'PC2$'), '0,1', 'two named it, neither by account: both, so neither is shown'),
+                @([string[]]@(), '', 'none'))) {
+            Test-Same "Computer object: $($case[2])" $case[1] (@($matching.Invoke($null, [object[]]@($case[0].PSObject.BaseObject, 'DEV02'))) -join ',')
+        }
+
+        # XML from vendors and devices: no DTDs.
+        $loadXml = $utility.GetMethod('LoadXml', [Type[]]@([string]))
+        [string]$plainXml = Join-Path $Work 'plain.xml'
+        [IO.File]::WriteAllText($plainXml, '<Report><Check Description="x">Passed</Check></Report>')
+        Test-Same 'XML: a plain file is read' 'Passed' ($loadXml.Invoke($null, [object[]]@($plainXml))).Value
+        [string]$dtdXml = Join-Path $Work 'dtd.xml'
+        [IO.File]::WriteAllText($dtdXml, '<?xml version="1.0"?><!DOCTYPE r [<!ENTITY e "expanded">]><r>&e;</r>')
+        try { [void]$loadXml.Invoke($null, [object[]]@($dtdXml)); $refused = $null } catch { $refused = Get-Message $_.Exception }
+        Test-Text 'XML: a file with a DTD is refused' $refused 'DTD'
+
+        # The hash a Dell pack (and a Lenovo pack) has to match.
+        $requireHash = Get-Method $authenticode 'RequireHash'
+        function Test-Hash([string]$Path, [string]$Expected, [bool]$Required) {
+            try { [void]$requireHash.Invoke($null, [object[]]@($Path, $Expected, 'Dell', $Required)); $null } catch { Get-Message $_.Exception }
+        }
+        [string]$hashed = Join-Path $Work 'pack.cab'
+        [IO.File]::WriteAllText($hashed, 'not really a pack')
+        $sha256 = (Get-FileHash -LiteralPath $hashed -Algorithm SHA256).Hash
+        $md5 = (Get-FileHash -LiteralPath $hashed -Algorithm MD5).Hash
+        Test-Same 'Pack hash: the right SHA-256 passes' $null (Test-Hash $hashed $sha256 $true)
+        Test-Same 'Pack hash: the right MD5 passes, in lower case' $null (Test-Hash $hashed $md5.ToLowerInvariant() $true)
+        Test-Text 'Pack hash: another hash is refused' (Test-Hash $hashed ('0' * 64) $true) 'doesn''t match the hash in Dell''s catalog'
+        Test-Text 'Pack hash: no hash, where one is needed, is refused' (Test-Hash $hashed '' $true) 'has no hash'
+        Test-Same 'Pack hash: no hash, where the signature checks it (Lenovo), passes' $null (Test-Hash $hashed '' $false)
+
+        # A pack is locked from its checks until it has run: still readable and runnable, not changeable.
+        $lock = Get-Method $authenticode 'Lock'
+        [string]$lockedExe = Join-Path $Work 'locked.exe'
+        Copy-Item -LiteralPath (Join-Path ([Environment]::SystemDirectory) 'hostname.exe') -Destination $lockedExe
+        $held = $lock.Invoke($null, [object[]]@($lockedExe))
+        try {
+            try { $writer = [IO.File]::Open($lockedExe, 'Open', 'Write', 'ReadWrite'); $writer.Dispose(); $opened = 'it opened for writing' } catch { $opened = $null }
+            Test-Same 'Locked pack: it can''t be written' $null $opened
+            try { [IO.File]::Move($lockedExe, (Join-Path $Work 'moved.exe')); $moved = 'it was renamed' } catch { $moved = $null }
+            Test-Same 'Locked pack: it can''t be renamed or replaced' $null $moved
+            $start = New-Object Diagnostics.ProcessStartInfo $lockedExe
+            $start.UseShellExecute = $true
+            $start.WindowStyle = 'Hidden'
+            $ran = [Diagnostics.Process]::Start($start)
+            if ($ran.WaitForExit(30000) -and $ran.ExitCode -eq 0) { Add-Check PASS 'Locked pack: it still runs (the way the packs start)' 'hostname.exe copy, exit code 0' }
+            else { Add-Check FAIL 'Locked pack: it still runs (the way the packs start)' 'it didn''t finish with exit code 0' }
+            $ran.Dispose()
+        }
+        finally { $held.Dispose() }
+        if ($signature.Status -eq 'Valid') {
+            [string]$lockedSigned = Join-Path $Work 'locked-signed.exe'
+            Copy-Item -LiteralPath $signedFile -Destination $lockedSigned
+            $held = $lock.Invoke($null, [object[]]@($lockedSigned))
+            try { Test-Same 'Locked pack: the signature check still reads it' $null (Test-Signed $lockedSigned ([regex]'^Microsoft Corporation$') 'Microsoft') }
+            finally { $held.Dispose() }
+        }
+
+        # Dell's and HP's catalogs, the copies their wizards keep: signed by the vendor, and every Dell pack has a hash.
+        $extractSigned = Get-Method $authenticode 'ExtractSignedCab'
+        $dellSigner = $authenticode.GetField('DellSigner', $flags).GetValue($null)
+        foreach ($vendor in @(
+                @('Dell', 'DriverPackCatalog.cab', $dellSigner, 'the Dell Driver Packs wizard'),
+                @('HP', 'HPClientDriverPackCatalog.cab', $hpSigner, 'the HP Driver Packs wizard'))) {
+            [string]$catalogCab = Join-Path ([IO.Path]::GetTempPath()) $vendor[1]
+            if (-not (Test-Path -LiteralPath $catalogCab)) { Add-Check SKIP "$($vendor[0]) catalog checks" "no copy at $catalogCab`: open $($vendor[3]) once"; continue }
+            $copyDate = '{0:yyyy-MM-dd HH:mm}' -f (Get-Item -LiteralPath $catalogCab).LastWriteTime
+            [string]$catalogFolder = Join-Path $Work "$($vendor[0])-catalog"
+            try { $files = @($extractSigned.Invoke($null, [object[]]@($catalogCab, $catalogFolder, $vendor[2], $vendor[0]))); $problem = $null } catch { $files = @(); $problem = Get-Message $_.Exception }
+            $signer = (Get-AuthenticodeSignature -LiteralPath $catalogCab).SignerCertificate
+            $signerName = if ($signer) { $signer.GetNameInfo('SimpleName', $false) } else { 'no signature' }
+            if ($null -eq $problem) { Add-Check PASS "$($vendor[0]) catalog: $($vendor[0])'s copy passes" "signed by $signerName, downloaded $copyDate" }
+            else { Add-Check FAIL "$($vendor[0]) catalog: $($vendor[0])'s copy passes" "$problem (signer: $signerName, downloaded $copyDate)" }
+            $bytes = [IO.File]::ReadAllBytes($catalogCab)
+            $middle = [int]($bytes.Length / 2)
+            $bytes[$middle] = [byte]($bytes[$middle] -bxor 0xFF)
+            [string]$changedCab = Join-Path $Work "changed-$($vendor[1])"
+            [IO.File]::WriteAllBytes($changedCab, $bytes)
+            [string]$changedFolder = Join-Path $Work "$($vendor[0])-changed"
+            try { [void]$extractSigned.Invoke($null, [object[]]@($changedCab, $changedFolder, $vendor[2], $vendor[0])); $refused = $null } catch { $refused = Get-Message $_.Exception }
+            Test-Text "$($vendor[0]) catalog: a changed copy is refused" $refused "isn't validly signed (WinVerifyTrust 0x"
+            if ($vendor[0] -eq 'Dell' -and $files) {
+                $packageType = $driver.GetType('Layer8.DriverManager.DellDriverPackage', $true)
+                $xml = $utility.GetMethod('LoadXml', [Type[]]@([string])).Invoke($null, [object[]]@([string]$files[0]))
+                $read = 0; $unread = 0; $sha = 0; $noHash = New-Object System.Collections.Generic.List[string]
+                foreach ($node in @($xml.Elements() | Where-Object { $_.Name.LocalName -eq 'DriverPackage' })) {
+                    try { $pack = [Activator]::CreateInstance($packageType, [object[]]@($node.PSObject.BaseObject)) } catch { $unread++; continue }
+                    $read++
+                    $hash = $packageType.GetProperty('CatalogHash').GetValue($pack)
+                    if ($hash.Length -eq 64) { $sha++ } elseif ($hash.Length -ne 32) { $noHash.Add($packageType.GetProperty('Model').GetValue($pack)) }
+                }
+                if ($read -eq 0) { Add-Check FAIL 'Dell catalog: every pack has a hash' "no packs read from $($files[0]) ($unread couldn't be)" }
+                elseif ($noHash.Count -eq 0) { Add-Check PASS 'Dell catalog: every pack has a hash' "$read packs: $sha SHA-256, $($read - $sha) MD5" }
+                else { Add-Check FAIL 'Dell catalog: every pack has a hash' "$($noHash.Count) of $read have none, so they'd be refused: $(@($noHash | Select-Object -First 5) -join ', ')" }
+            }
+        }
+
+        # Ctrl+C in a list, and a failure with no message.
+        Add-Type -AssemblyName System.Windows.Forms
+        $list = New-Object Windows.Forms.ListView
+        # Selection is only kept once the list has a window handle, as it always has in the console.
+        [void]$list.Handle
+        foreach ($row in @(@('Contoso', 'Driver A', '1.0'), @('Fabrikam', 'Driver B', '2.0'))) { [void]$list.Items.Add((New-Object Windows.Forms.ListViewItem -ArgumentList (, [string[]]$row))) }
+        $rowsText = Get-Method $utility 'SelectedRowsText'
+        Test-Same 'List copy: nothing selected copies nothing' '' $rowsText.Invoke($null, [object[]]@($list.PSObject.BaseObject))
+        $list.Items[0].Selected = $true
+        $list.Items[1].Selected = $true
+        Test-Same 'List copy: rows by line, columns by tab' "Contoso`tDriver A`t1.0`r`nFabrikam`tDriver B`t2.0" $rowsText.Invoke($null, [object[]]@($list.PSObject.BaseObject))
+        $list.Dispose()
+        $describeFailure = Get-Method ($device.GetType('Layer8.Device.DeviceProgressDialog', $true)) 'DescribeFailure'
+        [object[]]$failure = @('DEV02', [Exception]::new(''), $false)
+        Test-Same 'Progress dialog: a failure with no message names what failed' 'Error: Exception' $describeFailure.Invoke($null, $failure)
     }
     catch {
         Add-Check FAIL 'The library checks stopped' "script error: $(Get-Message $_.Exception)"
@@ -1388,6 +1543,25 @@ function Test-Devices {
     $code = $siteRead.Code
     # Get-WmiObject, not CIM: it hands the site's dates over as the provider's own text, which is UTC with no offset.
     $namespace = $siteRead.Namespace
+
+    # Names in queries (the security pass, 1.1.2.24): text escaped the way Utility.WqlText and WqlEscapeString escape
+    # it (the Library section checks those) is read by the SMS Provider as the name, quotes and backslashes included.
+    $odd = "Layer8 regression O'Brien \ [x] _%"
+    $escaped = $odd.Replace('\', '\\').Replace("'", "\'")
+    $likeEscaped = -join @($odd.ToCharArray() | ForEach-Object {
+            $c = [string]$_
+            switch ($c) { '[' { '[[]' } '%' { '[%]' } '_' { '[_]' } '\' { '\\' } "'" { "\'" } default { $c } }
+        })
+    foreach ($query in @(
+            @('WQL text: the SMS Provider reads an escaped quote and backslash', "SELECT PackageID FROM SMS_Package WHERE Name = '$escaped'"),
+            @('WQL LIKE text: the SMS Provider reads escaped wildcards', "SELECT ContainerNodeID FROM SMS_ObjectContainerNode WHERE Name LIKE '$likeEscaped'"))) {
+        try {
+            $found = @(Get-WmiObject -ComputerName $server -Namespace $namespace -Query $query[1])
+            if ($found.Count -eq 0) { Add-Result PASS $query[0] "no match for $odd, as expected" }
+            else { Add-Result FAIL $query[0] "$($found.Count) matches for $odd" }
+        }
+        catch { Add-Result FAIL $query[0] "$($_.Exception.Message) ($($query[1]))" }
+    }
     $collectionId = $siteRead.CollectionId
     $members = @(Get-WmiObject -ComputerName $server -Namespace $namespace -Query "SELECT Name, ResourceID, SMSID FROM SMS_FullCollectionMembership WHERE CollectionID = '$collectionId'" | Sort-Object Name)
     Add-Result INFO 'Collection' "$Collection ($collectionId): $($members.Count) members, from site $code on $server"

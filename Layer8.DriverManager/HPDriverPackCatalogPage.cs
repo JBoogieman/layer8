@@ -205,11 +205,24 @@ namespace Layer8.DriverManager
             string prefix = string.IsNullOrEmpty(registry.ReadString("HPFolderPrefix")) ? "HP" : registry.ReadString("HPFolderPrefix");
 
             string tempFile = Path.Combine(Path.GetTempPath(), "HPClientDriverPackCatalog.cab");
-            foreach (string catalogFile in Utility.ExtractCab(tempFile, Path.Combine(Path.GetTempPath(), "Layer8", "HPClientDriverPackCatalog"), clearDestination: true))
+            string[] catalogFiles;
+            try
+            {
+                // The packs come from the catalog: only HP's.
+                catalogFiles = Authenticode.ExtractSignedCab(tempFile, Path.Combine(Path.GetTempPath(), "Layer8", "HPClientDriverPackCatalog"), Authenticode.HPSigner, "HP");
+            }
+            catch (InvalidOperationException ex)
+            {
+                Authenticode.Discard(tempFile);
+                Layer8.Layer8Log.GetLogger(GetType()).Warn("HP's catalog wasn't used: " + ex.Message);
+                MessageBox.Show(this, ex.Message + "\r\n\r\nGo back and click the Windows version box to download it again.", "HP Driver Packs", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            foreach (string catalogFile in catalogFiles)
             {
                 using (Stream stream = File.OpenRead(catalogFile))
                 {
-                    catalog = XElement.Load(stream);
+                    catalog = Utility.LoadXml(stream);
 
                     IEnumerable<XElement> nodeList = catalog.Element("HPClientDriverPackCatalog").Element("ProductOSDriverPackList").Elements("ProductOSDriverPack").Where(
                         x => x.Element("OSName").Value == UserData["OS"].ToString()
@@ -416,21 +429,25 @@ namespace Layer8.DriverManager
                         if (!Utility.IsInside(sourceFolderPath, destinationFolder) || !Utility.IsInside(Path.Combine(tempFolderPath, "extract"), tempFolder))
                             throw new InvalidOperationException(string.Format("{0} isn't a folder inside {1}, so Layer8 won't replace it", package.FolderName, sourceFolderPath));
                         // The SoftPaq runs elevated, so only one HP signed: not a file tampered with on the way,
-                        // or one left in the download folder under the same name.
-                        Authenticode.RequireSignedBy(data.Value, Authenticode.HPSigner, "HP");
+                        // or one left in the download folder under the same name. Locked from the check until it
+                        // has finished, so the file that runs is the one that was checked.
+                        using (Authenticode.Lock(data.Value))
+                        {
+                            Authenticode.RequireSignedBy(data.Value, Authenticode.HPSigner, "HP");
 
-                        // Emptied first: a run that failed halfway left its files here, and they were copied in with
-                        // this pack, old .version files among them.
-                        if (Directory.Exists(tempFolder)) Directory.Delete(tempFolder, true);
+                            // Emptied first: a run that failed halfway left its files here, and they were copied in with
+                            // this pack, old .version files among them.
+                            if (Directory.Exists(tempFolder)) Directory.Delete(tempFolder, true);
 
-                        extractProcess.StartInfo.FileName = data.Value;
-                        extractProcess.StartInfo.Arguments = string.Format("-pdf -f \"{0}\" -s -e", tempFolder);
-                        extractProcess.StartInfo.CreateNoWindow = true;
-                        extractProcess.StartInfo.UseShellExecute = true;
-                        extractProcess.StartInfo.Verb = "RunAs";
-                        extractProcess.Start();
-                        extractProcess.WaitForExit();
-                        extractProcess.Close();
+                            extractProcess.StartInfo.FileName = data.Value;
+                            extractProcess.StartInfo.Arguments = string.Format("-pdf -f \"{0}\" -s -e", tempFolder);
+                            extractProcess.StartInfo.CreateNoWindow = true;
+                            extractProcess.StartInfo.UseShellExecute = true;
+                            extractProcess.StartInfo.Verb = "RunAs";
+                            extractProcess.Start();
+                            extractProcess.WaitForExit();
+                            extractProcess.Close();
+                        }
 
                         // update my best friend the progress bar
                         backgroundWorker.ReportProgress(Convert.ToInt32(50 + ((100 / totalPacks * extracted) * 0.5) - 1), string.Format("Processing {0} : moving to destination folder", currentModel));

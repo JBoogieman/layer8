@@ -113,17 +113,19 @@ function Set-Layer8Signature([string]$file) {
 }
 function Get-Sha256([string]$file) { (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash }
 
-$folder = Split-Path $cab
+$folder = Split-Path -LiteralPath $cab
 $baseName = [IO.Path]::GetFileNameWithoutExtension($cab)
 $work = Join-Path $folder "$baseName-customizing"
-if (Test-Path $work) { Remove-Item $work -Recurse -Force }
-New-Item -ItemType Directory -Path $work | Out-Null
+# -LiteralPath throughout: a folder name with [ ] in it is a wildcard pattern to plain -Path, which could match
+# and delete a different folder.
+if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
+[void][IO.Directory]::CreateDirectory($work)
 
 # 1. Unpack. Every file in a Layer8 cab sits at its root.
 $expand = Join-Path $env:SystemRoot 'System32\expand.exe'
 $output = & $expand $cab -F:* $work 2>&1
 $manifestPath = Join-Path $work 'manifest.xml'
-if ($LASTEXITCODE -or -not (Test-Path $manifestPath)) { throw "Unpacking $cab found no manifest.xml:`n$($output -join "`n")" }
+if ($LASTEXITCODE -or -not (Test-Path -LiteralPath $manifestPath)) { throw "Unpacking $cab found no manifest.xml:`n$($output -join "`n")" }
 
 $manifest = New-Object Xml.XmlDocument
 $manifest.PreserveWhitespace = $true
@@ -132,7 +134,10 @@ $root = $manifest.DocumentElement
 if ($root.GetAttribute('ExtensionID') -ne $extensionId) { throw "$cab isn't a Layer8 cab: its extension ID is '$($root.GetAttribute('ExtensionID'))'." }
 $version = $root.GetAttribute('Version')
 foreach ($entry in @($manifest.SelectNodes('//File'))) {
-    if (-not (Test-Path -LiteralPath (Join-Path $work $entry.GetAttribute('Name')))) { throw "manifest.xml lists $($entry.GetAttribute('Name')), but it isn't in the cab." }
+    $name = $entry.GetAttribute('Name')
+    # Every file sits at the cab's root. A name with a folder or .. in it would sign and pack a file from outside it.
+    if (-not $name -or $name -ne [IO.Path]::GetFileName($name) -or $name -match '^\.+$') { throw "manifest.xml lists '$name', which isn't a plain file name, so this isn't a cab Layer8 built." }
+    if (-not (Test-Path -LiteralPath (Join-Path $work $name))) { throw "manifest.xml lists $name, but it isn't in the cab." }
 }
 
 # Takes a file out of the manifest, and its console node's deployment if that was its last file.
@@ -191,7 +196,7 @@ try { $manifest.Save($writer) } finally { $writer.Close() }
 $suffix = @($(if ($items) { 'custom' }), $(if ($certificate) { 'signed' })) | Where-Object { $_ }
 $newName = "$baseName-$($suffix -join '-').cab"
 $newCab = Join-Path $folder $newName
-if (Test-Path $newCab) { Remove-Item $newCab -Force }
+if (Test-Path -LiteralPath $newCab) { Remove-Item -LiteralPath $newCab -Force }
 $names = @($manifest.SelectNodes('//File') | ForEach-Object { $_.GetAttribute('Name') } | Sort-Object -Unique)
 $ddf = Join-Path $work 'Layer8.ddf'
 $lines = @(
@@ -214,15 +219,15 @@ $lines = @(
 )
 $lines += "`"$manifestPath`" `"manifest.xml`""
 foreach ($name in $names) { $lines += "`"$(Join-Path $work $name)`" `"$name`"" }
-Set-Content -Path $ddf -Value $lines -Encoding ASCII
+Set-Content -LiteralPath $ddf -Value $lines -Encoding ASCII
 
 $makecab = Join-Path $env:SystemRoot 'System32\makecab.exe'
 $output = & $makecab /F $ddf 2>&1
-if ($LASTEXITCODE -or -not (Test-Path $newCab)) { throw "makecab failed:`n$($output -join "`n")" }
+if ($LASTEXITCODE -or -not (Test-Path -LiteralPath $newCab)) { throw "makecab failed:`n$($output -join "`n")" }
 
 # 6. Sign the cab.
 if ($certificate) { Set-Layer8Signature $newCab }
-Remove-Item $work -Recurse -Force
+Remove-Item -LiteralPath $work -Recurse -Force
 
 Write-Host ''
 Write-Host "Customized Layer8 $version"

@@ -70,7 +70,7 @@ namespace Layer8.DriverManager
 
         private bool CreateDriverPackge()
         {
-            string query = string.Format("SELECT * FROM SMS_DriverPackage WHERE NAME = '{0}'", Name);
+            string query = string.Format("SELECT * FROM SMS_DriverPackage WHERE NAME = '{0}'", Utility.WqlText(Name));
             packageObject = Utility.GetFirstWMIInstance(connectionManager, query);
 
             if (packageObject == null)
@@ -148,7 +148,7 @@ namespace Layer8.DriverManager
 
         public bool UpdatePackageVersion()
         {
-            string query = string.Format("SELECT * FROM SMS_DriverPackage WHERE NAME = '{0}'", Name);
+            string query = string.Format("SELECT * FROM SMS_DriverPackage WHERE NAME = '{0}'", Utility.WqlText(Name));
             packageObject = Utility.GetFirstWMIInstance(connectionManager, query);
 
             if (packageObject != null)
@@ -183,7 +183,7 @@ namespace Layer8.DriverManager
 
         private bool GetPackageVersion()
         {
-            string query = string.Format("SELECT * FROM SMS_Package WHERE NAME = '{0}'", Name);
+            string query = string.Format("SELECT * FROM SMS_Package WHERE NAME = '{0}'", Utility.WqlText(Name));
             IResultObject packageObject = Utility.GetFirstWMIInstance(connectionManager, query);
 
             if (packageObject != null)
@@ -352,7 +352,7 @@ namespace Layer8.DriverManager
         #region Driver Category
         private IResultObject GetDriverCategory()
         {
-            string query = string.Format("SELECT * FROM SMS_CategoryInstance WHERE CategoryTypeName='DriverCategories' AND LocalizedCategoryInstanceName='{0}'", Name);
+            string query = string.Format("SELECT * FROM SMS_CategoryInstance WHERE CategoryTypeName='DriverCategories' AND LocalizedCategoryInstanceName='{0}'", Utility.WqlText(Name));
             IResultObject categoryObject = Utility.GetFirstWMIInstance(connectionManager, query);
 
             if (categoryObject != null)

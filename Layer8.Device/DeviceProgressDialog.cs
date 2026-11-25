@@ -378,7 +378,8 @@ namespace Layer8.Device
                 offline = true;
                 return "Offline, or its firewall blocks WMI (RPC server unavailable)";
             }
-            return "Error: " + root.Message;
+            // Some exceptions carry no message at all; "Error: " on its own says nothing.
+            return "Error: " + (string.IsNullOrWhiteSpace(root.Message) ? root.GetType().Name : root.Message);
         }
 
         // The work runs on background threads. Anything that touches the window goes back to the

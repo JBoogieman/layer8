@@ -204,11 +204,24 @@ namespace Layer8.DriverManager
             string prefix = string.IsNullOrEmpty(registry.ReadString("DellFolderPrefix")) ? "Dell" : registry.ReadString("DellFolderPrefix");
 
             string tempFile = Path.Combine(Path.GetTempPath(), "DriverPackCatalog.cab");
-            foreach (string catalogFile in Utility.ExtractCab(tempFile, Path.Combine(Path.GetTempPath(), "Layer8", "DellDriverPackCatalog"), clearDestination: true))
+            string[] catalogFiles;
+            try
+            {
+                // The packs, and the hash each one is checked against, come from the catalog: only Dell's.
+                catalogFiles = Authenticode.ExtractSignedCab(tempFile, Path.Combine(Path.GetTempPath(), "Layer8", "DellDriverPackCatalog"), Authenticode.DellSigner, "Dell");
+            }
+            catch (InvalidOperationException ex)
+            {
+                Authenticode.Discard(tempFile);
+                Layer8.Layer8Log.GetLogger(GetType()).Warn("Dell's catalog wasn't used: " + ex.Message);
+                MessageBox.Show(this, ex.Message + "\r\n\r\nGo back and Layer8 downloads it again.", "Dell Driver Packs", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            foreach (string catalogFile in catalogFiles)
             {
                 using (Stream stream = File.OpenRead(catalogFile))
                 {
-                    catalog = XElement.Load(stream);
+                    catalog = Utility.LoadXml(stream);
                     XNamespace ns = catalog.GetDefaultNamespace();
                     // Get download base location from DriverPackCatalog.xml 
                     UserData["baseLocation"] = catalog.Attribute("baseLocation").Value;
@@ -405,9 +418,16 @@ namespace Layer8.DriverManager
                     // The folder names come from the vendor's catalog: never delete or fill a folder outside the two it belongs in.
                     if (!Utility.IsInside(sourceFolderPath, destinationFolder) || !Utility.IsInside(Path.Combine(tempFolderPath, "extract"), tempFolder))
                         throw new InvalidOperationException(string.Format("{0} isn't a folder inside {1}, so Layer8 won't replace it", package.FolderName, sourceFolderPath));
+                    // The drivers end up on every device the package goes to, so the pack has to be the file Dell's
+                    // signed catalog describes: not one tampered with on the way, or one left in the download folder
+                    // under the same name. Locked from the check until it's unpacked.
                     // Emptied first: a run that failed halfway left its files here, and they were copied in with
                     // this pack, old .version files among them.
-                    Utility.ExtractCab(data.Value, tempFolder, clearDestination: true);
+                    using (Authenticode.Lock(data.Value))
+                    {
+                        Authenticode.RequireHash(data.Value, package.CatalogHash, "Dell", required: true);
+                        Utility.ExtractCab(data.Value, tempFolder, clearDestination: true);
+                    }
 
                     // update my best friend the progress bar
                     backgroundWorker.ReportProgress(Convert.ToInt32(50 + ((80 / totalPacks * extracted) * 0.5)), string.Format("Processing {0} : moving to destination folder", currentModel));

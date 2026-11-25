@@ -197,7 +197,8 @@ namespace Layer8.DriverManager
 
             progressWorker.ReportProgress(50, "Validating connection to ADMIN$ share");
 
-            if (Utility.CheckFolderPermissions(string.Format(@"\\{0}\admin$", PropertyManager["Name"].StringValue), FileSystemRights.ReadData))
+            if (Utility.IsComputerName(PropertyManager["Name"].StringValue) &&
+                Utility.CheckFolderPermissions(string.Format(@"\\{0}\admin$", PropertyManager["Name"].StringValue), FileSystemRights.ReadData))
             {
                 checkBoxShare.Checked = true;
                 labelShareStatus.Text = "Connected successfully";

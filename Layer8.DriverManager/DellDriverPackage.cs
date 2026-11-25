@@ -1,4 +1,6 @@
-﻿using System.Xml.Linq;
+﻿using System;
+using System.Linq;
+using System.Xml.Linq;
 
 namespace Layer8.DriverManager
 {
@@ -11,6 +13,11 @@ namespace Layer8.DriverManager
         public string ReleaseNotesUrl { get; private set; }
         /// <summary>Download size in bytes.</summary>
         public double Size { get; private set; }
+        /// <summary>
+        /// The pack's hash in Dell's signed catalog: SHA-256 where the catalog has one, otherwise its MD5. Empty when
+        /// it has neither, and then the pack isn't used.
+        /// </summary>
+        public string CatalogHash { get; private set; }
 
         public DellDriverPackage(XElement pack)
         {
@@ -26,6 +33,10 @@ namespace Layer8.DriverManager
             VersionFile = Version + ".version";
 
             Url = packageObject.Attribute("path").Value;
+
+            XElement sha256 = packageObject.Element(ns + "Cryptography")?.Elements(ns + "Hash")
+                .FirstOrDefault(hash => string.Equals((string)hash.Attribute("algorithm"), "SHA256", StringComparison.OrdinalIgnoreCase));
+            CatalogHash = ((string)sha256 ?? (string)packageObject.Attribute("hashMD5") ?? string.Empty).Trim();
 
             ReleaseNotesUrl = packageObject.Element(ns + "ImportantInfo").Attribute("URL").Value;
         }

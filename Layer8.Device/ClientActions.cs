@@ -717,20 +717,7 @@ namespace Layer8.Device
         /// <summary>Text for inside a WQL LIKE '%...%': wildcards and brackets taken literally, quotes escaped.</summary>
         internal static string WqlLikeText(string text)
         {
-            System.Text.StringBuilder escaped = new System.Text.StringBuilder();
-            foreach (char c in text)
-            {
-                switch (c)
-                {
-                    case '[': escaped.Append("[[]"); break;
-                    case '%': escaped.Append("[%]"); break;
-                    case '_': escaped.Append("[_]"); break;
-                    case '\\': escaped.Append(@"\\"); break;
-                    case '\'': escaped.Append(@"\'"); break;
-                    default: escaped.Append(c); break;
-                }
-            }
-            return escaped.ToString();
+            return Utility.WqlEscapeString(text);
         }
 
         /// <summary>

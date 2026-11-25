@@ -78,7 +78,7 @@ namespace Layer8.DriverManager
         {
             // would be good if we could check based on architecture here, but there is no column that supports that in SMS_Driver without digging into the xml
             // we could maybe hack in the description field and append architecture
-            string query = string.Format("SELECT * FROM SMS_Driver WHERE LocalizedDisplayName='{0}' AND DriverVersion='{1}' AND DriverINFFile='{2}'", Model, Version, Path.GetFileName(InfLocation));
+            string query = string.Format("SELECT * FROM SMS_Driver WHERE LocalizedDisplayName='{0}' AND DriverVersion='{1}' AND DriverINFFile='{2}'", Utility.WqlText(Model), Utility.WqlText(Version), Utility.WqlText(Path.GetFileName(InfLocation)));
             IResultObject driverObject = Utility.GetFirstWMIInstance(connectionManager, query);
 
             if (driverObject != null)
@@ -153,7 +153,7 @@ namespace Layer8.DriverManager
                         try
                         {
                             // update content source path if it dose not exist
-                            string query = string.Format("SELECT * FROM SMS_Driver WHERE CI_UniqueID='{0}'", uniqueId.Replace("'", "''"));
+                            string query = string.Format("SELECT * FROM SMS_Driver WHERE CI_UniqueID='{0}'", Utility.WqlText(uniqueId));
                             driverObject = Utility.GetFirstWMIInstance(connectionManager, query);
                             // A query leaves out the driver's definition and names; load them so saving it below keeps them.
                             driverObject?.Get();

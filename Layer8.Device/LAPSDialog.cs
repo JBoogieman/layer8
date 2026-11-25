@@ -153,7 +153,7 @@ namespace Layer8.Device
 
             try
             {
-                using (DirectoryEntry entry = new DirectoryEntry("LDAP://" + found.DistinguishedName))
+                using (DirectoryEntry entry = new DirectoryEntry(found.Path))
                 {
                     entry.Properties[found.ExpirationAttribute].Value = DateTime.UtcNow.ToFileTimeUtc().ToString(CultureInfo.InvariantCulture);
                     entry.CommitChanges();
@@ -176,6 +176,8 @@ namespace Layer8.Device
     internal sealed class LapsPassword
     {
         public string DistinguishedName, Account, Password, Source, Message;
+        /// <summary>The object's ADsPath, escaped for a DirectoryEntry (a DN with a / in it isn't).</summary>
+        public string Path;
         /// <summary>The attribute Expire Now writes, or null when there's no password to expire.</summary>
         public string ExpirationAttribute;
         public DateTime? Changed, Expires;
@@ -193,19 +195,17 @@ namespace Layer8.Device
 
         public static LapsPassword Read(string computer)
         {
-            using (DirectorySearcher search = new DirectorySearcher
-            {
-                // Records such as "x64 Unknown Computer (x64 Unknown Computer)" never get here; real names are
-                // escaped anyway, the same way BitLocker lookups are.
-                Filter = string.Format("(&(objectCategory=computer)(objectClass=computer)(cn={0}))", BitLockerKeys.LdapEscape(computer)),
-            })
+            // Records such as "x64 Unknown Computer (x64 Unknown Computer)" never get here; real names are
+            // escaped anyway, and found the same way BitLocker lookups find them.
+            using (DirectorySearcher search = new DirectorySearcher())
             {
                 foreach (string attribute in new[] { "distinguishedName", WindowsEncrypted, WindowsClear, WindowsExpiration, WindowsHistory, LegacyPassword, LegacyExpiration })
                 {
                     search.PropertiesToLoad.Add(attribute);
                 }
 
-                SearchResult result = search.FindOne();
+                SearchResult result = BitLockerKeys.FindComputer(search, computer, out string problem);
+                if (problem != null) return new LapsPassword { Message = problem };
                 if (result == null) return new LapsPassword { Message = computer + " isn't in Active Directory (searched " + DomainName() + ")." };
 
                 string distinguishedName = First(result, "distinguishedName") as string;
@@ -229,6 +229,7 @@ namespace Layer8.Device
                     : clearLaps.Changed > encryptedLaps.Changed ? clearLaps : encryptedLaps;
                 LapsPassword laps = windowsLaps ?? new LapsPassword();
                 laps.DistinguishedName = distinguishedName;
+                laps.Path = result.Path;
                 if (windowsLaps != null)
                 {
                     laps.ExpirationAttribute = WindowsExpiration;
