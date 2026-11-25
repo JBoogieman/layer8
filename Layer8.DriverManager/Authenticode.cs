@@ -88,19 +88,19 @@ namespace Layer8.DriverManager
         }
 
         /// <summary>
-        /// Compares a download with the hash in the vendor's catalog: SHA-256 (64 hex digits) or MD5 (32). A catalog
-        /// entry without a hash passes unless <paramref name="required"/>, for packs nothing else checks.
+        /// Compares a download with the SHA-256 (64 hex digits) in the vendor's catalog. A catalog entry without one
+        /// passes unless <paramref name="required"/>, for packs nothing else checks. An MD5 isn't accepted: every pack
+        /// in Dell's catalog has a SHA-256 (all 1,131 in November 2026), so MD5 would only ever be a weaker way in.
         /// </summary>
         public static void RequireHash(string path, string expected, string vendor, bool required)
         {
             expected = (expected ?? string.Empty).Trim();
-            HashAlgorithm algorithm = expected.Length == 64 ? (HashAlgorithm)SHA256.Create() : expected.Length == 32 ? MD5.Create() : null;
-            if (algorithm == null)
+            if (expected.Length != 64)
             {
-                if (required) throw new InvalidOperationException(string.Format("{0}'s catalog has no hash for {1}, so Layer8 can't check it and won't use it.", vendor, path));
+                if (required) throw new InvalidOperationException(string.Format("{0}'s catalog has no SHA-256 for {1}, so Layer8 can't check it and won't use it.", vendor, path));
                 return;
             }
-            using (algorithm)
+            using (SHA256 algorithm = SHA256.Create())
             using (FileStream file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 string actual = BitConverter.ToString(algorithm.ComputeHash(file)).Replace("-", string.Empty);

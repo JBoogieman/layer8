@@ -941,11 +941,11 @@ $libraryChecks = {
         [string]$hashed = Join-Path $Work 'pack.cab'
         [IO.File]::WriteAllText($hashed, 'not really a pack')
         $sha256 = (Get-FileHash -LiteralPath $hashed -Algorithm SHA256).Hash
-        $md5 = (Get-FileHash -LiteralPath $hashed -Algorithm MD5).Hash
         Test-Same 'Pack hash: the right SHA-256 passes' $null (Test-Hash $hashed $sha256 $true)
-        Test-Same 'Pack hash: the right MD5 passes, in lower case' $null (Test-Hash $hashed $md5.ToLowerInvariant() $true)
+        Test-Same 'Pack hash: the right SHA-256 passes, in lower case' $null (Test-Hash $hashed $sha256.ToLowerInvariant() $true)
+        Test-Text 'Pack hash: the right MD5 is refused' (Test-Hash $hashed (Get-Md5 $hashed) $true) 'has no SHA-256'
         Test-Text 'Pack hash: another hash is refused' (Test-Hash $hashed ('0' * 64) $true) 'doesn''t match the hash in Dell''s catalog'
-        Test-Text 'Pack hash: no hash, where one is needed, is refused' (Test-Hash $hashed '' $true) 'has no hash'
+        Test-Text 'Pack hash: no hash, where one is needed, is refused' (Test-Hash $hashed '' $true) 'has no SHA-256'
         Test-Same 'Pack hash: no hash, where the signature checks it (Lenovo), passes' $null (Test-Hash $hashed '' $false)
 
         # A pack is locked from its checks until it has run: still readable and runnable, not changeable.
@@ -1006,11 +1006,11 @@ $libraryChecks = {
                     try { $pack = [Activator]::CreateInstance($packageType, [object[]]@($node.PSObject.BaseObject)) } catch { $unread++; continue }
                     $read++
                     $hash = $packageType.GetProperty('CatalogHash').GetValue($pack)
-                    if ($hash.Length -eq 64) { $sha++ } elseif ($hash.Length -ne 32) { $noHash.Add($packageType.GetProperty('Model').GetValue($pack)) }
+                    if ($hash.Length -eq 64) { $sha++ } else { $noHash.Add($packageType.GetProperty('Model').GetValue($pack)) }
                 }
-                if ($read -eq 0) { Add-Check FAIL 'Dell catalog: every pack has a hash' "no packs read from $($files[0]) ($unread couldn't be)" }
-                elseif ($noHash.Count -eq 0) { Add-Check PASS 'Dell catalog: every pack has a hash' "$read packs: $sha SHA-256, $($read - $sha) MD5" }
-                else { Add-Check FAIL 'Dell catalog: every pack has a hash' "$($noHash.Count) of $read have none, so they'd be refused: $(@($noHash | Select-Object -First 5) -join ', ')" }
+                if ($read -eq 0) { Add-Check FAIL 'Dell catalog: every pack has a SHA-256' "no packs read from $($files[0]) ($unread couldn't be)" }
+                elseif ($noHash.Count -eq 0) { Add-Check PASS 'Dell catalog: every pack has a SHA-256' "$read packs, $sha with a SHA-256" }
+                else { Add-Check FAIL 'Dell catalog: every pack has a SHA-256' "$($noHash.Count) of $read have none, so they'd be refused: $(@($noHash | Select-Object -First 5) -join ', ')" }
             }
         }
 
@@ -1037,6 +1037,12 @@ $libraryChecks = {
 }
 
 function Test-Library {
+        # The MD5 a catalog could list, to show that even the right one is refused.
+        function Get-Md5 {
+            [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingBrokenHashAlgorithms', '', Justification = 'Computes the MD5 a catalog could list, to check that Layer8 refuses it.')]
+            param([string]$Path)
+            (Get-FileHash -LiteralPath $Path -Algorithm MD5).Hash
+        }
     if (-not $consoleBin) { Add-Result SKIP 'Library' 'no ConfigMgr console on this computer (SMS_ADMIN_UI_PATH)'; return }
     foreach ($dll in $dlls) { if (-not (Test-Path -LiteralPath (Join-Path $buildDir $dll))) { Add-Result FAIL 'Library' "$dll isn't in Build\Release: run tools\Build-Layer8Msi.ps1"; return } }
     $libraryWork = Join-Path $work 'library'
