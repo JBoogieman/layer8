@@ -47,6 +47,8 @@ namespace Layer8.Device
         public bool? IsServer;
         /// <summary>No ConfigMgr client on it (no CcmExec, or CcmExec with no client): Health Check and Repair can't help.</summary>
         public bool NoClient;
+        /// <summary>Whether anyone is signed in, for a restart's question; null when it couldn't be read.</summary>
+        public bool? SomeoneSignedIn;
 
         /// <summary>"Couldn't check: BitLocker (access denied)", as the Issues column shows it.</summary>
         public string UnreadText => HealthCheck.Name(HealthIssue.CouldNotCheck) + ": " + string.Join(", ", Unread);
@@ -175,6 +177,7 @@ namespace Layer8.Device
             report.SignedIn = Read(report, host, "Signed in", () =>
             {
                 List<string> users = ClientActions.SignedInUsers(cimv2);
+                report.SomeoneSignedIn = users.Count > 0;
                 return new InfoCell(users.Count == 0 ? "No one" : string.Join(", ", users));
             });
 

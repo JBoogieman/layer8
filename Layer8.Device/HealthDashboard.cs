@@ -304,6 +304,9 @@ namespace Layer8.Device
         private readonly Button fixButton;
         private readonly ContextMenuStrip fixMenu = new ContextMenuStrip();
         private readonly Tile clientTile;
+        private readonly Tile restartTile;
+        // The most devices a restart from a tile runs on. A bigger one is narrowed first, with the filter box.
+        private const int RestartCap = 50;
         // Devices answer up to 32 at a time; the tiles and the status line catch up a few times a second.
         private readonly System.Windows.Forms.Timer summaryTimer = new System.Windows.Forms.Timer { Interval = 300 };
 
@@ -363,7 +366,9 @@ namespace Layer8.Device
             AddTile("Offline", "Didn't answer: ports 135 and 445 closed, or WMI's RPC server unreachable", Tone.Muted,
                 row => row.State == RowState.Offline);
             changedTile = AddTile("Changed", string.Empty, Tone.Info, row => row.Change != null);
-            AddIssueTile(HealthIssue.RestartPending, "ConfigMgr, Windows servicing or Windows Update is waiting on a restart");
+            restartTile = AddIssueTile(HealthIssue.RestartPending, "ConfigMgr, Windows servicing or Windows Update is waiting on a restart");
+            // Workstations only: a server's restart should be meant, from the right-click menu.
+            restartTile.Fix = new TileFix("Restart", Named("Restart Computer"));
             AddIssueTile(HealthIssue.LowDisk, string.Format("Less than {0} GB free on C:", lowDiskGB));
             AddIssueTile(HealthIssue.BitLockerOff, "C: isn't protected by BitLocker: off, or protection suspended");
             AddIssueTile(HealthIssue.Defender, string.Format(
@@ -1142,7 +1147,7 @@ namespace Layer8.Device
         private List<Row> FixTargets(Tile tile, out string leftOut)
         {
             List<Row> targets = new List<Row>();
-            string[] reasons = { "not a computer name", "offline", "couldn't be checked", "not checked yet", "no client" };
+            string[] reasons = { "not a computer name", "offline", "couldn't be checked", "not checked yet", "no client", "server", "couldn't tell if it's a server" };
             int[] counts = new int[reasons.Length];
             foreach (Row row in rows.Where(Matches))
             {
@@ -1152,6 +1157,8 @@ namespace Layer8.Device
                 else if (row.State == RowState.Failed) reason = 2;
                 else if (row.State != RowState.Checked || row.Report == null) reason = 3;
                 else if (tile == clientTile && row.Report.NoClient) reason = 4;
+                else if (tile == restartTile && row.Report.IsServer == true) reason = 5;
+                else if (tile == restartTile && row.Report.IsServer == null) reason = 6;
                 else
                 {
                     targets.Add(row);
@@ -1303,12 +1310,32 @@ namespace Layer8.Device
             int confirmAbove = Layer8Settings.ConfirmAbove;
             if (tile != null)
             {
+                bool restart = chosen.Tool == nameof(ClientActions.RestartComputer);
+                if (restart && targets.Count > RestartCap)
+                {
+                    MessageBox.Show(this, string.Format("A restart from a tile runs on {0} devices at most, and {1} would be restarted.\n\nNarrow the grid with the filter box first.", RestartCap, targets.Count),
+                                    actionTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    log.InfoFormat("{0} on {1}: {2}{3} on {4}{5}: more than {6}, not run", title, scope, from, actionTitle, target, left, RestartCap);
+                    return;
+                }
                 string question = confirmQuestion != null ? string.Format(confirmQuestion, target) : RunQuestion(actionTitle, target);
+                if (restart) question += "\n\n" + SignedInText(targets);
                 if (leftOut != null) question += "\n\nLeft out: " + leftOut + ".";
                 if (MessageBox.Show(this, question, actionTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                 {
                     log.InfoFormat("{0} on {1}: {2}{3} on {4}{5}: canceled at the question", title, scope, from, actionTitle, target, left);
                     return;
+                }
+                // More than one device: type how many, so a restart is never one click on the wrong tile.
+                if (restart && targets.Count > 1)
+                {
+                    string typed = InputPrompt.Ask(actionTitle, string.Format("To restart these {0} devices, type {0}.", targets.Count), null);
+                    if (typed != targets.Count.ToString())
+                    {
+                        if (typed != null) MessageBox.Show(this, string.Format("That wasn't {0}: nothing was restarted.", targets.Count), actionTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        log.InfoFormat("{0} on {1}: {2}{3} on {4}{5}: the count wasn't typed, not run", title, scope, from, actionTitle, target, left);
+                        return;
+                    }
                 }
             }
             else if (confirmQuestion != null)
@@ -1324,6 +1351,18 @@ namespace Layer8.Device
             List<IResultObject> devices = DeploymentRetry.DevicesById(connection, targets.Select(row => row.ResourceId).ToList());
             log.InfoFormat("{0} on {1}: {2}{3} on {4}{5}", title, scope, from, actionTitle, target, left);
             ClientActions.RunOnDevices(action, devices, actionName, run, actionTitle);
+        }
+
+        /// <summary>For a restart's question: who has someone signed in, by the pass's check.</summary>
+        private static string SignedInText(List<Row> targets)
+        {
+            int signedIn = targets.Count(row => row.Report?.SomeoneSignedIn == true);
+            int unknown = targets.Count(row => row.Report?.SomeoneSignedIn == null);
+            string text = targets.Count == 1
+                ? (signedIn == 1 ? targets[0].Host + " has someone signed in." : unknown == 1 ? "Whether anyone is signed in to " + targets[0].Host + " couldn't be read." : "No one is signed in to " + targets[0].Host + ".")
+                : string.Format("{0} of them {1} someone signed in.", signedIn, signedIn == 1 ? "has" : "have");
+            if (targets.Count > 1 && unknown > 0) text += string.Format(" For {0}, it couldn't be read.", unknown);
+            return text;
         }
 
         /// <summary>"Run Software Updates Scan Cycle on 3 devices?", and "Run Client Health Check on 3 devices?" rather than "Run Run ...".</summary>
