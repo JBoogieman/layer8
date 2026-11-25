@@ -37,7 +37,7 @@ Written for the lab STATUS.md describes: a site server, the client the console r
 
 ### A. Health Dashboard
 
-Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Layer8.Device/HealthRun.cs`, `Layer8/ListViewSorter.cs`, `Extensions/Actions/*/Layer8Devices.xml`, `Extensions/Actions/*/Layer8Collections.xml`
+Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Layer8.Device/HealthRun.cs`, `Layer8/ListViewSorter.cs`, `Layer8.Device/WindowsSecurity.cs`, `Extensions/Actions/*/Layer8Devices.xml`, `Extensions/Actions/*/Layer8Collections.xml`
 
 - [ ] **Layer8 Dev:** both clients checked in a few seconds. BitLocker reads as BitLocker Status reads it ("Suspended (encrypted)" when not protected but fully encrypted, "Off" when fully decrypted).
 - [ ] **All Systems:** the placeholders are skipped by name. The site server shows Client "Not installed" (its management point runs CcmExec without a client), BitLocker "Not available" and not counted, and Updates "No client".
@@ -71,6 +71,23 @@ Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Laye
   - Restart Computer asks the console menu's question ("Restart <name> in 5 minutes?"), and No runs nothing.
   - Find Software asks for its search first.
   - With only a placeholder record selected, Client Actions is greyed out.
+- [ ] **The Fix button:**
+  - It shows on Not scanning, Client, Restart pending, BitLocker off, Defender and Not reporting, and not on the other tiles or on Devices.
+  - Its count is the devices the grid shows (the tile and the filter box) less those left out, and hovering it says which were left out and why. It's greyed out while a check runs, except Windows Security.
+  - **All Systems, Client tile:** the site server is left out as "no client". With nothing left to run on, clicking says why instead of asking.
+  - **All Systems, Restart pending tile**, if the site server is on it: it's left out as "server".
+- [ ] **Changes something: a fix that asks** (Not scanning or Not reporting, whichever has a client on it; or Client with DEV02's name in the filter box):
+  - It asks once, naming the action, the count and who was left out, even below Layer8 Settings' Confirm above. Client's menu offers Run Client Health Check and Repair Client, and Repair asks its own question.
+  - No runs nothing, and the log says "canceled at the question".
+  - Yes runs it in the progress window. Afterwards those devices are selected, and the status line starts "Ran <action> on <device> at <time>: give it time, then right-click and Check Again".
+- [ ] **Changes something: Restart pending** (DEV02 set up with a pending restart by the launcher; never with DEV01, the console's own computer, in the grid):
+  - DEV02 alone (its name in the filter box): Restart Computer's own question, plus whether someone is signed in. No restarts nothing.
+  - Yes restarts DEV02 after the 5-minute warning. Cancel Restart from the right-click menu stops it inside those 5 minutes.
+  - Two or more devices: after Yes it asks for the count, and anything else says "nothing was restarted". More than 50 says to narrow the grid first (code review only: the lab has no 50 devices).
+- [ ] **Windows Security:**
+  - On BitLocker off or Defender, with two devices shown and none selected, the Fix button says to pick one. With one selected, or only one shown, Windows Security opens for it without asking.
+  - Right-click > Windows Security... opens it for the selected device, and is greyed out with two selected.
+- [ ] **The log:** the script's `-Since` run passes each tile fix: the right action for its tile, and a restart on 50 devices at most and never on a server.
 - [ ] **Changes something:** with the second client switched off, Offline counts it and its Issues cell says Offline. The long placeholder names don't widen the Device column, and hovering the row shows the full offline reason.
 - [ ] **Step timing:** with Layer8 Settings > General > Log level at Debug, every check on every device logs its time. The script's `-Since` run lists any step over 10 seconds, which is logged at any level.
 

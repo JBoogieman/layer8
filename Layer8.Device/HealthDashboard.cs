@@ -21,7 +21,10 @@ namespace Layer8.Device
     /// Health Dashboard: one live pass over a collection, or the selected devices, with what's wrong where. Tiles
     /// across the top count each issue (offline, restart pending, low disk, BitLocker off, Defender, missing
     /// updates, client, long uptime); clicking one shows just those devices. Below is a grid to sort, filter, copy
-    /// and export, and double-clicking a device opens System Information. Read only.
+    /// and export, and double-clicking a device opens System Information. Checking only reads. Changing a device
+    /// is always a click away and always asks first: a tile's Fix button (a scan, a health check or repair, policy,
+    /// a restart, or Windows Security to look closer) on the devices the grid shows, or the right-click menu's
+    /// client actions on the selected ones.
     /// </summary>
     public static class HealthDashboard
     {
