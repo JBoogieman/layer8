@@ -108,7 +108,7 @@ if ($CertificateThumbprint) {
 
 $untrustedWarned = $false
 function Set-Layer8Signature([string]$file) {
-    $signature = Set-AuthenticodeSignature -FilePath $file -Certificate $certificate -HashAlgorithm SHA256 -TimestampServer $TimestampServer
+    $signature = Set-AuthenticodeSignature -LiteralPath $file -Certificate $certificate -HashAlgorithm SHA256 -TimestampServer $TimestampServer
     if (-not $signature.SignerCertificate) { throw "Signing $file failed: $($signature.StatusMessage)" }
     # A certificate this computer doesn't trust still signs; the site server is the one that has to trust it.
     if ($signature.Status -ne 'Valid' -and -not $script:untrustedWarned) {
