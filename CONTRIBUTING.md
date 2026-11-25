@@ -33,9 +33,16 @@ You need the ConfigMgr console and Visual Studio with .NET desktop development. 
 
 Nothing ships untested, and every build re-runs the old tests, not only the new one:
 
-1. Run `tools\Test-Layer8Regression.ps1` on a lab with a console and at least one client. It prints PASS or FAIL for each check, and its Changes section names the console steps your change touches.
-2. Do those steps from [REGRESSION.md](docs/REGRESSION.md).
-3. Say in the pull request what you tested and on what (ConfigMgr version, Windows on the devices).
+1. Build with `tools\Build-Layer8Msi.ps1`. Microsoft's .NET security analyzers run in the build, and a security finding stops it. Fix it; if it's a false positive, suppress it on the one member it's about, saying why it's safe: `[SuppressMessage("Security", "CA5351", Justification = "...")]`. Never switch a rule off.
+2. Run `tools\Test-Layer8Regression.ps1` on a lab with a console and at least one client. It prints PASS or FAIL for each check, and its Changes section names the console steps your change touches. Its Security section also checks the scripts in `tools`, with two modules you install once (it says so if they're missing):
+
+   ```powershell
+   Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser
+   Install-Module InjectionHunter -RequiredVersion 1.0.0 -Scope CurrentUser
+   ```
+
+3. Do those steps from [REGRESSION.md](docs/REGRESSION.md).
+4. Say in the pull request what you tested and on what (ConfigMgr version, Windows on the devices).
 
 If your change adds something the script can check, add a check for it.
 

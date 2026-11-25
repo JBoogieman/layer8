@@ -1,6 +1,6 @@
 # Layer8 regression run
 
-Every test build re-runs the old tests, not only the new one: everything in [STATUS.md](STATUS.md)'s tested table that the change could touch, and a Health Dashboard run on All Systems every time. This is that list. `tools\Test-Layer8Regression.ps1` checks what doesn't need the console (the build, the cab, the installed copy, Customize-Layer8Cab.ps1, Error Lookup's text, the signature checks, what each device should show on the dashboard, and what Online Status, Quick Status, Client Info, Check Pending Restart, BitLocker Status, Defender Status and List Missing Updates answer on each device, run in 32-bit PowerShell as the console runs them); the steps below are the rest.
+Every test build re-runs the old tests, not only the new one: everything in [STATUS.md](STATUS.md)'s tested table that the change could touch, and a Health Dashboard run on All Systems every time. This is that list. `tools\Test-Layer8Regression.ps1` checks what doesn't need the console (the build, the security scans of the code and the scripts, the cab, the installed copy, Customize-Layer8Cab.ps1, Error Lookup's text, the signature checks, what each device should show on the dashboard, and what Online Status, Quick Status, Client Info, Check Pending Restart, BitLocker Status, Defender Status and List Missing Updates answer on each device, run in 32-bit PowerShell as the console runs them); the steps below are the rest.
 
 Written for the lab STATUS.md describes: a site server, the client the console runs on, a second client, the Layer8 Dev collection, and the test data from `tools\New-Layer8LabTestData.ps1`.
 
@@ -16,6 +16,7 @@ Written for the lab STATUS.md describes: a site server, the client the console r
    ```
 
    - Every FAIL is understood before going on.
+   - Its **Security** section lists the build's security analyzer findings and the scripts' scan: each is fixed, or suppressed on its one member with a justification, before the commit.
    - Its **Changes** section names the sections below that this change touches: the files changed since the last commit that changed STATUS.md, matched against each section's Files line.
    - Its **Devices** section says what the dashboard should show on All Systems.
    - Its last line is the command for step 5.
@@ -289,6 +290,27 @@ Files: `Layer8.Device/ResultClientHealthControl*`, `Layer8/IncrementalCollection
 - [ ] **Client Health tab** on the second client: lists CcmEvalReport.xml's checks and the last evaluation time.
 - [ ] **Ctrl+C in a list:** in the Collections tab, with nothing selected nothing happens; with two rows selected, Notepad gets two lines, columns separated by tabs.
 - [ ] **Task sequence export:** Cancel in the save dialog writes no file; Save writes the XML where it was asked to.
+
+### S. Security scans
+
+Files: `tools/PSScriptAnalyzerSettings.psd1`, `*/packages.lock.json`
+
+The analyzers' settings themselves are in `Directory.Build.*`, under Z. Every build, the script's Security section checks:
+
+- each C# project's SARIF (`Build\Analysis\Release`) is from its current DLL and lists the 94 security rules, with no open finding, and each suppression is listed with its justification
+- `tools\*.ps1` through PSScriptAnalyzer 1.25.0's security rules and InjectionHunter 1.0.0's 8 rules, with no open finding
+
+What the tools don't see, measured with throwaway samples on November 25, 2026. These stay Layer8's own checks (`Utility`'s helpers, the Library section):
+
+- The injection rules (CA3001 to CA3012) only treat web input as untrusted: a device name from WMI, or a text box, going into `Process.Start` raised nothing.
+- CA3075 flags an `XmlDocument` with a resolver, not `XmlReaderSettings` with `DtdProcessing.Parse` and a resolver. `Utility.LoadXml` refuses DTDs, and the Library section checks that it does.
+- InjectionHunter flags quotes doubled with `-replace`, not with `.Replace()`.
+
+- [ ] **Another analyzer version** (`Directory.Build.props` and the four lock files change together; restore once with `-p:RestoreLockedMode=false` to write the new lock files):
+  - A build with NuGet pointed at an empty folder (`RestoreSources`, `RestoreForce`) still restores.
+  - Throwaway samples outside the repo, compiled in through `CustomAfterMicrosoftCommonTargets`: an MD5 call stops the build, so does `BinaryFormatter.Deserialize` (off by default), and an MD5 call with a `SuppressMessage` and a `Justification` doesn't.
+  - Built deterministically before and after at the same version, every file in `Build\Release` is byte for byte the same.
+- [ ] **Another PSScriptAnalyzer or InjectionHunter version** (the two versions in `tools\Test-Layer8Regression.ps1`): the section's rule counts change only as the release notes say, and a sample with `Invoke-Expression` on a parameter is flagged by both.
 
 ### Z. Shared code: run every section
 

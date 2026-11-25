@@ -12,7 +12,7 @@ Where Layer8 might go next. These are ideas, not promises: Layer8 is built in sp
 
 ## Next up
 
-Nothing picked yet. **Fix it from the Health Dashboard** is done and on `next` for the next release: a Fix button on the Not scanning, Client, Restart pending, Not reporting, BitLocker off and Defender tiles.
+Nothing picked yet. **Fix it from the Health Dashboard** is done and on `next` for the next release: a Fix button on the Not scanning, Client, Restart pending, Not reporting, BitLocker off and Defender tiles. So is **security scanning in every build**: Microsoft's .NET security analyzers in the compile (a finding stops the build), and PSScriptAnalyzer with InjectionHunter on the scripts.
 
 ## Soon-ish
 
