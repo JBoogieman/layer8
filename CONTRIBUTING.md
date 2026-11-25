@@ -9,6 +9,7 @@ Layer8 is built by one person in spare time, for fun. Help is welcome, and so is
 - Issues and pull requests get read, but replies come when they come. There's no promised support, response time or release date.
 - What gets merged, and when, is the maintainer's call. A no is about fit, not about you.
 - Layer8 is provided as is, without warranty (see [LICENSE](LICENSE)). It acts with your ConfigMgr and Active Directory rights, so try each release in a lab or on a small collection first.
+- Be decent to each other: see the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Before you write code
 
