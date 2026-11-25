@@ -35,8 +35,10 @@
                  collection, through the code the Client Tools menu and its progress window use. Each answer is
                  checked against the Devices section's reading of that device, and the registry view Check Pending
                  Restart reads against Windows' own.
-      Log        With -Since: the errors, warnings and slow steps Layer8 logged since then, and the last Health
-                 Dashboard run on the collection compared with the Devices section.
+      Log        With -Since: the errors, warnings and slow steps Layer8 logged since then, each fix run from a
+                 Health Dashboard tile (the right action for its tile, a restart on 50 devices at most and never on
+                 a server or this computer), and the last Health Dashboard run on the collection compared with the
+                 Devices section.
       Changes    The files changed since the last commit that changed docs\STATUS.md (the last recorded run), and
                  the sections of docs\REGRESSION.md whose Files lines name them.
 
@@ -2240,6 +2242,49 @@ function Test-Tools {
 
 # --- Log ------------------------------------------------------------------------------------------------------------------
 
+# Each Health Dashboard tile's fix, as HealthDashboardDialog wires them: the Fix button runs only these.
+$tileFixes = @{
+    'Not scanning'    = @('Software Updates Scan Cycle')
+    'Client'          = @('Run Client Health Check', 'Repair Client')
+    'Restart pending' = @('Restart Computer')
+    'BitLocker off'   = @('Windows Security')
+    'Defender'        = @('Windows Security')
+    'Not reporting'   = @('Machine Policy Retrieval and Evaluation Cycle')
+}
+$restartCap = 50
+
+# The fixes run from dashboard tiles since -Since, from their log lines:
+#   Health Dashboard on <scope>: tile <tile>: <action> on <device, or N devices>[ (left out: ...)][: <why it didn't run>]
+function Test-TileFixes($Entries) {
+    $pattern = '^Health Dashboard on (?<scope>.+?): tile (?<tile>.+?): (?<action>.+?) on (?<target>.+?)(?: \(left out: (?<left>.+?)\))?(?:: (?<stopped>canceled at the question|the count wasn''t typed, not run|more than \d+, not run))?$'
+    $fixes = @($Entries | Where-Object { $_.Text -match $pattern } | ForEach-Object {
+        $null = $_.Text -match $pattern
+        [pscustomobject]@{ Time = $_.Time; Tile = $Matches.tile; Action = $Matches.action; Target = $Matches.target; Left = $Matches.left; Stopped = $Matches.stopped; Text = $_.Text }
+    })
+    if (-not $fixes) { Add-Result INFO 'Fixes from dashboard tiles' 'none logged: section A''s Fix steps weren''t run'; return }
+    foreach ($fix in $fixes) {
+        $label = "Tile fix at {0:T}" -f $fix.Time
+        if (-not $tileFixes.ContainsKey($fix.Tile)) { Add-Result FAIL $label "'$($fix.Tile)' has no fix: $($fix.Text)"; continue }
+        if ($tileFixes[$fix.Tile] -notcontains $fix.Action) { Add-Result FAIL $label "$($fix.Action) isn't $($fix.Tile)'s fix ($($tileFixes[$fix.Tile] -join ' or '))"; continue }
+        $outcome = 'ran'
+        if ($fix.Stopped) { $outcome = $fix.Stopped }
+        $detail = "$($fix.Tile): $($fix.Action) on $($fix.Target), $outcome"
+        if ($fix.Left) { $detail += " (left out: $($fix.Left))" }
+
+        if ($fix.Action -eq 'Restart Computer' -and -not $fix.Stopped) {
+            $count = 1
+            if ($fix.Target -match '^(\d+) devices$') { $count = [int]$Matches[1] }
+            if ($count -gt $restartCap) { Add-Result FAIL $label "a restart from a tile ran on $count devices, over $restartCap"; continue }
+            if ($count -eq 1 -and ($fix.Target -split '\.')[0] -eq $env:COMPUTERNAME) { Add-Result FAIL $label "a restart from a tile ran on $($fix.Target), the computer the console runs on"; continue }
+            if ($count -eq 1 -and $script:expected) {
+                $row = $script:expected.Rows | Where-Object Device -eq $fix.Target | Select-Object -First 1
+                if ($row -and [string]$row.Windows -like 'Server*') { Add-Result FAIL $label "a restart from a tile ran on $($fix.Target), a server ($($row.Windows))"; continue }
+            }
+        }
+        Add-Result PASS $label $detail
+    }
+}
+
 function Test-Log {
     $entries = @(Get-LogEntries | Where-Object { $_.Time -ge $Since })
     Add-Result INFO 'Entries' ("{0} since {1:g}, in {2}" -f $entries.Count, $Since, $logFolder)
@@ -2277,6 +2322,8 @@ function Test-Log {
     else { Add-Result PASS 'No step took 10 seconds or more' '' }
 
     foreach ($entry in $entries | Where-Object { $_.Text -like '*settings saved*' }) { Add-Result INFO ("Settings saved at {0:T}" -f $entry.Time) $entry.Text }
+
+    Test-TileFixes $entries
 
     # The last Health Dashboard run on the collection: every build runs one, and the Devices section says what it should find.
     $scope = [regex]::Escape("Health Dashboard on $Collection")

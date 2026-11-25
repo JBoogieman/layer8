@@ -40,6 +40,15 @@ namespace Layer8.Device
         /// <summary>The checks that couldn't be read, as "BitLocker (access denied)".</summary>
         public readonly List<string> Unread = new List<string>();
         public InfoCell SignedIn, Uptime, DiskFree, Restart, BitLocker, Defender, BlueScreen, Windows, Updates, UpdateScan, Client;
+        /// <summary>
+        /// A server or domain controller (Win32_OperatingSystem.ProductType 2 or 3); null when Windows couldn't be
+        /// read. A fix from the dashboard that restarts devices leaves out servers, and devices it can't tell about.
+        /// </summary>
+        public bool? IsServer;
+        /// <summary>No ConfigMgr client on it (no CcmExec, or CcmExec with no client): Health Check and Repair can't help.</summary>
+        public bool NoClient;
+        /// <summary>Whether anyone is signed in, for a restart's question; null when it couldn't be read.</summary>
+        public bool? SomeoneSignedIn;
 
         /// <summary>"Couldn't check: BitLocker (access denied)", as the Issues column shows it.</summary>
         public string UnreadText => HealthCheck.Name(HealthIssue.CouldNotCheck) + ": " + string.Join(", ", Unread);
@@ -168,6 +177,7 @@ namespace Layer8.Device
             report.SignedIn = Read(report, host, "Signed in", () =>
             {
                 List<string> users = ClientActions.SignedInUsers(cimv2);
+                report.SomeoneSignedIn = users.Count > 0;
                 return new InfoCell(users.Count == 0 ? "No one" : string.Join(", ", users));
             });
 
@@ -208,7 +218,10 @@ namespace Layer8.Device
             {
                 using (ManagementObject os = Utility.GetFirstWMIInstance(cimv2, "SELECT Caption, BuildNumber, ProductType FROM Win32_OperatingSystem"))
                 {
-                    if (os == null || !int.TryParse(os["BuildNumber"] as string, NumberStyles.None, CultureInfo.InvariantCulture, out int build))
+                    if (os == null) throw new InvalidOperationException("no Windows build number");
+                    object productType = os["ProductType"];
+                    report.IsServer = productType == null ? (bool?)null : Convert.ToUInt32(productType) != 1;
+                    if (!int.TryParse(os["BuildNumber"] as string, NumberStyles.None, CultureInfo.InvariantCulture, out int build))
                         throw new InvalidOperationException("no Windows build number");
                     // The update revision (the .4652 in 26100.4652) and the marketing version (24H2) are only in the
                     // registry. Windows 10 before 20H2 has ReleaseId (1909) where later ones have DisplayVersion.
@@ -218,7 +231,7 @@ namespace Layer8.Device
 
                     // ProductType 1 is a workstation; 2 and 3 are domain controllers and servers, whose builds follow
                     // their own line (Server 2022 is 20348) and aren't held to a workstation build.
-                    if (Convert.ToUInt32(os["ProductType"] ?? 1u) != 1)
+                    if (report.IsServer == true)
                         return new InfoCell(SystemInfoReader.Join(", ", ServerName(os["Caption"] as string), buildText), version);
 
                     string release = SystemInfoReader.RegistryValue(registryScope(), "GetStringValue", CurrentVersionKey, "DisplayVersion") as string
@@ -237,6 +250,7 @@ namespace Layer8.Device
                     if (service == null)
                     {
                         report.Issues.Add(HealthIssue.Client);
+                        report.NoClient = true;
                         return new InfoCell("Not installed");
                     }
                     state = service["State"] as string ?? "in an unknown state";
@@ -262,6 +276,7 @@ namespace Layer8.Device
                     // no client installed. A client whose WMI classes have gone reads the same; Client Info and
                     // Repair Client tell the two apart.
                     report.Issues.Add(HealthIssue.Client);
+                    report.NoClient = true;
                     return new InfoCell("Not installed");
                 }
 

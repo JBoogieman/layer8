@@ -21,15 +21,15 @@ namespace Layer8.Device
         /// <summary>Console entry point: runs ShowCore behind Layer8's crash guard.</summary>
         public static void Show(object sender, ScopeNode scopeNode, ActionDescription action, IResultObject selectedObject, PropertyDataUpdated dataUpdatedDelegate, Status status)
         {
-            SafeAction.Run(action?.DisplayName ?? "Windows Security", () => ShowCore(selectedObject));
+            SafeAction.Run(action?.DisplayName ?? "Windows Security", () => ShowFor(selectedObject["Name"].StringValue));
         }
 
-        private static void ShowCore(IResultObject selectedObject)
+        /// <summary>Opens the window for one device by name: the console's menu, and the Health Dashboard's BitLocker off and Defender tiles.</summary>
+        internal static void ShowFor(string name, IWin32Window parent = null)
         {
-            string name = selectedObject["Name"].StringValue;
             if (!RemoteTools.IsComputerName(name))
             {
-                MessageBox.Show(name + " isn't a computer name.", "Windows Security", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(parent, name + " isn't a computer name.", "Windows Security", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             using (SystemInfoDialog dialog = new SystemInfoDialog(name, "Windows Security"))
@@ -49,7 +49,7 @@ namespace Layer8.Device
                     int? restarts = AskRestarts(owner, host);
                     return restarts.HasValue ? (Func<string>)(() => WindowsSecurityReader.SuspendBitLocker(host, restarts.Value)) : null;
                 });
-                dialog.ShowDialog();
+                dialog.ShowDialog(parent);
             }
         }
 
