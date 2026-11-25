@@ -45,7 +45,9 @@ namespace Layer8
 
         internal static int NaturalCompare(string a, string b) => StrCmpLogicalW(a ?? string.Empty, b ?? string.Empty);
 
+        // From System32 only: the default search looks in the console's folder and Layer8's own first.
         [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         private static extern int StrCmpLogicalW(string a, string b);
     }
 

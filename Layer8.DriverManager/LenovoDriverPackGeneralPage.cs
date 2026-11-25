@@ -180,7 +180,7 @@ namespace Layer8.DriverManager
             {
                 Uri source = new Uri(registry.ReadString("LenovoCatalogURI"));
                 Layer8.Layer8Log.GetLogger(GetType()).InfoFormat("Downloading the Lenovo catalog from {0}", source);
-                ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+                // SecurityProtocol is left as it is, as for the packs (LenovoDriverPackCatalogPage).
                 using (WebClient client = new WebClient())
                 {
                     client.DownloadFile(source, CatalogFile);

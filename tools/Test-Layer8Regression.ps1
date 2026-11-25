@@ -13,6 +13,11 @@
       Build      The DLLs carry SharedAssemblyInfo.cs's version and are newer than their code; the cab and the MSI
                  are from that build; the cab's manifest matches its files; the cab and its DLLs are signed by one
                  certificate; every XML file in the cab parses.
+      Security   The security analyzers' findings from this build (Build\Analysis\Release\*.sarif, set up in
+                 Directory.Build.*): each project's SARIF is from its current DLL and lists the security rules, every
+                 open finding is a FAIL, and every suppression is listed with its justification. Then tools\*.ps1
+                 through PSScriptAnalyzer's security rules (tools\PSScriptAnalyzerSettings.psd1) and every
+                 InjectionHunter rule, at pinned versions. Nothing is run: both only read the scripts.
       Installed  The console's newest copy of Layer8 is this build's cab, file for file; Layer8.msi's files aren't
                  there as well; the console last loaded this version.
       Customize  The one-file release copy of Customize-Layer8Cab.ps1, alone in a folder with a space in its name,
@@ -51,8 +56,8 @@
     PowerShell either way.
 
 .PARAMETER Since
-    For the second run, after the console steps: adds the Log section from this time on, and skips Build, Customize,
-    Library and Tools (unless -Skip says otherwise). The first run prints the command to use.
+    For the second run, after the console steps: adds the Log section from this time on, and skips Build, Security,
+    Customize, Library and Tools (unless -Skip says otherwise). The first run prints the command to use.
 
 .PARAMETER Collection
     The collection the Devices and Log sections look at. Default: All Systems.
@@ -68,7 +73,7 @@
     Without one, the catalog checks are skipped.
 
 .PARAMETER Skip
-    Sections to leave out: Build, Installed, Customize, Library, Settings, Devices, Tools, Log, Changes.
+    Sections to leave out: Build, Security, Installed, Customize, Library, Settings, Devices, Tools, Log, Changes.
 
 .EXAMPLE
     .\tools\Test-Layer8Regression.ps1
@@ -86,7 +91,7 @@ param(
     [string]$SiteServer,
     [string]$SiteCode,
     [string]$LenovoCatalog = (Join-Path ([IO.Path]::GetTempPath()) 'LenovoCatalogV2.xml'),
-    [ValidateSet('Build', 'Installed', 'Customize', 'Library', 'Settings', 'Devices', 'Tools', 'Log', 'Changes')]
+    [ValidateSet('Build', 'Security', 'Installed', 'Customize', 'Library', 'Settings', 'Devices', 'Tools', 'Log', 'Changes')]
     [string[]]$Skip
 )
 
@@ -94,7 +99,9 @@ param(
 # answers with the 32-bit view (WOW6432Node), the blind spot the Tools section looks for in Layer8. So run again in
 # 64-bit, with the same parameters. The 32-bit parts start their own 32-bit PowerShell.
 if ([IntPtr]::Size -eq 4 -and [Environment]::Is64BitOperatingSystem) {
-    $quote = { param($text) "'" + ([string]$text).Replace("'", "''") + "'" }
+    # PowerShell's own escaping, which also doubles the curly quotes (U+2018 to U+201B): PowerShell reads those as
+    # single quotes too, so doubling only ' let a collection name with a right single quote run as a second command.
+    $quote = { param($text) "'" + [Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent([string]$text) + "'" }
     $command = '& ' + (& $quote $PSCommandPath)
     foreach ($name in $PSBoundParameters.Keys) {
         $value = $PSBoundParameters[$name]
@@ -116,7 +123,7 @@ Add-Type -AssemblyName System.Management
 $sinceGiven = $PSBoundParameters.ContainsKey('Since')
 # The second run comes after the console steps, which don't change the build or the devices' answers, so by default
 # it doesn't repeat those checks.
-if ($sinceGiven -and -not $PSBoundParameters.ContainsKey('Skip')) { $Skip = 'Build', 'Customize', 'Library', 'Tools' }
+if ($sinceGiven -and -not $PSBoundParameters.ContainsKey('Skip')) { $Skip = 'Build', 'Security', 'Customize', 'Library', 'Tools' }
 
 # Layer8's permanent console extension ID, the same in every Layer8 cab (Build-Layer8Extension.ps1).
 $extensionId = '3b900076-0ea8-46a7-b3b3-57bc7336c50f'
@@ -372,6 +379,98 @@ function Get-MsiProperty([string]$Path, [string]$Property) {
         # Released, or the MSI stays locked until PowerShell exits.
         foreach ($comObject in $record, $view, $database, $installer) { if ($comObject) { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($comObject) } }
     }
+}
+
+# --- Security ------------------------------------------------------------------------------------------------------
+
+# The C# projects by the name their SARIF is written under (MSBuildProjectName, Directory.Build.targets), with their DLL.
+$analyzedProjects = [ordered]@{
+    'Layer8'               = 'Layer8.dll'
+    'Layer8.Device'        = 'Layer8.Device.dll'
+    'Layer8.DriverManager' = 'Layer8.DriverManager.dll'
+    'INIFileParser'        = 'Layer8.IniFileParser.dll'
+}
+# The PowerShell analyzers at the versions these checks were tested with. They're installed by hand from the PowerShell
+# Gallery (CONTRIBUTING.md), so a version with new rules comes in on purpose, not with whatever Install-Module gets.
+$scriptAnalyzerVersion = [version]'1.25.0'
+$injectionHunterVersion = [version]'1.0.0'
+
+# "file:line" for a finding, relative to the repo.
+function Get-FindingPlace([string]$Path, $Line) {
+    if ($Path -like "$repo\*") { $Path = $Path.Substring($repo.Length + 1) }
+    '{0}:{1}' -f $Path, $Line
+}
+
+function Test-Security {
+    # C#: the analyzers run inside the build and write each project's results as SARIF (Directory.Build.*).
+    $analysisDir = Join-Path $repo 'Build\Analysis\Release'
+    foreach ($project in $analyzedProjects.Keys) {
+        $sarif = Join-Path $analysisDir "$project.sarif"
+        if (-not (Test-Path -LiteralPath $sarif)) { Add-Result FAIL "$project analyzed" "no $project.sarif in Build\Analysis\Release: run tools\Build-Layer8Msi.ps1"; continue }
+        # The compiler writes the SARIF 4 to 6 ms after the DLL, and the copy into Build\Release keeps the DLL's time, so
+        # a SARIF older than its DLL means that DLL came from a compile without the analyzers.
+        $dll = Get-Item -LiteralPath (Join-Path $buildDir $analyzedProjects[$project]) -ErrorAction SilentlyContinue
+        $written = (Get-Item -LiteralPath $sarif).LastWriteTime
+        if ($dll -and $written -lt $dll.LastWriteTime.AddSeconds(-2)) {
+            Add-Result FAIL "$project analyzed" ("its SARIF is from {0:g}, {1} from {2:g}: that DLL was built without the analyzers" -f $written, $dll.Name, $dll.LastWriteTime)
+            continue
+        }
+        $run = (Get-Content -Raw -LiteralPath $sarif | ConvertFrom-Json).runs[0]
+        # The SARIF lists every rule the compiler loaded, with its category, whether or not it found anything.
+        $rules = @($run.tool.driver.rules | Where-Object { $_.properties.category -eq 'Security' })
+        if (-not $rules) { Add-Result FAIL "$project analyzed" "its SARIF lists no security rules: the analyzers didn't load"; continue }
+        # Only the Security category is switched on, so every CA result is a security finding. Compiler warnings (CS) aren't.
+        $findings = @($run.results | Where-Object { $_.ruleId -like 'CA*' })
+        foreach ($finding in $findings) {
+            $location = $finding.locations[0].physicalLocation
+            $place = Get-FindingPlace ([Uri]$location.artifactLocation.uri).LocalPath $location.region.startLine
+            if ($finding.suppressions) {
+                $why = $finding.suppressions[0].justification
+                if (-not $why) { $why = "no justification ($($finding.suppressions[0].properties.suppressionType))" }
+                Add-Result INFO "$($finding.ruleId) suppressed" "${place}: $why"
+            }
+            else { Add-Result FAIL $finding.ruleId ('{0}: {1}' -f $place, (Get-FirstLine $finding.message.text)) }
+        }
+        $open = @($findings | Where-Object { -not $_.suppressions }).Count
+        if ($open) { Add-Result INFO "$project security analysis" "$($rules.Count) security rules, $open open finding(s)" }
+        else { Add-Result PASS "$project security analysis" "$($rules.Count) security rules, no open findings ($($findings.Count) suppressed)" }
+    }
+
+    # PowerShell: tools\*.ps1 through PSScriptAnalyzer's security rules (tools\PSScriptAnalyzerSettings.psd1), then every
+    # InjectionHunter rule in a second pass. Both read the scripts; neither runs them.
+    $analyzer = Get-Module -ListAvailable PSScriptAnalyzer | Where-Object Version -eq $scriptAnalyzerVersion | Select-Object -First 1
+    $hunter = Get-Module -ListAvailable InjectionHunter | Where-Object Version -eq $injectionHunterVersion | Select-Object -First 1
+    $missing = @()
+    if (-not $analyzer) { $missing += "PSScriptAnalyzer $scriptAnalyzerVersion" }
+    if (-not $hunter) { $missing += "InjectionHunter $injectionHunterVersion" }
+    if ($missing) {
+        Add-Result WARN 'PowerShell analysis' ("not run, not installed: {0}. Install-Module PSScriptAnalyzer -RequiredVersion {1} -Scope CurrentUser, and Install-Module InjectionHunter -RequiredVersion {2} -Scope CurrentUser" -f ($missing -join ' and '), $scriptAnalyzerVersion, $injectionHunterVersion)
+        return
+    }
+    Import-Module $analyzer.Path -Force
+    $settings = Join-Path $repo 'tools\PSScriptAnalyzerSettings.psd1'
+    # A rule name PSScriptAnalyzer doesn't have would be skipped without a word, so each one is checked.
+    $named = @((Import-PowerShellDataFile -LiteralPath $settings).IncludeRules)
+    $known = @(Get-ScriptAnalyzerRule | ForEach-Object RuleName)
+    $unknown = @($named | Where-Object { $known -notcontains $_ })
+    if ($unknown) { Add-Result FAIL 'PowerShell analysis rules' "PSScriptAnalyzer $scriptAnalyzerVersion has no rule named $($unknown -join ', ') (tools\PSScriptAnalyzerSettings.psd1)" }
+    $hunterRules = @(Get-ScriptAnalyzerRule -CustomRulePath $hunter.Path)
+    if (-not $hunterRules) { Add-Result FAIL 'PowerShell analysis rules' "InjectionHunter $injectionHunterVersion loaded no rules from $($hunter.Path)"; return }
+
+    $files = @(Get-ChildItem -LiteralPath (Join-Path $repo 'tools') -Filter *.ps1 -File | Sort-Object Name)
+    $records = @(foreach ($file in $files) {
+        Invoke-ScriptAnalyzer -Path $file.FullName -Settings $settings -IncludeSuppressed
+        Invoke-ScriptAnalyzer -Path $file.FullName -CustomRulePath $hunter.Path -IncludeSuppressed
+    })
+    foreach ($record in $records) {
+        $place = Get-FindingPlace $record.ScriptPath $record.Line
+        if ($record.Suppression) { Add-Result INFO "$($record.RuleName) suppressed" "${place}: $($record.Suppression[0].Justification)" }
+        else { Add-Result FAIL $record.RuleName ('{0}: {1}' -f $place, (Get-FirstLine $record.Message)) }
+    }
+    $open = @($records | Where-Object { -not $_.Suppression }).Count
+    $summary = '{0} scripts, {1} PSScriptAnalyzer rules and {2} InjectionHunter rules' -f $files.Count, ($named.Count - $unknown.Count), $hunterRules.Count
+    if ($open) { Add-Result INFO 'PowerShell analysis' "${summary}: $open open finding(s)" }
+    else { Add-Result PASS 'PowerShell analysis' "${summary}: no open findings ($($records.Count) suppressed)" }
 }
 
 # --- Installed ------------------------------------------------------------------------------------------------------
@@ -938,14 +1037,20 @@ $libraryChecks = {
         function Test-Hash([string]$Path, [string]$Expected, [bool]$Required) {
             try { [void]$requireHash.Invoke($null, [object[]]@($Path, $Expected, 'Dell', $Required)); $null } catch { Get-Message $_.Exception }
         }
+        # The MD5 a catalog could list, to show that even the right one is refused.
+        function Get-Md5 {
+            [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingBrokenHashAlgorithms', '', Justification = 'Computes the MD5 a catalog could list, to check that Layer8 refuses it.')]
+            param([string]$Path)
+            (Get-FileHash -LiteralPath $Path -Algorithm MD5).Hash
+        }
         [string]$hashed = Join-Path $Work 'pack.cab'
         [IO.File]::WriteAllText($hashed, 'not really a pack')
         $sha256 = (Get-FileHash -LiteralPath $hashed -Algorithm SHA256).Hash
-        $md5 = (Get-FileHash -LiteralPath $hashed -Algorithm MD5).Hash
         Test-Same 'Pack hash: the right SHA-256 passes' $null (Test-Hash $hashed $sha256 $true)
-        Test-Same 'Pack hash: the right MD5 passes, in lower case' $null (Test-Hash $hashed $md5.ToLowerInvariant() $true)
+        Test-Same 'Pack hash: the right SHA-256 passes, in lower case' $null (Test-Hash $hashed $sha256.ToLowerInvariant() $true)
+        Test-Text 'Pack hash: the right MD5 is refused' (Test-Hash $hashed (Get-Md5 $hashed) $true) 'has no SHA-256'
         Test-Text 'Pack hash: another hash is refused' (Test-Hash $hashed ('0' * 64) $true) 'doesn''t match the hash in Dell''s catalog'
-        Test-Text 'Pack hash: no hash, where one is needed, is refused' (Test-Hash $hashed '' $true) 'has no hash'
+        Test-Text 'Pack hash: no hash, where one is needed, is refused' (Test-Hash $hashed '' $true) 'has no SHA-256'
         Test-Same 'Pack hash: no hash, where the signature checks it (Lenovo), passes' $null (Test-Hash $hashed '' $false)
 
         # A pack is locked from its checks until it has run: still readable and runnable, not changeable.
@@ -1006,11 +1111,11 @@ $libraryChecks = {
                     try { $pack = [Activator]::CreateInstance($packageType, [object[]]@($node.PSObject.BaseObject)) } catch { $unread++; continue }
                     $read++
                     $hash = $packageType.GetProperty('CatalogHash').GetValue($pack)
-                    if ($hash.Length -eq 64) { $sha++ } elseif ($hash.Length -ne 32) { $noHash.Add($packageType.GetProperty('Model').GetValue($pack)) }
+                    if ($hash.Length -eq 64) { $sha++ } else { $noHash.Add($packageType.GetProperty('Model').GetValue($pack)) }
                 }
-                if ($read -eq 0) { Add-Check FAIL 'Dell catalog: every pack has a hash' "no packs read from $($files[0]) ($unread couldn't be)" }
-                elseif ($noHash.Count -eq 0) { Add-Check PASS 'Dell catalog: every pack has a hash' "$read packs: $sha SHA-256, $($read - $sha) MD5" }
-                else { Add-Check FAIL 'Dell catalog: every pack has a hash' "$($noHash.Count) of $read have none, so they'd be refused: $(@($noHash | Select-Object -First 5) -join ', ')" }
+                if ($read -eq 0) { Add-Check FAIL 'Dell catalog: every pack has a SHA-256' "no packs read from $($files[0]) ($unread couldn't be)" }
+                elseif ($noHash.Count -eq 0) { Add-Check PASS 'Dell catalog: every pack has a SHA-256' "$read packs, $sha with a SHA-256" }
+                else { Add-Check FAIL 'Dell catalog: every pack has a SHA-256' "$($noHash.Count) of $read have none, so they'd be refused: $(@($noHash | Select-Object -First 5) -join ', ')" }
             }
         }
 
@@ -2551,7 +2656,7 @@ try {
     # The Tools section's 32-bit job, started now so its slowest device overlaps the sections before it. A problem
     # starting it is reported in that section.
     if ($Skip -notcontains 'Tools' -and $Skip -notcontains 'Devices') { try { Start-ToolJob } catch { } }
-    foreach ($name in 'Build', 'Installed', 'Customize', 'Library', 'Settings', 'Devices', 'Tools', 'Log', 'Changes') {
+    foreach ($name in 'Build', 'Security', 'Installed', 'Customize', 'Library', 'Settings', 'Devices', 'Tools', 'Log', 'Changes') {
         $section = $name
         Write-Host ''
         Write-Host $name -ForegroundColor Cyan

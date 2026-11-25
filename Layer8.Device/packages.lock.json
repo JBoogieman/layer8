@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "dependencies": {
+    ".NETFramework,Version=v4.8": {
+      "Microsoft.CodeAnalysis.NetAnalyzers": {
+        "type": "Direct",
+        "requested": "[10.0.404, 10.0.404]",
+        "resolved": "10.0.404",
+        "contentHash": "9ZyV32KO4zOtcWI7AflNIMvbXwAdJms7mAdlI4pl5Jy6gTEvyFzgzg+vlsk7mbqxG9OJDHN26A0v84mYRICTyg=="
+      },
+      "layer8": {
+        "type": "Project"
+      },
+      "layer8.drivermanager": {
+        "type": "Project",
+        "dependencies": {
+          "Layer8": "[1.0.0, )",
+          "Layer8.IniFileParser": "[1.0.0, )"
+        }
+      },
+      "Layer8.IniFileParser": {
+        "type": "Project"
+      }
+    },
+    ".NETFramework,Version=v4.8/win": {},
+    ".NETFramework,Version=v4.8/win-arm64": {},
+    ".NETFramework,Version=v4.8/win-x64": {},
+    ".NETFramework,Version=v4.8/win-x86": {}
+  }
+}

@@ -11,4 +11,29 @@
     <ConfigMgrConsoleBin Condition="'$(ConfigMgrConsoleBin)' == ''">$(MSBuildProgramFiles32)\Microsoft Configuration Manager\AdminConsole\bin</ConfigMgrConsoleBin>
     <ConfigMgrConsoleBin>$([MSBuild]::EnsureTrailingSlash('$(ConfigMgrConsoleBin)'))</ConfigMgrConsoleBin>
   </PropertyGroup>
+
+  <!--
+    Microsoft's .NET security analyzers in every C# project, as part of the build: the Security category only, every
+    other category off. Build-time only: the package has no files that ship.
+    The version is pinned, and packages.lock.json next to each project pins the package's content hash, so a restore
+    that would get anything else fails (locked mode).
+    The levels have to be numbers: the package's targets only pick a rule set when one is set, which in an SDK project
+    the SDK does from AnalysisLevel, and in these old-style projects nothing does. Without them AnalysisMode and
+    AnalysisModeSecurity are ignored without a word. 10 is this package's own rule set (10.0.404).
+    A security finding stops the build: the code was brought to none in 1.1.3.28, so a new one is fixed, or
+    suppressed on the one member with a Justification, before anything is pushed. Only the analyzers' rules become
+    errors; compiler warnings stay warnings.
+  -->
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
+    <EffectiveAnalysisLevel>10</EffectiveAnalysisLevel>
+    <AnalysisMode>None</AnalysisMode>
+    <AnalysisLevelSecurity>10</AnalysisLevelSecurity>
+    <AnalysisModeSecurity>All</AnalysisModeSecurity>
+    <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode>true</RestoreLockedMode>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="[10.0.404]" PrivateAssets="all" />
+  </ItemGroup>
 </Project>

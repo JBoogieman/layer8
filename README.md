@@ -58,6 +58,8 @@ The devices you manage need nothing installed except the ConfigMgr client, just 
 
 Console references resolve automatically (see `Directory.Build.props`). If your console is installed somewhere unusual, build with `-p:ConfigMgrConsoleBin=<path to AdminConsole\bin>`.
 
+Every build runs Microsoft's .NET security analyzers (`Microsoft.CodeAnalysis.NetAnalyzers`, pinned in `Directory.Build.props` and downloaded from nuget.org the first time), and a security finding stops it. Nothing they add ships. `tools\Test-Layer8Regression.ps1` lists their results and checks the scripts in `tools` as well ([CONTRIBUTING.md](CONTRIBUTING.md#testing)).
+
 To build the packages, run `tools\Build-Layer8Msi.ps1` (everything in Release, then `Build\Installer\Release\Layer8.msi`; the first run downloads the WiX Toolset from nuget.org), then `tools\Build-Layer8Extension.ps1` for `Build\Extension\Layer8-<version>.cab` (add `-CertificateThumbprint` to sign it).
 
 ## Installing

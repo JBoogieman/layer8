@@ -315,6 +315,8 @@ On a computer with the ConfigMgr console and Visual Studio (.NET desktop develop
 .\tools\Build-Layer8Extension.ps1 -CertificateThumbprint <thumbprint>   # signed: Layer8-<version>.<build>.cab
 ```
 
+The first build downloads the WiX Toolset and Microsoft's .NET security analyzers from nuget.org; after that it builds without a network. A finding from the security analyzers stops the build ([CONTRIBUTING.md](../CONTRIBUTING.md#testing) says what to do about one).
+
 `Build-Layer8Extension.ps1` packages the DLLs that `Build-Layer8Msi.ps1` built, so run that first. The certificate has to be a code-signing certificate in your `CurrentUser\My` or `LocalMachine\My` store. Signing uses a timestamp server (`-TimestampServer`, DigiCert's by default), so the computer needs internet access while it signs. Both scripts take `-Exclude` (see [Leaving features out](#leaving-features-out)).
 
 `Build-Layer8Extension.ps1` also writes `Build\Extension\Customize-Layer8Cab.ps1`: `tools\Customize-Layer8Cab.ps1` with `tools\Layer8Features.ps1` built in, so it works on its own. Run unsigned, it puts the three files a GitHub release takes in `Build\Release\<version>`: `Layer8.msi` (if `Build-Layer8Msi.ps1` built the same version), the cab, and that copy of the script. Upload everything in that folder.

@@ -14,8 +14,8 @@ namespace Layer8.DriverManager
         /// <summary>Download size in bytes.</summary>
         public double Size { get; private set; }
         /// <summary>
-        /// The pack's hash in Dell's signed catalog: SHA-256 where the catalog has one, otherwise its MD5. Empty when
-        /// it has neither, and then the pack isn't used.
+        /// The pack's SHA-256 in Dell's signed catalog. Empty when it has none, and then the pack isn't used: the
+        /// catalog's MD5 isn't accepted (Authenticode.RequireHash).
         /// </summary>
         public string CatalogHash { get; private set; }
 
@@ -36,7 +36,7 @@ namespace Layer8.DriverManager
 
             XElement sha256 = packageObject.Element(ns + "Cryptography")?.Elements(ns + "Hash")
                 .FirstOrDefault(hash => string.Equals((string)hash.Attribute("algorithm"), "SHA256", StringComparison.OrdinalIgnoreCase));
-            CatalogHash = ((string)sha256 ?? (string)packageObject.Attribute("hashMD5") ?? string.Empty).Trim();
+            CatalogHash = ((string)sha256 ?? string.Empty).Trim();
 
             ReleaseNotesUrl = packageObject.Element(ns + "ImportantInfo").Attribute("URL").Value;
         }
