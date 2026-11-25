@@ -45,6 +45,8 @@ namespace Layer8.Device
         /// read. A fix from the dashboard that restarts devices leaves out servers, and devices it can't tell about.
         /// </summary>
         public bool? IsServer;
+        /// <summary>No ConfigMgr client on it (no CcmExec, or CcmExec with no client): Health Check and Repair can't help.</summary>
+        public bool NoClient;
 
         /// <summary>"Couldn't check: BitLocker (access denied)", as the Issues column shows it.</summary>
         public string UnreadText => HealthCheck.Name(HealthIssue.CouldNotCheck) + ": " + string.Join(", ", Unread);
@@ -245,6 +247,7 @@ namespace Layer8.Device
                     if (service == null)
                     {
                         report.Issues.Add(HealthIssue.Client);
+                        report.NoClient = true;
                         return new InfoCell("Not installed");
                     }
                     state = service["State"] as string ?? "in an unknown state";
@@ -270,6 +273,7 @@ namespace Layer8.Device
                     // no client installed. A client whose WMI classes have gone reads the same; Client Info and
                     // Repair Client tell the two apart.
                     report.Issues.Add(HealthIssue.Client);
+                    report.NoClient = true;
                     return new InfoCell("Not installed");
                 }
 

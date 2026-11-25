@@ -194,6 +194,22 @@ namespace Layer8.Device
 
         private static DeviceAction Cycle(string name, string schedule, bool full = false) => new DeviceAction(name, null, schedule, full);
 
+        /// <summary>What a tile's Fix button offers: the button's words, and the client actions (two or more make a menu).</summary>
+        private sealed class TileFix
+        {
+            public TileFix(string label, params DeviceAction[] actions)
+            {
+                Label = label;
+                Actions = actions;
+            }
+
+            public readonly string Label;
+            public readonly DeviceAction[] Actions;
+        }
+
+        /// <summary>One of the right-click menu's client actions, by name, so a tile's fix is the very same action.</summary>
+        private static DeviceAction Named(string name) => DeviceActionGroups.SelectMany(group => group).Single(each => each.Name == name);
+
         // Grouped by what the tiles find: policy and inventory, updates, restarts, the client itself, and the rest.
         // The read-only tools the grid already answers (Quick Status, Check Pending Restart, BitLocker and Defender
         // Status) are left out.
@@ -284,6 +300,10 @@ namespace Layer8.Device
         private readonly Label status;
         private readonly ProgressBar progress;
         private readonly Button runButton;
+        // Runs the active tile's fix on the devices the grid shows; hidden on tiles without one.
+        private readonly Button fixButton;
+        private readonly ContextMenuStrip fixMenu = new ContextMenuStrip();
+        private readonly Tile clientTile;
         // Devices answer up to 32 at a time; the tiles and the status line catch up a few times a second.
         private readonly System.Windows.Forms.Timer summaryTimer = new System.Windows.Forms.Timer { Interval = 300 };
 
@@ -353,12 +373,16 @@ namespace Layer8.Device
                 "Windows wrote a crash dump (a blue screen) in the last {0} days. Read from C:\\Windows\\Minidump: a blue screen whose dump was turned off or cleaned up doesn't show", blueScreenDays));
             AddIssueTile(HealthIssue.MissingUpdates, "Deployed software updates the client reports as missing");
             AddIssueTile(HealthIssue.NotScanning, string.Format(
-                "The client's last software update scan finished {0} days ago or more, or it has never finished one (its scan history, as List Missing Updates reads it). Not counted where client settings turn software updates off", notScanningDays));
+                "The client's last software update scan finished {0} days ago or more, or it has never finished one (its scan history, as List Missing Updates reads it). Not counted where client settings turn software updates off", notScanningDays))
+                .Fix = new TileFix("Run Update Scan", Named("Software Updates Scan Cycle"));
             AddIssueTile(HealthIssue.WindowsBehind, string.Format(
                 "A workstation on a Windows build older than {0} (set in Layer8 Settings). Servers aren't counted: their builds follow their own line", windowsBuildText));
-            AddIssueTile(HealthIssue.Client, "No ConfigMgr client, its service (CcmExec) isn't running, or it's in provisioning mode");
+            clientTile = AddIssueTile(HealthIssue.Client, "No ConfigMgr client, its service (CcmExec) isn't running, or it's in provisioning mode");
+            // Health Check first; Repair for what's still here once it's had time. They can't be chained: CcmEval runs on its own for minutes.
+            clientTile.Fix = new TileFix("Fix Client", Named("Run Client Health Check"), Named("Repair Client"));
             AddIssueTile(HealthIssue.NotReporting, string.Format(
-                "The site hasn't had a policy request from its client in {0} days or more. Read from the site, so offline devices count too", notReportingDays));
+                "The site hasn't had a policy request from its client in {0} days or more. Read from the site, so offline devices count too", notReportingDays))
+                .Fix = new TileFix("Request Policy", Named("Machine Policy Retrieval and Evaluation Cycle"));
             AddIssueTile(HealthIssue.LongUptime, string.Format("Up {0} days or more since the last restart", longUptimeDays));
             AddTile(HealthCheck.Name(HealthIssue.CouldNotCheck),
                 "Answered, but couldn't be checked (access denied, a WMI error), or one check couldn't be read: the Issues column says which", Tone.Bad,
@@ -423,6 +447,15 @@ namespace Layer8.Device
             Panel bottom = new Panel { Dock = DockStyle.Bottom, Size = new Size(1160, 44) };
             Button copy = new Button { Text = "Copy", Location = new Point(12, 10), Size = new Size(75, 23) };
             Button export = new Button { Text = "Export...", Location = new Point(93, 10), Size = new Size(75, 23) };
+            fixButton = new Button
+            {
+                Location = new Point(174, 10),
+                MinimumSize = new Size(75, 23),
+                Size = new Size(75, 23),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Visible = false,
+            };
             status = new Label
             {
                 Location = new Point(180, 10),
@@ -434,7 +467,7 @@ namespace Layer8.Device
             progress = new ProgressBar { Location = new Point(832, 13), Size = new Size(150, 17), Anchor = AnchorStyles.Top | AnchorStyles.Right, Visible = false };
             runButton = new Button { Text = "Refresh", Location = new Point(992, 10), Size = new Size(75, 23), Anchor = AnchorStyles.Top | AnchorStyles.Right };
             Button close = new Button { Text = "Close", DialogResult = DialogResult.Cancel, Location = new Point(1073, 10), Size = new Size(75, 23), Anchor = AnchorStyles.Top | AnchorStyles.Right };
-            bottom.Controls.AddRange(new Control[] { copy, export, status, progress, runButton, close });
+            bottom.Controls.AddRange(new Control[] { copy, export, fixButton, status, progress, runButton, close });
 
             filter.TextChanged += (s, e) => ApplyFilter();
             list.ColumnClick += (s, e) => SortBy(e.Column);
@@ -447,6 +480,9 @@ namespace Layer8.Device
             };
             copy.Click += (s, e) => CopyRows(false);
             export.Click += (s, e) => Export();
+            fixButton.Click += (s, e) => SafeAction.Run("Fix", FixClicked);
+            fixButton.SizeChanged += (s, e) => PlaceStatus();
+            fixButton.VisibleChanged += (s, e) => PlaceStatus();
             runButton.Click += (s, e) => { if (running) Stop(); else Run(rows); };
             summaryTimer.Tick += (s, e) =>
             {
@@ -482,6 +518,7 @@ namespace Layer8.Device
                 cancel?.Cancel();
                 summaryTimer.Dispose();
                 tips.Dispose();
+                fixMenu.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -595,9 +632,9 @@ namespace Layer8.Device
                 title, scope, previous.Finished, changed.Count, which, LeftSincePrevious());
         }
 
-        private void AddIssueTile(HealthIssue issue, string tip)
+        private Tile AddIssueTile(HealthIssue issue, string tip)
         {
-            AddTile(HealthCheck.Name(issue), tip, Tone.Warn, row => row.Has(issue));
+            return AddTile(HealthCheck.Name(issue), tip, Tone.Warn, row => row.Has(issue));
         }
 
         /// <summary>A tile shows just its devices; clicking it again, or Devices, shows them all.</summary>
@@ -1066,6 +1103,103 @@ namespace Layer8.Device
             shown.Text = visible == rows.Count
                 ? "Showing all " + Count(rows.Count, "device")
                 : string.Format("Showing {0} of {1}{2}", visible, Count(rows.Count, "device"), activeTile != null ? ": " + activeTile.Caption : string.Empty);
+            UpdateFixButton();
+        }
+
+        /// <summary>
+        /// The Fix button follows the active tile: shown when it has a fix, with how many of the devices shown it
+        /// would run on, and off while a check is running (the rows are still changing). With none to run on it
+        /// stays clickable, to say why: a disabled button shows no hover text.
+        /// </summary>
+        private void UpdateFixButton()
+        {
+            TileFix fix = activeTile?.Fix;
+            fixButton.Visible = fix != null;
+            if (fix == null) return;
+            List<Row> targets = FixTargets(activeTile, out string leftOut);
+            string text = string.Format("{0} ({1})...", fix.Label, targets.Count.ToString("N0"));
+            string tip = running
+                ? "Wait for the check to finish"
+                : string.Format("{0}, on the {1} the grid shows that can take it{2}", string.Join(" or ", fix.Actions.Select(each => each.Name)),
+                                Count(targets.Count, "device"), leftOut != null ? ". Left out: " + leftOut : string.Empty);
+            bool enabled = !running;
+            if (fixButton.Text != text) fixButton.Text = text;
+            if (fixButton.Enabled != enabled) fixButton.Enabled = enabled;
+            if (tips.GetToolTip(fixButton) != tip) tips.SetToolTip(fixButton, tip);
+        }
+
+        /// <summary>The status line starts after the Fix button when it's there, and where it was before when it isn't.</summary>
+        private void PlaceStatus()
+        {
+            int left = fixButton.Visible ? fixButton.Right + LogicalToDeviceUnits(12) : fixButton.Left + LogicalToDeviceUnits(6);
+            status.SetBounds(left, status.Top, Math.Max(0, progress.Left - LogicalToDeviceUnits(12) - left), status.Height);
+        }
+
+        /// <summary>
+        /// The devices a tile's fix runs on: the rows the grid shows (the tile and the filter box), less those it
+        /// can't reach or help. Why each was left out comes back counted ("2 offline, 1 not checked yet"), or null.
+        /// </summary>
+        private List<Row> FixTargets(Tile tile, out string leftOut)
+        {
+            List<Row> targets = new List<Row>();
+            string[] reasons = { "not a computer name", "offline", "couldn't be checked", "not checked yet", "no client" };
+            int[] counts = new int[reasons.Length];
+            foreach (Row row in rows.Where(Matches))
+            {
+                int reason;
+                if (!RemoteTools.IsComputerName(row.Host)) reason = 0;
+                else if (row.State == RowState.Offline) reason = 1;
+                else if (row.State == RowState.Failed) reason = 2;
+                else if (row.State != RowState.Checked || row.Report == null) reason = 3;
+                else if (tile == clientTile && row.Report.NoClient) reason = 4;
+                else
+                {
+                    targets.Add(row);
+                    continue;
+                }
+                counts[reason]++;
+            }
+            List<string> parts = new List<string>();
+            for (int i = 0; i < reasons.Length; i++)
+            {
+                if (counts[i] > 0) parts.Add(counts[i].ToString("N0") + " " + reasons[i]);
+            }
+            leftOut = parts.Count == 0 ? null : string.Join(", ", parts);
+            return targets;
+        }
+
+        private void FixClicked()
+        {
+            Tile tile = activeTile;
+            TileFix fix = tile?.Fix;
+            if (fix == null || running) return;
+            List<Row> targets = FixTargets(tile, out string leftOut);
+            if (targets.Count == 0)
+            {
+                MessageBox.Show(this, string.Format("None of the devices shown can take {0}{1}.", string.Join(" or ", fix.Actions.Select(each => each.Name)),
+                                leftOut != null ? ": " + leftOut : string.Empty), fix.Label, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (fix.Actions.Length == 1)
+            {
+                RunFix(tile, fix.Actions[0]);
+                return;
+            }
+            fixMenu.Items.Clear();
+            foreach (DeviceAction each in fix.Actions)
+            {
+                DeviceAction chosen = each;
+                fixMenu.Items.Add(new ToolStripMenuItem(chosen.Name + "...", null, (s, e) => SafeAction.Run(chosen.Name, () => RunFix(tile, chosen))));
+            }
+            fixMenu.Show(fixButton, new Point(0, fixButton.Height));
+        }
+
+        /// <summary>A tile's fix, on that tile's devices as the grid shows them now, through the right-click menu's own code.</summary>
+        private void RunFix(Tile tile, DeviceAction chosen)
+        {
+            if (running || tile != activeTile) return;
+            List<Row> targets = FixTargets(tile, out string leftOut);
+            RunDeviceAction(chosen, targets, tile.Caption, leftOut);
         }
 
         private string Elapsed()
@@ -1135,11 +1269,12 @@ namespace Layer8.Device
         }
 
         /// <summary>
-        /// Runs a client action on these devices (the selected rows, from the right-click menu), with the same
-        /// questions and in the same progress window as the console's Client Actions menu. The grid doesn't change by
-        /// itself: check the devices again once the action has had time to work.
+        /// Runs a client action on these devices, in the same progress window as the console's Client Actions menu.
+        /// From the right-click menu (no tile) it asks what the menus ask. From a tile's Fix button it always asks,
+        /// once: what runs, on how many, and which devices were left out and why. The grid doesn't change by itself:
+        /// check the devices again once the action has had time to work.
         /// </summary>
-        private void RunDeviceAction(DeviceAction chosen, List<Row> targets)
+        private void RunDeviceAction(DeviceAction chosen, List<Row> targets, string tile = null, string leftOut = null)
         {
             if (targets.Count == 0) return;
 
@@ -1163,21 +1298,37 @@ namespace Layer8.Device
 
             // The same questions the menus ask: the action's own, or, for a big selection, whether to go ahead.
             string target = targets.Count == 1 ? targets[0].Host : targets.Count + " devices";
+            string from = tile == null ? string.Empty : "tile " + tile + ": ";
+            string left = leftOut == null ? string.Empty : " (left out: " + leftOut + ")";
             int confirmAbove = Layer8Settings.ConfirmAbove;
-            if (confirmQuestion != null)
+            if (tile != null)
+            {
+                string question = confirmQuestion != null ? string.Format(confirmQuestion, target) : RunQuestion(actionTitle, target);
+                if (leftOut != null) question += "\n\nLeft out: " + leftOut + ".";
+                if (MessageBox.Show(this, question, actionTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                {
+                    log.InfoFormat("{0} on {1}: {2}{3} on {4}{5}: canceled at the question", title, scope, from, actionTitle, target, left);
+                    return;
+                }
+            }
+            else if (confirmQuestion != null)
             {
                 if (MessageBox.Show(this, string.Format(confirmQuestion, target), actionTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
             }
             else if (confirmAbove > 0 && targets.Count > confirmAbove &&
-                     MessageBox.Show(this, string.Format("Run {0} on {1}?", actionTitle, target), actionTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                     MessageBox.Show(this, RunQuestion(actionTitle, target), actionTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             {
                 return;
             }
 
             List<IResultObject> devices = DeploymentRetry.DevicesById(connection, targets.Select(row => row.ResourceId).ToList());
-            log.InfoFormat("{0} on {1}: {2} on {3}", title, scope, actionTitle, target);
+            log.InfoFormat("{0} on {1}: {2}{3} on {4}{5}", title, scope, from, actionTitle, target, left);
             ClientActions.RunOnDevices(action, devices, actionName, run, actionTitle);
         }
+
+        /// <summary>"Run Software Updates Scan Cycle on 3 devices?", and "Run Client Health Check on 3 devices?" rather than "Run Run ...".</summary>
+        private static string RunQuestion(string actionTitle, string target) =>
+            (actionTitle.StartsWith("Run ", StringComparison.Ordinal) ? string.Empty : "Run ") + actionTitle + " on " + target + "?";
 
         private void CheckAgain()
         {
@@ -1267,6 +1418,10 @@ namespace Layer8.Device
             public string Caption { get; }
             public Tone Tone { get; }
             public Func<Row, bool> Match { get; }
+
+            /// <summary>What its Fix button runs; null for a tile without one.</summary>
+            public TileFix Fix { get; set; }
+
             /// <summary>Its rule, for the hover text; the window adds the last run's count to it.</summary>
             public string Tip { get; set; }
 
