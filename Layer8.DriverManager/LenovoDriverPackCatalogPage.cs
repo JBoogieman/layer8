@@ -330,8 +330,9 @@ namespace Layer8.DriverManager
                     return;
                 }
 
-                ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
-
+                // ServicePointManager.SecurityProtocol is left as it is: it's process-wide, and the console (.NET 4.7.2)
+                // already lets Windows pick TLS 1.2 or 1.3. Adding Tls12 to that (SystemDefault is 0) held the whole
+                // console to TLS 1.2.
                 webClient = new WebClient();
                 webClient.DownloadProgressChanged += Client_DownloadProgressChanged;
                 webClient.DownloadFileCompleted += Client_DownloadFileCompleted;
