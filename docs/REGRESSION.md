@@ -298,7 +298,7 @@ Everything else is built on these, so a change here can touch any section.
 
 ### W. Version, docs and the regression tools
 
-Files: `SharedAssemblyInfo.cs`, `docs/*`, `README.md`, `SECURITY.md`, `LICENSE`, `.github/*`, `*.gitignore`, `*.gitattributes`, `Extensions.Dev/*`, `tools/Test-Layer8Regression.ps1`, `tools/New-Layer8LabTestData.ps1`, `tools/New-Layer8ScaleRecords.ps1`, `tools/Prepare-Layer8LabClient.ps1`
+Files: `SharedAssemblyInfo.cs`, `docs/*`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `LICENSE`, `.github/*`, `*.gitignore`, `*.gitattributes`, `Extensions.Dev/*`, `tools/Test-Layer8Regression.ps1`, `tools/New-Layer8LabTestData.ps1`, `tools/New-Layer8ScaleRecords.ps1`, `tools/Prepare-Layer8LabClient.ps1`
 
 Nothing beyond the every-build steps.
 

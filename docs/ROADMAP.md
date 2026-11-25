@@ -12,9 +12,7 @@ Where Layer8 might go next. These are ideas, not promises: Layer8 is built in sp
 
 ## Next up
 
-| Idea | What it would do |
-|---|---|
-| **Fix it from the Health Dashboard** | Act on a tile straight from the dashboard: a scan cycle for Not scanning, repair for Client, a restart (with a confirmation) for Restart pending, the right tool for BitLocker off and Defender, Online Status then a policy request for Not reporting |
+Nothing picked yet. **Fix it from the Health Dashboard** is done and on `next` for the next release: a Fix button on the Not scanning, Client, Restart pending, Not reporting, BitLocker off and Defender tiles.
 
 ## Soon-ish
 
