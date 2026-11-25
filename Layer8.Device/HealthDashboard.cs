@@ -286,6 +286,8 @@ namespace Layer8.Device
         private readonly Version windowsBuild;
         // Why the site's side couldn't be read this pass, for the status line; null when it could.
         private string siteNote;
+        // What the last client action ran on, at the start of the status line until the next check; null before one.
+        private string actionNote;
         // Whether this pass's read of the site has come back, and whether it was read.
         private bool siteDone, siteOk;
         // Which run this is: a read of the site that comes back after the next run started is dropped.
@@ -738,6 +740,7 @@ namespace Layer8.Device
             progress.Visible = true;
             stopwatch.Restart();
             siteNote = null;
+            actionNote = null;
             log.InfoFormat("{0} on {1}: checking {2} device(s), {3} at a time", title, scope, runTotal, devicesAtOnce);
             UpdateSummary();
 
@@ -1118,6 +1121,8 @@ namespace Layer8.Device
                 }
             }
             if (siteNote != null) status.Text += "; " + siteNote;
+            // First, so a narrow window cuts off the run's details rather than what to do next.
+            if (actionNote != null) status.Text = actionNote + ". " + status.Text;
 
             int visible = list.Items.Count;
             shown.Text = visible == rows.Count
@@ -1398,6 +1403,28 @@ namespace Layer8.Device
             List<IResultObject> devices = DeploymentRetry.DevicesById(connection, targets.Select(row => row.ResourceId).ToList());
             log.InfoFormat("{0} on {1}: {2}{3} on {4}{5}", title, scope, from, actionTitle, target, left);
             ClientActions.RunOnDevices(action, devices, actionName, run, actionTitle);
+            AfterDeviceAction(actionTitle, targets);
+        }
+
+        /// <summary>
+        /// Once the progress window closes: the devices it ran on are selected in the grid, and the status line says
+        /// what ran and when. Nothing is checked again by itself: each action works on its own clock (a scan or a
+        /// health check takes minutes, a restart 5 minutes and a boot), so checking now would show nothing changed.
+        /// </summary>
+        private void AfterDeviceAction(string actionTitle, List<Row> targets)
+        {
+            if (IsDisposed) return;
+            list.BeginUpdate();
+            list.SelectedItems.Clear();
+            foreach (Row row in targets)
+            {
+                if (row.Item.ListView == list) row.Item.Selected = true;
+            }
+            list.EndUpdate();
+            list.Focus();
+            actionNote = string.Format("Ran {0} on {1} at {2:t}: give it time, then right-click and {3}", actionTitle, targets.Count == 1 ? targets[0].Host : Count(targets.Count, "device"),
+                                       DateTime.Now, targets.Count == 1 ? "Check Again" : "Check These " + targets.Count + " Again");
+            UpdateSummary();
         }
 
         /// <summary>For a restart's question: who has someone signed in, by the pass's check.</summary>
