@@ -94,7 +94,9 @@ param(
 # answers with the 32-bit view (WOW6432Node), the blind spot the Tools section looks for in Layer8. So run again in
 # 64-bit, with the same parameters. The 32-bit parts start their own 32-bit PowerShell.
 if ([IntPtr]::Size -eq 4 -and [Environment]::Is64BitOperatingSystem) {
-    $quote = { param($text) "'" + ([string]$text).Replace("'", "''") + "'" }
+    # PowerShell's own escaping, which also doubles the curly quotes (U+2018 to U+201B): PowerShell reads those as
+    # single quotes too, so doubling only ' let a collection name with a right single quote run as a second command.
+    $quote = { param($text) "'" + [Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent([string]$text) + "'" }
     $command = '& ' + (& $quote $PSCommandPath)
     foreach ($name in $PSBoundParameters.Keys) {
         $value = $PSBoundParameters[$name]
