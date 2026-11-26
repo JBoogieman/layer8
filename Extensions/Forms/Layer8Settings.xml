@@ -5,6 +5,7 @@
     <Pages>
       <Page VendorId="Layer8" Id="{819E7722-EDC5-465E-B020-4A0268AFEFFE}" Assembly="Layer8" Namespace="Layer8" Type="OptionsControl" ReadOnly="false" MultiSelection="true" Visible="false" />
       <Page VendorId="Layer8" Id="{A449EF27-2338-4EF6-B79F-0AAB42335789}" Assembly="Layer8" Namespace="Layer8" Type="HealthDashboardOptionsControl" ReadOnly="false" MultiSelection="true" Visible="false" />
+      <Page VendorId="Layer8" Id="{BBEF13F0-2F4A-45CA-9653-2180B946A942}" Assembly="Layer8" Namespace="Layer8" Type="ADCleanupOptionsControl" ReadOnly="false" MultiSelection="true" Visible="false" />
     </Pages>
   </Form>
 </SmsFormData>
