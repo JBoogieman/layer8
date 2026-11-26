@@ -4,7 +4,7 @@ What Layer8 looks like in the ConfigMgr console. The screenshots are from a lab 
 
 ## Right-click menus
 
-Right-click a device collection, **Layer8**: **Health Dashboard** first, then **Status** (read-only checks), **Client Cycles**, **Fix** (changes something on the devices) and **Power and Users**, each alphabetical inside. Each action runs on every device in the collection. Below them are Add and Remove Resources List, Collect Client Logs, Copy Member Names and Error Lookup, then Layer8 Settings.
+Right-click a device collection, **Layer8**: **Health Dashboard** first, then **Status** (read-only checks), **Client Cycles**, **Fix** (changes something on the devices) and **Power and Users**, each alphabetical inside. Each action runs on every device in the collection. Below them are the AD Cleanup Report, Add and Remove Resources List, Collect Client Logs, Copy Member Names and Error Lookup, then Layer8 Settings.
 
 ![A device collection's context menu, Layer8 open: Health Dashboard, then Status, Client Cycles, Fix and Power and Users, then Add Resources List, Collect Client Logs, Copy Member Names, Error Lookup, Remove Resources List and Layer8 Settings](images/tour/collection-menu.png)
 
@@ -36,6 +36,22 @@ Each full run on a collection is kept for your Windows account (in `%LOCALAPPDAT
 | Couldn't check | it answered but couldn't be checked (access denied, a WMI error), or one check couldn't be read; the Issues column says which |
 
 ![Health Dashboard on All Systems: tiles counting offline, BitLocker off and client problems over one row per device](images/tour/health-dashboard.png)
+
+## AD Cleanup Report
+
+Right-click a device collection, **Layer8** > **AD Cleanup Report**: your domain's computer objects beside the site's device records, whichever collection you start from. The tiles work like the dashboard's: click one to show just those computers, hover for its rule. Nothing in the window changes anything, and no device is contacted.
+
+| Tile | A computer goes here when |
+|---|---|
+| Not in AD | the site has a record of it from this domain, but its computer object is gone (the site keeps a record until Delete Aged Discovery Data removes it) |
+| Disabled | its computer object is disabled |
+| Stale | AD hasn't seen it in 90 days (its last logon or password change), and no client has reported in that time either |
+| AD unused | its client still reports, but AD hasn't seen the computer's account in 90 days: a broken trust relationship, or a computer renamed or joined again under another account |
+| Client silent | AD has seen it in 90 days, but its client hasn't reported in 90 |
+| No client | AD has seen it in 90 days, and the site has no record of it or no client on it |
+| Not checked | a record from another domain or a workgroup, or one two computer objects could be; the Notes column says which |
+
+A record matches its computer object by SID, which survives a rename. A record without one matches by name, and only when exactly one object could be it, as LAPS Password and BitLocker Recovery Key pick an object. AD writes a computer's last logon only every 9 to 14 days, so Last seen in AD is the latest of its last logon, its last password change (every 30 days) and when it was made. **Workstations only** leaves servers and domain controllers out, since many have no client on purpose. The number of days is on Layer8 Settings' AD Cleanup Report page. The grid sorts on any column, filters as you type, and Copy and Export take what's shown.
 
 ## One row per device
 
@@ -113,6 +129,6 @@ Software Library > Driver Packages, **Layer8** on the ribbon: the Driver Package
 
 ## Settings
 
-**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, when to ask before a big run, the quick check that each device answers, and the log level. A second page sets the Health Dashboard's low disk, long uptime, not reporting, blue screen, not scanning and Windows behind tiles. They're saved for your Windows account.
+**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, when to ask before a big run, the quick check that each device answers, and the log level. A second page sets the Health Dashboard's low disk, long uptime, not reporting, blue screen, not scanning and Windows behind tiles, and a third the AD Cleanup Report's number of days. They're saved for your Windows account.
 
 ![Layer8 Settings: 32 devices at once, ask before more than 100, check that each device answers within 2 seconds, log level Info](images/tour/layer8-settings.png)

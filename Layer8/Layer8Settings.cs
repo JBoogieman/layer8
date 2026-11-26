@@ -47,6 +47,14 @@ namespace Layer8
         public const int MinNotScanningDays = 1;
         public const int MaxNotScanningDays = 365;
 
+        /// <summary>
+        /// ConfigMgr's own default for the same question, twice over: AD System Discovery's "only computers that
+        /// logged on in" filter and the Delete Aged Discovery Data task both start at 90 days (read on the lab's site).
+        /// </summary>
+        public const int DefaultADNotSeenDays = 90;
+        public const int MinADNotSeenDays = 1;
+        public const int MaxADNotSeenDays = 3650;
+
         /// <summary>Windows 11 24H2. A build alone, or a build and update revision ("26100.4652").</summary>
         public const string DefaultWindowsBuild = "26100";
         /// <summary>Windows 10's first release: nothing older reports a build this dashboard can compare.</summary>
@@ -62,6 +70,7 @@ namespace Layer8
         private const string BlueScreenDaysValue = "BlueScreenDays";
         private const string NotScanningDaysValue = "NotScanningDays";
         private const string WindowsBuildValue = "WindowsBuild";
+        private const string ADNotSeenDaysValue = "ADNotSeenDays";
 
         /// <summary>How many devices an action on many devices contacts at the same time.</summary>
         public static int DevicesAtOnce
@@ -134,6 +143,16 @@ namespace Layer8
         {
             get { return ReadInt(NotScanningDaysValue, DefaultNotScanningDays, MinNotScanningDays, MaxNotScanningDays); }
             set { WriteInt(NotScanningDaysValue, Clamp(value, MinNotScanningDays, MaxNotScanningDays)); }
+        }
+
+        /// <summary>
+        /// AD Cleanup Report: a computer AD hasn't seen in this many days or more (by its last logon or password
+        /// change) counts as unused there, and a client the site hasn't heard from in as long counts as silent.
+        /// </summary>
+        public static int ADNotSeenDays
+        {
+            get { return ReadInt(ADNotSeenDaysValue, DefaultADNotSeenDays, MinADNotSeenDays, MaxADNotSeenDays); }
+            set { WriteInt(ADNotSeenDaysValue, Clamp(value, MinADNotSeenDays, MaxADNotSeenDays)); }
         }
 
         /// <summary>

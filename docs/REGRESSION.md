@@ -1,6 +1,6 @@
 # Layer8 regression run
 
-Every test build re-runs the old tests, not only the new one: everything in [STATUS.md](STATUS.md)'s tested table that the change could touch, and a Health Dashboard run on All Systems every time. This is that list. `tools\Test-Layer8Regression.ps1` checks what doesn't need the console (the build, the security scans of the code and the scripts, the cab, the installed copy, Customize-Layer8Cab.ps1, Error Lookup's text, the signature checks, what each device should show on the dashboard, and what Online Status, Quick Status, Client Info, Check Pending Restart, BitLocker Status, Defender Status and List Missing Updates answer on each device, run in 32-bit PowerShell as the console runs them); the steps below are the rest.
+Every test build re-runs the old tests, not only the new one: everything in [STATUS.md](STATUS.md)'s tested table that the change could touch, and a Health Dashboard run on All Systems every time. This is that list. `tools\Test-Layer8Regression.ps1` checks what doesn't need the console (the build, the security scans of the code and the scripts, the cab, the installed copy, Customize-Layer8Cab.ps1, Error Lookup's text, the signature checks, what each device should show on the dashboard, the tile each computer gets on the AD Cleanup Report, and what Online Status, Quick Status, Client Info, Check Pending Restart, BitLocker Status, Defender Status and List Missing Updates answer on each device, run in 32-bit PowerShell as the console runs them); the steps below are the rest.
 
 Written for the lab STATUS.md describes: a site server, the client the console runs on, a second client, the Layer8 Dev collection, and the test data from `tools\New-Layer8LabTestData.ps1`.
 
@@ -38,7 +38,7 @@ Written for the lab STATUS.md describes: a site server, the client the console r
 
 ### A. Health Dashboard
 
-Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Layer8.Device/HealthRun.cs`, `Layer8/ListViewSorter.cs`, `Layer8.Device/WindowsSecurity.cs`, `Extensions/Actions/*/Layer8Devices.xml`, `Extensions/Actions/*/Layer8Collections.xml`
+Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Layer8.Device/HealthRun.cs`, `Layer8.Device/Tile.cs`, `Layer8/ListViewSorter.cs`, `Layer8.Device/WindowsSecurity.cs`, `Extensions/Actions/*/Layer8Devices.xml`, `Extensions/Actions/*/Layer8Collections.xml`
 
 - [ ] **Layer8 Dev:** both clients checked in a few seconds. BitLocker reads as BitLocker Status reads it ("Suspended (encrypted)" when not protected but fully encrypted, "Off" when fully decrypted).
 - [ ] **All Systems:** the placeholders are skipped by name. The site server shows Client "Not installed" (its management point runs CcmExec without a client), BitLocker "Not available" and not counted, and Updates "No client".
@@ -95,13 +95,13 @@ Files: `Layer8.Device/HealthDashboard.cs`, `Layer8.Device/HealthCheck.cs`, `Laye
 
 ### B. Layer8 Settings
 
-Files: `Layer8/Layer8Settings.cs`, `Layer8/OptionsControl*`, `Layer8/HealthDashboardOptionsControl.cs`, `Extensions/Forms/Layer8Settings.xml`, `Extensions/Actions/*/Layer8Devices.xml`, `Extensions/Actions/*/Layer8Collections.xml`
+Files: `Layer8/Layer8Settings.cs`, `Layer8/OptionsControl*`, `Layer8/HealthDashboardOptionsControl.cs`, `Layer8/ADCleanupOptionsControl.cs`, `Extensions/Forms/Layer8Settings.xml`, `Extensions/Actions/*/Layer8Devices.xml`, `Extensions/Actions/*/Layer8Collections.xml`
 
 Open it from a collection's Client Actions menu. Every change below is set back afterwards; the script's `-Since` run warns about one left changed.
 
 - [ ] **Open Log Folder** (General): Explorer opens Layer8's log folder.
 
-- [ ] **Tabs:** General and Health Dashboard. Health Dashboard shows the defaults (10 GB, 14 days, 7 days, 14 days, 14 days, build 26100), and Apply lights up after a change.
+- [ ] **Tabs:** General, Health Dashboard and AD Cleanup Report. Health Dashboard shows the defaults (10 GB, 14 days, 7 days, 14 days, 14 days, build 26100), AD Cleanup Report shows 90 days, and Apply lights up after a change.
 - [ ] **Long uptime:** set below the console's computer's uptime, the next dashboard counts that computer under Long uptime and not the second client. The page shows the new number when opened again. Set back to 14, the tile goes back to 0.
 - [ ] **Not reporting:** 3 saves and shows 3 when opened again. Set back to 7.
 - [ ] **Blue screens:** 30 saves, and the tile's hover text says "in the last 30 days". Set back to 14.
@@ -290,6 +290,25 @@ Files: `Layer8.Device/ResultClientHealthControl*`, `Layer8/IncrementalCollection
 - [ ] **Client Health tab** on the second client: lists CcmEvalReport.xml's checks and the last evaluation time.
 - [ ] **Ctrl+C in a list:** in the Collections tab, with nothing selected nothing happens; with two rows selected, Notepad gets two lines, columns separated by tabs.
 - [ ] **Task sequence export:** Cancel in the save dialog writes no file; Save writes the XML where it was asked to.
+
+### R. AD Cleanup Report
+
+Files: `Layer8.Device/ADCleanup*`, `Layer8.Device/Tile.cs`, `Layer8/ADCleanupOptionsControl.cs`, `Extensions/Actions/*/Layer8Collections.xml`
+
+It only reads: one search of AD and two of the site, and no device is contacted. Every build, the script's Library section puts made-up computer objects and records through every tile and matching rule, and its ADCleanup section checks what the report reads and the tile each lab computer gets, at Layer8 Settings' days and at 1 day, against its own reading.
+
+- [ ] **Opening it:** right-click All Systems > Layer8 > AD Cleanup Report, and again from Layer8 Dev and from the ribbon: the same report each time, since it covers the whole domain and site.
+- [ ] **Tiles:** each computer is on the tile the script's ADCleanup section lists at 90 days (in the lab, DC01 and CM01 on No client, DEV01 and DEV02 on OK).
+  - Clicking a tile filters the grid, and it works with the filter box.
+  - Computers shows them all again.
+  - Each tile shows its rule on hover, with the number of days in it.
+- [ ] **Workstations only:** DC01 and CM01 drop out of the grid and the tiles' counts, and come back when it's unticked.
+- [ ] **Rows:** hovering a row shows its Notes ("Matched by name: the site's record has no SID" on CM01). Last seen in AD, Last logon and Client last heard from sort by date both ways, Resource ID by number.
+- [ ] **The status line:** the number of computer objects and records, the domain, the read time and the days; hovering it adds where the search started.
+- [ ] **Layer8 Settings at 1 day:** the next report has DC01 and CM01 on Stale and DEV01 and DEV02 on AD unused, as the script's "At 1 day" lines say. Set back to 90.
+- [ ] **Copy and Export:** the shown rows in their sort order; the file is UTF-8 with a byte order mark.
+- [ ] **Changes something (AD), yours to make and to delete after:** a disabled computer object and a new one that's never been used. The next report has the first on Disabled and the second on No client ("The site has no record of it"), and the script's ADCleanup section agrees.
+- [ ] **The log:** one line per report with the counts and each tile's number. At Debug, the AD read and the site read with their times; either one over 10 seconds is logged at any level.
 
 ### S. Security scans
 

@@ -112,6 +112,9 @@
     <Compile Include="HealthDashboardOptionsControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
+    <Compile Include="ADCleanupOptionsControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
     <Compile Include="OptionsControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
