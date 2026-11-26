@@ -496,6 +496,24 @@
         <string>ContextMenu</string>
       </ShowOn>
     </ActionDescription>
+    <ActionDescription Class="AssemblyType" SelectionMode="Both" DisplayName="AD Cleanup Report" MnemonicDisplayName="AD Cleanup Report" Description="This domain's computer objects beside the site's device records: not in AD, disabled, stale, AD unused while the client reports, a silent client or none. The whole domain and site, whichever collection; it only reads" NodeInConsole="a92615d6-9df3-49ba-a8c9-6ecb0e8b956b" RibbonDisplayType="TextAndSmallImage">
+      <ShowOn>
+        <string>DefaultHomeTab</string>
+        <string>ContextMenu</string>
+      </ShowOn>
+      <ImagesDescription>
+        <ResourceAssembly>
+          <Assembly>Layer8.dll</Assembly>
+          <Type>Layer8.Properties.Resources.resources</Type>
+        </ResourceAssembly>
+        <ImageResourceName>tools</ImageResourceName>
+      </ImagesDescription>
+      <ActionAssembly>
+        <Assembly>Layer8.Device.dll</Assembly>
+        <Type>Layer8.Device.ADCleanup</Type>
+        <Method>Show</Method>
+      </ActionAssembly>
+    </ActionDescription>
     <ActionDescription Class="ShowDialog" DisplayName="Add Resources List" MnemonicDisplayName="Add Resources List" Description="Quick way of adding devices from a list of devices. For example, copy a column of device names from Excel and paste it in." NodeInConsole="a92615d6-9df3-49ba-a8c9-6ecb0e8b956b" RibbonDisplayType="TextAndSmallImage">
       <ShowOn>
         <string>DefaultHomeTab</string>
