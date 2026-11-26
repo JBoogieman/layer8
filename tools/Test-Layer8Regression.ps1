@@ -30,7 +30,9 @@
                  importers' folder hash, Export's formula guard, how a copied LAPS or BitLocker password goes
                  onto the clipboard, WQL escaping, the computer-name check, picking a computer object, XML read
                  without DTDs, the hash and lock on driver packs, Dell's and HP's catalog signatures on the copies
-                 their wizards keep (and that every Dell pack has a hash), the list copy and an empty error.
+                 their wizards keep (and that every Dell pack has a hash), the list copy and an empty error, and
+                 the AD Cleanup Report's attribute list and every one of its tiles and matching rules on made-up
+                 computer objects and site records.
       Settings   Layer8 Settings at their defaults (HKCU\SOFTWARE\Layer8).
       Devices    That the SMS Provider reads names escaped the way Layer8 escapes them. Every member of the
                  collection, read from the same places the Health Dashboard reads: what each column should show,
@@ -40,7 +42,10 @@
                  collection, through the code the Client Tools menu and its progress window use. Each answer is
                  checked against the Devices section's reading of that device, and the registry view Check Pending
                  Restart reads against Windows' own.
-      Log        With -Since: the errors, warnings and slow steps Layer8 logged since then, each fix run from a
+      ADCleanup  In 32-bit PowerShell, as the console runs: the AD Cleanup Report's reads of AD and the site and the
+                 tile each computer object and device record gets, at Layer8 Settings' days and at 1 day, each
+                 checked against this script's own reading of AD and the site and its own copy of the rules.
+      Log       With -Since: the errors, warnings and slow steps Layer8 logged since then, each fix run from a
                  Health Dashboard tile (the right action for its tile, a restart on 50 devices at most and never on
                  a server or this computer), and the last Health Dashboard run on the collection compared with the
                  Devices section.
@@ -57,7 +62,7 @@
 
 .PARAMETER Since
     For the second run, after the console steps: adds the Log section from this time on, and skips Build, Security,
-    Customize, Library and Tools (unless -Skip says otherwise). The first run prints the command to use.
+    Customize, Library, Tools and ADCleanup (unless -Skip says otherwise). The first run prints the command to use.
 
 .PARAMETER Collection
     The collection the Devices and Log sections look at. Default: All Systems.
@@ -73,7 +78,8 @@
     Without one, the catalog checks are skipped.
 
 .PARAMETER Skip
-    Sections to leave out: Build, Security, Installed, Customize, Library, Settings, Devices, Tools, Log, Changes.
+    Sections to leave out: Build, Security, Installed, Customize, Library, Settings, Devices, Tools, ADCleanup, Log,
+    Changes.
 
 .EXAMPLE
     .\tools\Test-Layer8Regression.ps1
@@ -91,7 +97,7 @@ param(
     [string]$SiteServer,
     [string]$SiteCode,
     [string]$LenovoCatalog = (Join-Path ([IO.Path]::GetTempPath()) 'LenovoCatalogV2.xml'),
-    [ValidateSet('Build', 'Security', 'Installed', 'Customize', 'Library', 'Settings', 'Devices', 'Tools', 'Log', 'Changes')]
+    [ValidateSet('Build', 'Security', 'Installed', 'Customize', 'Library', 'Settings', 'Devices', 'Tools', 'ADCleanup', 'Log', 'Changes')]
     [string[]]$Skip
 )
 
@@ -123,7 +129,7 @@ Add-Type -AssemblyName System.Management
 $sinceGiven = $PSBoundParameters.ContainsKey('Since')
 # The second run comes after the console steps, which don't change the build or the devices' answers, so by default
 # it doesn't repeat those checks.
-if ($sinceGiven -and -not $PSBoundParameters.ContainsKey('Skip')) { $Skip = 'Build', 'Security', 'Customize', 'Library', 'Tools' }
+if ($sinceGiven -and -not $PSBoundParameters.ContainsKey('Skip')) { $Skip = 'Build', 'Security', 'Customize', 'Library', 'Tools', 'ADCleanup' }
 
 # Layer8's permanent console extension ID, the same in every Layer8 cab (Build-Layer8Extension.ps1).
 $extensionId = '3b900076-0ea8-46a7-b3b3-57bc7336c50f'
@@ -1119,6 +1125,126 @@ $libraryChecks = {
             }
         }
 
+        # AD Cleanup Report (1.1.3.29): the only attributes its AD search loads, FILETIMEs, and every tile and
+        # matching rule on made-up computer objects and site records, so each has a case the lab doesn't.
+        $cleanup = $device.GetType('Layer8.Device.ADCleanup', $true)
+        Test-Same 'AD Cleanup: the AD search loads only these attributes, none of them secret' 'name, sAMAccountName, distinguishedName, objectSid, userAccountControl, lastLogonTimestamp, pwdLastSet, whenCreated, operatingSystem' (@($cleanup.GetField('Attributes', $flags).GetValue($null)) -join ', ')
+        $fileTime = Get-Method $cleanup 'FileTime'
+        Test-Same 'AD Cleanup: a FILETIME of 0 is never' $null $fileTime.Invoke($null, [object[]]@([long]0))
+        Test-Same 'AD Cleanup: the largest FILETIME is never' $null $fileTime.Invoke($null, [object[]]@([long]::MaxValue))
+        $sample = [datetime]::new(2026, 11, 16, 14, 19, 0, [DateTimeKind]::Utc)
+        Test-Same 'AD Cleanup: a FILETIME reads as UTC' $sample.ToString('u') $fileTime.Invoke($null, [object[]]@($sample.ToFileTimeUtc())).ToString('u')
+
+        $computerType = $device.GetType('Layer8.Device.ADComputer', $true)
+        $recordType = $device.GetType('Layer8.Device.SiteRecord', $true)
+        function New-Fake($Type, [hashtable]$Values) {
+            $fake = [Activator]::CreateInstance($Type)
+            foreach ($name in $Values.Keys) { $Type.GetField($name).SetValue($fake, $Values[$name]) }
+            $fake
+        }
+        function New-FakeList($Type, $Items) {
+            $list = [Activator]::CreateInstance([Collections.Generic.List`1].MakeGenericType($Type))
+            $add = $list.GetType().GetMethod('Add')
+            foreach ($item in $Items) { [void]$add.Invoke($list, [object[]]@($item)) }
+            , $list
+        }
+        $now = [datetime]::new(2026, 11, 25, 12, 0, 0, [DateTimeKind]::Utc)
+        function Get-Ago([double]$Days) { $now.AddDays(-$Days) }
+        $sid = 'S-1-5-21-100-200-300-'
+        function New-Computer([string]$Name, [string]$Id, [double]$SeenDaysAgo, [hashtable]$More = @{}) {
+            $values = @{ Name = $Name; AccountName = "$Name$"; Sid = "$sid$Id"; PasswordSet = (Get-Ago $SeenDaysAgo); Created = (Get-Ago 400); DistinguishedName = "CN=$Name,CN=Computers,DC=lab,DC=test" }
+            foreach ($key in $More.Keys) { $values[$key] = $More[$key] }
+            New-Fake $computerType $values
+        }
+        function New-Record([string]$Name, [string]$Id, $ContactDaysAgo, [hashtable]$More = @{}) {
+            $values = @{ ResourceId = $(if ($Id) { 16777000 + [int]$Id.Substring($Id.Length - 2) } else { 0 }); Name = $Name; Sid = $(if ($Id) { "$sid$Id" } else { $null }); Domain = 'LAB'; Client = $null -ne $ContactDaysAgo; LastContact = $(if ($null -ne $ContactDaysAgo) { Get-Ago $ContactDaysAgo } else { $null }) }
+            foreach ($key in $More.Keys) { $values[$key] = $More[$key] }
+            New-Fake $recordType $values
+        }
+        $computers = @(
+            New-Computer 'OK1' '1001' 10 @{ LastLogon = (Get-Ago 3) }
+            New-Computer 'NEWNAME' '1002' 5
+            New-Computer 'DISABLED1' '1003' 2 @{ Disabled = $true }
+            New-Computer 'STALE1' '1004' 200 @{ LastLogon = (Get-Ago 200) }
+            New-Computer 'STALE2' '1005' 120
+            New-Computer 'UNUSED1' '1006' 100
+            New-Computer 'SILENT1' '1007' 5
+            New-Computer 'SILENT2' '1008' 5
+            New-Computer 'NOREC1' '1009' 1
+            New-Computer 'NOCLIENT1' '1010' 1
+            New-Computer 'NEWOBJ' '1011' 0 @{ PasswordSet = $null; Created = (Get-Ago 1) }
+            New-Computer 'EDGE90' '1012' 90
+            New-Computer 'EDGE89' '1013' 89.99
+            New-Computer 'TWIN' '1014' 1 @{ AccountName = 'TWINA$'; DistinguishedName = 'CN=TWIN,OU=A,DC=lab,DC=test' }
+            New-Computer 'TWIN' '1015' 1 @{ AccountName = 'TWINB$'; DistinguishedName = 'CN=TWIN,OU=B,DC=lab,DC=test' }
+            New-Computer 'REUSED' '1016' 1
+            New-Computer 'SERVER1' '1017' 1 @{ OperatingSystem = 'Windows Server 2025 Standard' }
+        )
+        $records = @(
+            New-Record 'OK1' '1001' 0.05
+            New-Record 'OLDNAME' '1002' 0.05
+            New-Record 'STALE2' '1005' 120
+            New-Record 'UNUSED1' '1006' 0.1
+            New-Record 'SILENT1' '1007' 95
+            New-Record 'SILENT2' '1008' $null @{ Client = $true }
+            New-Record 'NOCLIENT1' '' $null @{ ResourceId = 16777110 }
+            New-Record 'TWIN' '' 0.1 @{ ResourceId = 16777114 }
+            New-Record 'REUSED' '1099' 0.1
+            New-Record 'GONE1' '1098' 0.1
+            New-Record 'NOSIDGONE' '' 0.1 @{ ResourceId = 16777197 }
+            New-Record 'OTHERDOM' '1096' 0.1 @{ Domain = 'CONTOSO' }
+            New-Record 'WORKGRP' '' $null @{ ResourceId = 16777195; Domain = $null }
+            New-Record 'SRVREC' '1094' $null @{ OperatingSystem = 'Microsoft Windows NT Server 10.0' }
+        )
+        $entries = (Get-Method $cleanup 'Compare').Invoke($null, [object[]]@((New-FakeList $computerType $computers), (New-FakeList $recordType $records), 'LAB', 90, $now))
+        # Each entry by its record's name and its computer object's, either side empty when there's none.
+        $found = @{}
+        foreach ($entry in $entries) {
+            $key = '{0}/{1}' -f $(if ($entry.Record) { $entry.Record.Name }), $(if ($entry.Computer) { $entry.Computer.Name })
+            if (-not $found.ContainsKey($key)) { $found[$key] = New-Object System.Collections.Generic.List[object] }
+            $found[$key].Add($entry)
+        }
+        $cases = @(
+            @('OK1/OK1', 'OK', '', 'matched by SID, seen by both'),
+            @('OLDNAME/NEWNAME', 'OK', '', 'renamed: the SID still matches'),
+            @('/DISABLED1', 'Disabled', '', 'disabled, even though it was just seen'),
+            @('/STALE1', 'Stale', '', 'not seen in 200 days, no record'),
+            @('STALE2/STALE2', 'Stale', '', 'not seen in 120 days, nor its client'),
+            @('UNUSED1/UNUSED1', 'ADUnused', '', 'AD not used in 100 days while the client reports'),
+            @('SILENT1/SILENT1', 'ClientSilent', '', 'seen by AD, client silent 95 days'),
+            @('SILENT2/SILENT2', 'ClientSilent', '', 'seen by AD, client never heard from'),
+            @('/NOREC1', 'NoClient', 'The site has no record of it', 'seen by AD, no record'),
+            @('NOCLIENT1/NOCLIENT1', 'NoClient', 'Matched by name', 'a record without a SID or a client, matched by name'),
+            @('/NEWOBJ', 'NoClient', '', 'made a day ago, never logged on: not stale yet'),
+            @('/EDGE90', 'Stale', '', 'seen exactly 90 days ago counts as 90 days or more'),
+            @('/EDGE89', 'NoClient', '', 'seen just under 90 days ago'),
+            @('TWIN/', 'NotChecked', '2 computer objects could be it', 'two objects named alike, and no SID on the record: flagged, not guessed'),
+            @('/TWIN', 'NoClient,NoClient', '', 'the two objects named alike, each on its own'),
+            @('REUSED/', 'NotInAD', 'the name was used again', 'a SID no object has, its name on another object'),
+            @('/REUSED', 'NoClient', '', 'the object that has the name now'),
+            @('GONE1/', 'NotInAD', 'No computer object has its SID or its name', 'a SID and a name no object has'),
+            @('NOSIDGONE/', 'NotInAD', 'has no SID, and no computer object has its name', 'no SID, and a name no object has'),
+            @('OTHERDOM/', 'NotChecked', 'In CONTOSO', 'another domain'),
+            @('WORKGRP/', 'NotChecked', 'names no domain', 'no domain on the record'),
+            @('SRVREC/', 'NotInAD', '', 'a server record from this domain'),
+            @('/SERVER1', 'NoClient', '', 'a server object without a client')
+        )
+        foreach ($case in $cases) {
+            $check = "AD Cleanup: $($case[3])"
+            if (-not $found.ContainsKey($case[0])) { Add-Check FAIL $check "no entry $($case[0]); entries: $(@($found.Keys | Sort-Object) -join ', ')"; continue }
+            $actual = @($found[$case[0]] | ForEach-Object { [string]$_.Finding }) -join ','
+            $note = @($found[$case[0]] | ForEach-Object { $_.Note }) -join '; '
+            if ($actual -ne $case[1]) { Add-Check FAIL $check "$($case[0]): expected $($case[1]), got $actual ($note)" }
+            elseif ($case[2] -and $note -notlike "*$($case[2])*") { Add-Check FAIL $check "$($case[0]): $actual, but the note is '$note', not '$($case[2])'" }
+            else { Add-Check PASS $check "$($case[0]): $actual$(if ($note) { " ($note)" })" }
+        }
+        $expectedKeys = @($cases | ForEach-Object { $_[0] })
+        $extra = @($found.Keys | Where-Object { $expectedKeys -notcontains $_ })
+        if ($extra) { Add-Check FAIL 'AD Cleanup: every computer object and record once' "unexpected: $($extra -join ', ')" }
+        else { Add-Check PASS 'AD Cleanup: every computer object and record once' "$($computers.Count) computer objects and $($records.Count) records, $(@($entries).Count) entries" }
+        $servers = @($entries | Where-Object { $_.IsServer } | ForEach-Object { '{0}/{1}' -f $(if ($_.Record) { $_.Record.Name }), $(if ($_.Computer) { $_.Computer.Name }) } | Sort-Object)
+        Test-Same 'AD Cleanup: servers by the operating system AD or the site has' '/SERVER1, SRVREC/' ($servers -join ', ')
+
         # Ctrl+C in a list, and a failure with no message.
         Add-Type -AssemblyName System.Windows.Forms
         $list = New-Object Windows.Forms.ListView
@@ -1172,7 +1298,7 @@ function Get-Layer8Settings {
         [Math]::Max($Min, [Math]::Min($Max, $number))
     }
     $settings = [ordered]@{}
-    foreach ($name in 'LowDiskGB', 'LongUptimeDays', 'NotReportingDays', 'BlueScreenDays', 'NotScanningDays', 'DevicesAtOnce', 'ConfirmAbove', 'ReachableSeconds') {
+    foreach ($name in 'LowDiskGB', 'LongUptimeDays', 'NotReportingDays', 'BlueScreenDays', 'NotScanningDays', 'ADNotSeenDays', 'DevicesAtOnce', 'ConfirmAbove', 'ReachableSeconds') {
         $settings[$name] = & $readInt $name $const["Default$name"] $const["Min$name"] $const["Max$name"]
         $settings["Default$name"] = $const["Default$name"]
     }
@@ -1205,6 +1331,7 @@ function Test-Settings {
         NotReportingDays = 'Not reporting after (days)'
         BlueScreenDays   = 'Blue screens in the last (days)'
         NotScanningDays  = 'Not scanning after (days)'
+        ADNotSeenDays    = 'AD Cleanup: not seen in (days)'
     }
     # Several tested rows end "set back to ..."; a value left changed would skew the next dashboard run.
     foreach ($name in $labels.Keys) {
@@ -2345,6 +2472,227 @@ function Test-Tools {
     }
 }
 
+# --- ADCleanup ------------------------------------------------------------------------------------------------------------
+
+# Runs in a 32-bit PowerShell job, as the console runs: the AD Cleanup Report's own reads of AD and the site
+# (ADCleanup.ReadComputers and ReadRecords) and its comparison, at each number of days given. Returns plain objects,
+# with times in UTC to the second.
+$cleanupChecks = {
+    param([string]$BuildDir, [string]$ConsoleBin, [string]$Server, [int[]]$DaysList, [long]$NowTicks, [string]$ResolverSource)
+    $ErrorActionPreference = 'Stop'
+    $answer = [pscustomobject]@{ Domain = $null; DomainPath = $null; Computers = @(); Records = @(); Obsolete = 0; Entries = @(); ADSeconds = 0; SiteSeconds = 0; Error = $null }
+    function Get-Message($Exception) {
+        while ($Exception.InnerException -and ($Exception -is [Management.Automation.MethodInvocationException] -or $Exception -is [Reflection.TargetInvocationException])) { $Exception = $Exception.InnerException }
+        $Exception.Message
+    }
+    function Format-Utc($Time) { if ($null -eq $Time) { '' } else { ([datetime]$Time).ToString('yyyy-MM-dd HH:mm:ss') } }
+    try {
+        if ([IntPtr]::Size -ne 4) { throw 'this has to run in 32-bit PowerShell' }
+        Add-Type -TypeDefinition $ResolverSource
+        [Layer8RegressionResolver]::Register([string[]]@($BuildDir, $ConsoleBin))
+        $flags = [Reflection.BindingFlags]'Static, Public, NonPublic'
+        $device = [Reflection.Assembly]::LoadFrom((Join-Path $BuildDir 'Layer8.Device.dll'))
+        $cleanup = $device.GetType('Layer8.Device.ADCleanup', $true)
+        $token = [Threading.CancellationToken]::None
+        $watch = [Diagnostics.Stopwatch]::StartNew()
+        [object[]]$arguments = @($token, $null, $null)
+        $computers = $cleanup.GetMethod('ReadComputers', $flags).Invoke($null, $arguments)
+        $answer.ADSeconds = $watch.Elapsed.TotalSeconds
+        $answer.Domain = $arguments[1]
+        $answer.DomainPath = $arguments[2]
+
+        # The console's own connection to the SMS Provider, as the Tools section makes it.
+        [void][Reflection.Assembly]::LoadFrom((Join-Path $ConsoleBin 'Microsoft.ConfigurationManagement.ManagementProvider.dll'))
+        [void][Reflection.Assembly]::LoadFrom((Join-Path $ConsoleBin 'AdminUI.WqlQueryEngine.dll'))
+        $connection = New-Object Microsoft.ConfigurationManagement.ManagementProvider.WqlQueryEngine.WqlConnectionManager (New-Object Microsoft.ConfigurationManagement.ManagementProvider.SmsNamedValuesDictionary)
+        try {
+            if (-not $connection.Connect($Server)) { throw "couldn't connect to the SMS Provider on $Server" }
+            $watch.Restart()
+            # The connection itself: New-Object hands back PowerShell's wrapper, which reflection won't take.
+            [object[]]$arguments = @($connection.PSObject.BaseObject, $token, 0)
+            $records = $cleanup.GetMethod('ReadRecords', $flags).Invoke($null, $arguments)
+            $answer.SiteSeconds = $watch.Elapsed.TotalSeconds
+            $answer.Obsolete = $arguments[2]
+        }
+        finally {
+            if ($connection -is [IDisposable]) { $connection.Dispose() }
+        }
+
+        $answer.Computers = @(foreach ($computer in $computers) {
+            [pscustomobject]@{ Name = $computer.Name; Sid = $computer.Sid; Disabled = $computer.Disabled; LastLogon = Format-Utc $computer.LastLogon; PasswordSet = Format-Utc $computer.PasswordSet; Created = Format-Utc $computer.Created }
+        })
+        $answer.Records = @(foreach ($record in $records) {
+            [pscustomobject]@{ ResourceId = $record.ResourceId; Name = $record.Name; Sid = $record.Sid; Domain = $record.Domain; Client = $record.Client; LastContact = Format-Utc $record.LastContact }
+        })
+        $compare = $cleanup.GetMethod('Compare', $flags)
+        $now = [datetime]::new($NowTicks, [DateTimeKind]::Utc)
+        $answer.Entries = @(foreach ($days in $DaysList) {
+            foreach ($entry in $compare.Invoke($null, [object[]]@($computers, $records, $answer.Domain, $days, $now))) {
+                [pscustomobject]@{
+                    Days    = $days
+                    Key     = '{0}|{1}' -f $(if ($entry.Record) { $entry.Record.ResourceId }), $(if ($entry.Computer) { $entry.Computer.Sid })
+                    Name    = $entry.Name
+                    Finding = [string]$entry.Finding
+                    Note    = $entry.Note
+                }
+            }
+        })
+    }
+    catch { $answer.Error = Get-Message $_.Exception }
+    $answer
+}
+
+# The report's tile for a computer object, with or without a site record: this script's own copy of the rules in
+# ADCleanup.Classify, the first that fits from the top.
+function Get-CleanupFinding($Computer, $Record, [datetime]$Cutoff) {
+    $seen = $null -ne $Computer.LastSeen -and $Computer.LastSeen -gt $Cutoff
+    $client = $null -ne $Record -and $Record.Client
+    $alive = $client -and $null -ne $Record.LastContact -and $Record.LastContact -gt $Cutoff
+    if ($Computer.Disabled) { 'Disabled' }
+    elseif (-not $seen -and -not $alive) { 'Stale' }
+    elseif (-not $seen) { 'ADUnused' }
+    elseif ($client -and -not $alive) { 'ClientSilent' }
+    elseif (-not $client) { 'NoClient' }
+    else { 'OK' }
+}
+
+function Test-ADCleanup {
+    if (-not $consoleBin) { Add-Result SKIP 'ADCleanup' 'no ConfigMgr console on this computer (SMS_ADMIN_UI_PATH)'; return }
+    if (-not (Test-Path -LiteralPath (Join-Path $buildDir 'Layer8.Device.dll'))) { Add-Result FAIL 'ADCleanup' "Layer8.Device.dll isn't in Build\Release: run tools\Build-Layer8Msi.ps1"; return }
+    $site = Get-Site
+    $settingDays = (Get-Layer8Settings).ADNotSeenDays
+    # Layer8 Settings' number, and 1 day, which puts every computer the lab has on Stale or AD unused.
+    $daysList = @(@($settingDays, 1) | Select-Object -Unique)
+    $now = [datetime]::UtcNow
+    $job = Start-Job -RunAs32 -ScriptBlock $cleanupChecks -ArgumentList $buildDir, $consoleBin, $site.Server, $daysList, $now.Ticks, $resolverSource
+
+    # This script's own reading meanwhile, in 64-bit PowerShell: AD through its own search, the site through
+    # Get-WmiObject. whenCreated comes back in UTC, unmarked (DEV02's said 19:11 where its pwdLastSet said 13:11 CST).
+    $format = { param($Time) if ($null -eq $Time) { '' } else { $Time.ToString('yyyy-MM-dd HH:mm:ss') } }
+    $domainPath = [string]([ADSI]'LDAP://RootDSE').defaultNamingContext
+    $search = New-Object DirectoryServices.DirectorySearcher([ADSI]"LDAP://$domainPath", '(&(objectCategory=computer)(objectClass=computer))')
+    $search.PageSize = 1000
+    foreach ($name in 'name', 'sAMAccountName', 'objectSid', 'userAccountControl', 'lastLogonTimestamp', 'pwdLastSet', 'whenCreated') { [void]$search.PropertiesToLoad.Add($name) }
+    $fromFileTime = {
+        param($Result, [string]$Name)
+        if ($Result.Properties[$Name].Count) {
+            $value = [long]$Result.Properties[$Name][0]
+            if ($value -gt 0 -and $value -lt [datetime]::MaxValue.ToFileTimeUtc()) { return [datetime]::FromFileTimeUtc($value) }
+        }
+        $null
+    }
+    # Not $results: Add-Result adds to the script's $results, and would find this one first.
+    $searchResults = $search.FindAll()
+    $mine = @(foreach ($result in $searchResults) {
+        $created = $null
+        if ($result.Properties['whencreated'].Count) { $created = [datetime]::SpecifyKind($result.Properties['whencreated'][0], [DateTimeKind]::Utc) }
+        $logon = & $fromFileTime $result 'lastlogontimestamp'
+        $password = & $fromFileTime $result 'pwdlastset'
+        [pscustomobject]@{
+            Name        = [string]$result.Properties['name'][0]
+            Account     = [string]$result.Properties['samaccountname'][0]
+            Sid         = (New-Object Security.Principal.SecurityIdentifier($result.Properties['objectsid'][0], 0)).Value
+            Disabled    = [bool]([int]$result.Properties['useraccountcontrol'][0] -band 2)
+            LastLogon   = $logon
+            PasswordSet = $password
+            Created     = $created
+            LastSeen    = @($logon, $password, $created | Where-Object { $_ } | Sort-Object -Descending)[0]
+        }
+    })
+    $searchResults.Dispose()
+
+    $all = @(Get-WmiObject -ComputerName $site.Server -Namespace $site.Namespace -Query 'SELECT ResourceID, Name, SID, Client, Obsolete, ResourceDomainORWorkgroup FROM SMS_R_System')
+    $obsolete = @($all | Where-Object { $_.Obsolete -eq 1 }).Count
+    $siteRecords = @($all | Where-Object { $_.Obsolete -ne 1 } | ForEach-Object {
+        [pscustomobject]@{ ResourceId = [int]$_.ResourceID; Name = $_.Name; Sid = $(if ($_.SID) { $_.SID } else { $null }); Domain = $_.ResourceDomainORWorkgroup; Client = $_.Client -eq 1; LastContact = $null }
+    })
+    # When the site last heard from each client, from the same six times HealthCheck.ReadSiteContact takes the latest of.
+    $clients = @{}
+    foreach ($record in $siteRecords | Where-Object Client) { $clients[$record.ResourceId] = $record }
+    $ids = @($clients.Keys)
+    for ($start = 0; $start -lt $ids.Count; $start += 300) {
+        $idList = $ids[$start..([Math]::Min($start + 299, $ids.Count - 1))] -join ','
+        foreach ($row in Get-WmiObject -ComputerName $site.Server -Namespace $site.Namespace -Query "SELECT ResourceID, LastPolicyRequest, LastDDR, LastClientCheckTime, LastActiveTime, CNLastOnlineTime, CNLastOfflineTime FROM SMS_CombinedDeviceResources WHERE ResourceID IN ($idList)") {
+            $times = @(foreach ($property in 'LastPolicyRequest', 'LastDDR', 'LastClientCheckTime', 'LastActiveTime', 'CNLastOnlineTime', 'CNLastOfflineTime') { ConvertFrom-SiteTime $row.$property }) | Where-Object { $_ }
+            if ($times) { $clients[[int]$row.ResourceID].LastContact = @($times | Sort-Object -Descending)[0] }
+        }
+    }
+
+    $answer = @(Receive-Job -Job $job -Wait -AutoRemoveJob) | Where-Object { $_.PSObject.Properties['Entries'] } | Select-Object -Last 1
+    if (-not $answer) { Add-Result FAIL 'The AD Cleanup run' 'the 32-bit job gave nothing back'; return }
+    if ($answer.Error) { Add-Result FAIL 'The AD Cleanup run stopped' $answer.Error; return }
+    Add-Result INFO 'Run' ("Layer8's reads in 32-bit PowerShell: AD {0:0.0} s, the site {1:0.0} s; searched {2}" -f $answer.ADSeconds, $answer.SiteSeconds, $answer.DomainPath)
+    if ($answer.Domain -eq $env:USERDOMAIN) { Add-Result PASS 'Domain' "$($answer.Domain), the domain this account signed in to" }
+    else { Add-Result FAIL 'Domain' "Layer8 read $($answer.Domain); this account signed in to $env:USERDOMAIN" }
+    if ($answer.DomainPath -eq $domainPath) { Add-Result PASS 'Where the search starts' $domainPath }
+    else { Add-Result FAIL 'Where the search starts' "Layer8 searched $($answer.DomainPath); RootDSE says $domainPath" }
+
+    $layer8Computers = @{}
+    foreach ($computer in $answer.Computers) { $layer8Computers[$computer.Sid] = $computer }
+    $differ = @(foreach ($computer in $mine) {
+        $read = $layer8Computers[$computer.Sid]
+        if (-not $read) { "$($computer.Name) isn't in Layer8's read"; continue }
+        foreach ($property in 'LastLogon', 'PasswordSet', 'Created') {
+            $theirs = & $format $computer.$property
+            if ($read.$property -ne $theirs) { "$($computer.Name)'s $property is '$($read.$property)' where AD has '$theirs'" }
+        }
+        if ([bool]$read.Disabled -ne $computer.Disabled) { "$($computer.Name) disabled: $($read.Disabled) where AD has $($computer.Disabled)" }
+    })
+    if (@($answer.Computers).Count -ne $mine.Count) { $differ += "Layer8 read $(@($answer.Computers).Count) computer objects, AD has $($mine.Count)" }
+    if ($differ) { Add-Result FAIL 'Computer objects, as AD has them' (($differ | Select-Object -First 3) -join '; ') }
+    else { Add-Result PASS 'Computer objects, as AD has them' "$($mine.Count) in $($answer.Domain): each one's last logon, password change, creation and enabled state the same, to the second (UTC)" }
+
+    $layer8Records = @{}
+    foreach ($record in $answer.Records) { $layer8Records[[int]$record.ResourceId] = $record }
+    $differ = @(foreach ($record in $siteRecords) {
+        $read = $layer8Records[$record.ResourceId]
+        if (-not $read) { "$($record.Name) ($($record.ResourceId)) isn't in Layer8's read"; continue }
+        if ("$($read.Sid)" -ne "$($record.Sid)" -or "$($read.Domain)" -ne "$($record.Domain)" -or [bool]$read.Client -ne $record.Client) { "$($record.Name): SID, domain or client isn't what the site has" }
+        $theirs = & $format $record.LastContact
+        if ($read.LastContact -ne $theirs) { "$($record.Name) last heard from '$($read.LastContact)' where the site has '$theirs'" }
+    })
+    if (@($answer.Records).Count -ne $siteRecords.Count) { $differ += "Layer8 read $(@($answer.Records).Count) records, the site has $($siteRecords.Count)" }
+    if ([int]$answer.Obsolete -ne $obsolete) { $differ += "Layer8 left out $($answer.Obsolete) obsolete records, the site has $obsolete" }
+    if ($differ) { Add-Result FAIL 'Device records, as the site has them' (($differ | Select-Object -First 3) -join '; ') }
+    else { Add-Result PASS 'Device records, as the site has them' "$($siteRecords.Count) ($obsolete obsolete left out): each one's SID, domain, client and when its client was last heard from the same, to the second (UTC)" }
+
+    $bySid = @{}
+    foreach ($computer in $mine) { $bySid[$computer.Sid] = $computer }
+    foreach ($days in $daysList) {
+        $cutoff = $now.AddDays(-$days)
+        $expected = @{}
+        $matched = @{}
+        foreach ($record in $siteRecords) {
+            if ($record.Domain -ne $answer.Domain) { $expected["$($record.ResourceId)|"] = 'NotChecked'; continue }
+            $computer = $null
+            if ($record.Sid) {
+                $computer = $bySid[$record.Sid]
+                if (-not $computer) { $expected["$($record.ResourceId)|"] = 'NotInAD'; continue }
+            }
+            else {
+                $named = @($mine | Where-Object { $_.Account -eq "$($record.Name)$" })
+                if (-not $named) { $named = @($mine | Where-Object { $_.Name -eq $record.Name }) }
+                if ($named.Count -ne 1) { $expected["$($record.ResourceId)|"] = $(if ($named.Count) { 'NotChecked' } else { 'NotInAD' }); continue }
+                $computer = $named[0]
+            }
+            $matched[$computer.Sid] = $true
+            $expected["$($record.ResourceId)|$($computer.Sid)"] = Get-CleanupFinding $computer $record $cutoff
+        }
+        foreach ($computer in $mine | Where-Object { -not $matched[$_.Sid] }) { $expected["|$($computer.Sid)"] = Get-CleanupFinding $computer $null $cutoff }
+
+        $actual = @{}
+        foreach ($entry in @($answer.Entries | Where-Object Days -eq $days)) { $actual[$entry.Key] = $entry }
+        foreach ($key in @(@($expected.Keys) + @($actual.Keys) | Select-Object -Unique | Sort-Object)) {
+            $entry = $actual[$key]
+            $check = "At $days day$(if ($days -ne 1) { 's' }): $(if ($entry) { $entry.Name } else { $key })"
+            if (-not $entry) { Add-Result FAIL $check "Layer8 has no entry for it; this script has $($expected[$key])" }
+            elseif (-not $expected.ContainsKey($key)) { Add-Result FAIL $check "Layer8 has $($entry.Finding) ($($entry.Note)), but this script matched it with another record or object" }
+            elseif ($entry.Finding -ne $expected[$key]) { Add-Result FAIL $check "Layer8 has $($entry.Finding) ($($entry.Note)); this script has $($expected[$key])" }
+            else { Add-Result PASS $check "$($entry.Finding)$(if ($entry.Note) { " ($($entry.Note))" })" }
+        }
+    }
+}
+
 # --- Log ------------------------------------------------------------------------------------------------------------------
 
 # Each Health Dashboard tile's fix, as HealthDashboardDialog wires them: the Fix button runs only these.
@@ -2656,7 +3004,7 @@ try {
     # The Tools section's 32-bit job, started now so its slowest device overlaps the sections before it. A problem
     # starting it is reported in that section.
     if ($Skip -notcontains 'Tools' -and $Skip -notcontains 'Devices') { try { Start-ToolJob } catch { } }
-    foreach ($name in 'Build', 'Security', 'Installed', 'Customize', 'Library', 'Settings', 'Devices', 'Tools', 'Log', 'Changes') {
+    foreach ($name in 'Build', 'Security', 'Installed', 'Customize', 'Library', 'Settings', 'Devices', 'Tools', 'ADCleanup', 'Log', 'Changes') {
         $section = $name
         Write-Host ''
         Write-Host $name -ForegroundColor Cyan
