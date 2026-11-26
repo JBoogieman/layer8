@@ -27,6 +27,8 @@ Organized by where you right-click in the console. [The tour](docs/TOUR.md) has 
 
 **A collection:** Add Resources List and Remove Resources List (paste names), Copy Member Names
 
+**AD Cleanup Report** (a device collection's Layer8 menu): your domain's computer objects beside the site's device records, with tiles for what doesn't add up. **Not in AD**: a record whose computer object is gone. **Disabled**: the object is disabled. **Stale**: neither AD nor a client has seen it in 90 days. **AD unused**: the client reports but the computer's account hasn't been used, a broken trust relationship or a rename. **Client silent**: AD sees it but its client doesn't report. **No client**: AD sees it, the site has no client for it. Records match computer objects by SID, so a rename doesn't break the match, and by name only when the record has no SID and just one object could be it. It covers the whole domain and site, whichever collection you start from. Workstations only leaves servers and domain controllers out. The grid sorts, filters as you type, copies and exports. It only reads AD and the site and contacts no device, and its AD search loads names, dates and the enabled flag, never a LAPS password or a BitLocker key.
+
 **Monitoring:**
 - **Deployments:** Retry Failed Devices (re-runs the deployment on every device in error; for an Available app, installs it), Copy Failed Devices (with error codes), Delete
 - **Distribution Status:** Redistribute Failed Content, Copy Failed Distribution Points
@@ -45,7 +47,7 @@ Organized by where you right-click in the console. [The tour](docs/TOUR.md) has 
 
 **Error Lookup** (on the Layer8 menus): paste any error code (`0x87D00324`, `-2016410844`, `1603`) and see what it means, from ConfigMgr's own error catalog and Windows'. Copy Failed Devices and Install Application show the meaning next to every code too.
 
-**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, a quick offline check before connecting, the log level, and the Health Dashboard's thresholds.
+**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, a quick offline check before connecting, the log level, the Health Dashboard's thresholds, and the AD Cleanup Report's number of days.
 
 Don't want some of it? `Customize-Layer8Cab.ps1 -Exclude LAPS, BitLockerKeys, RemoteControl` takes those menu items out of the released cab entirely, no building needed ([how](docs/INSTALL.md#leaving-features-out)).
 
@@ -96,7 +98,7 @@ reg add HKCU\SOFTWARE\Layer8 /v LogLevel /d Debug /f
 
 Use `Debug`, `Info` (the default), `Warn` or `Error`.
 
-The Health Dashboard's thresholds, low disk (10 GB), long uptime (14 days), not reporting (7 days), blue screens (14 days), not scanning (14 days) and the Windows build (26100, or a build and update such as 26100.4652), are on the settings' Health Dashboard page, and in the same key as `LowDiskGB`, `LongUptimeDays`, `NotReportingDays`, `BlueScreenDays`, `NotScanningDays` and `WindowsBuild`.
+The Health Dashboard's thresholds, low disk (10 GB), long uptime (14 days), not reporting (7 days), blue screens (14 days), not scanning (14 days) and the Windows build (26100, or a build and update such as 26100.4652), are on the settings' Health Dashboard page, and in the same key as `LowDiskGB`, `LongUptimeDays`, `NotReportingDays`, `BlueScreenDays`, `NotScanningDays` and `WindowsBuild`. The AD Cleanup Report's days (90, ConfigMgr's own default for AD System Discovery's logon filter and for Delete Aged Discovery Data) are on its own page, and in the same key as `ADNotSeenDays`.
 
 The log rolls over to `Layer8.lo_` at 2 MB, the same way ConfigMgr's own logs do.
 

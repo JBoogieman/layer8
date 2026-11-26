@@ -12,14 +12,14 @@ Where Layer8 might go next. These are ideas, not promises: Layer8 is built in sp
 
 ## Next up
 
-Nothing picked yet. **Fix it from the Health Dashboard** is done and on `next` for the next release: a Fix button on the Not scanning, Client, Restart pending, Not reporting, BitLocker off and Defender tiles. So is **security scanning in every build**: Microsoft's .NET security analyzers in the compile (a finding stops the build), and PSScriptAnalyzer with InjectionHunter on the scripts.
+Nothing picked yet. **Fix it from the Health Dashboard** is done and on `next` for the next release: a Fix button on the Not scanning, Client, Restart pending, Not reporting, BitLocker off and Defender tiles. So is **security scanning in every build**: Microsoft's .NET security analyzers in the compile (a finding stops the build), and PSScriptAnalyzer with InjectionHunter on the scripts. So is the **AD Cleanup Report**: your domain's computer objects beside the site's device records, read-only, with tiles for not in AD, disabled, stale, AD unused, a silent client and no client.
 
 ## Soon-ish
 
 | Idea | What it would do |
 |---|---|
 | Warranty lookup | Warranty end date per device, vendor by vendor (Lenovo first) |
-| AD cleanup | Computers in AD that ConfigMgr hasn't heard from, and the reverse. A read-only report first; disable, move and delete later, behind confirmations |
+| AD cleanup, the fixes | Disable, move and delete from the AD Cleanup Report's tiles, behind confirmations (the read-only report is on `next`) |
 | LAPS from Microsoft Entra ID | Read Windows LAPS passwords backed up to Entra ID, not just AD |
 | Columns for every status tool | Online Status, BitLocker Status, Defender Status and Client Info get sortable columns like Quick Status |
 | Recent sign-ins | Who was on a device, not just who is on it now |
