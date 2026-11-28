@@ -39,7 +39,7 @@ Each full run on a collection is kept for your Windows account (in `%LOCALAPPDAT
 
 ## AD Cleanup Report
 
-Right-click a device collection, **Layer8** > **AD Cleanup Report**: your domain's computer objects beside the site's device records, whichever collection you start from. The tiles work like the dashboard's: click one to show just those computers, hover for its rule. Nothing in the window changes anything, and no device is contacted.
+Right-click a device collection, **Layer8** > **AD Cleanup Report**: your domain's computer objects beside the site's device records, whichever collection you start from. The tiles work like the dashboard's: click one to show just those computers, hover for its rule. Only the Fix button changes anything, and only in AD; no device is contacted.
 
 | Tile | A computer goes here when |
 |---|---|
@@ -52,6 +52,17 @@ Right-click a device collection, **Layer8** > **AD Cleanup Report**: your domain
 | Not checked | a record from another domain or a workgroup, or one two computer objects could be; the Notes column says which |
 
 A record matches its computer object by SID, which survives a rename. A record without one matches by name, and only when exactly one object could be it, as LAPS Password and BitLocker Recovery Key pick an object. AD writes a computer's last logon only every 9 to 14 days, so Last seen in AD is the latest of its last logon, its last password change (every 30 days) and when it was made. **Workstations only** leaves servers and domain controllers out, since many have no client on purpose. The number of days is on Layer8 Settings' AD Cleanup Report page. The grid sorts on any column, filters as you type, and Copy and Export take what's shown.
+
+**Fixing from the tiles.** Stale and Disabled have a Fix button: select the rows, and it counts the ones it could run on.
+
+| Fix | On | What it does, and how it's undone |
+|---|---|---|
+| Disable | Stale | the computer can't sign in to the domain; Enable undoes it |
+| Enable | Disabled | the computer can sign in again; Disable undoes it |
+| Move to OU | Stale, Disabled | moves the objects to an OU you pick (every OU and the computers container, never the Domain Controllers OU); moving them back undoes it, and the log keeps where each one was |
+| Delete | Stale, Disabled | deletes the objects with everything under them, at most 50 a run; the question says whether the AD Recycle Bin can restore them or AD keeps only a tombstone |
+
+Before it asks, a fix reads each object again by SID from the domain controller the report used, and leaves out any whose tile has changed since. The question names what it leaves out and why, and which domain controller and account make the change. More than one object, and any delete, has you type the count. It never touches a domain controller, the console's own computer or a server with a site system role. Move and Delete leave out objects protected from accidental deletion, and Delete leaves out objects with BitLocker recovery keys in AD: with the Recycle Bin off, a delete would lose them. When AD refuses one, the summary says why in words (no permission, an object with that name already in the OU), and the report reads again. The OU Move to OU offers first is the last one a move used, or one typed on the settings page.
 
 ## One row per device
 
@@ -129,6 +140,6 @@ Software Library > Driver Packages, **Layer8** on the ribbon: the Driver Package
 
 ## Settings
 
-**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, when to ask before a big run, the quick check that each device answers, and the log level. A second page sets the Health Dashboard's low disk, long uptime, not reporting, blue screen, not scanning and Windows behind tiles, and a third the AD Cleanup Report's number of days. They're saved for your Windows account.
+**Layer8 Settings** (on the Layer8 menus): how many devices to contact at once, when to ask before a big run, the quick check that each device answers, and the log level. A second page sets the Health Dashboard's low disk, long uptime, not reporting, blue screen, not scanning and Windows behind tiles, and a third the AD Cleanup Report's number of days and the OU its Move to OU offers first. They're saved for your Windows account.
 
 ![Layer8 Settings: 32 devices at once, ask before more than 100, check that each device answers within 2 seconds, log level Info](images/tour/layer8-settings.png)

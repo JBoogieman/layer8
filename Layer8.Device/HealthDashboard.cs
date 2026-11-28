@@ -391,10 +391,10 @@ namespace Layer8.Device
                 HealthCheck.DefenderSignatureDays))
                 .Fix = TileFix.ForWindowsSecurity();
             AddIssueTile(HealthIssue.BlueScreen, string.Format(
-                "Windows wrote a crash dump (a blue screen) in the last {0} days. Read from C:\\Windows\\Minidump: a blue screen whose dump was turned off or cleaned up doesn't show", blueScreenDays));
+                "Windows wrote a crash dump (a blue screen) in the last {0}. Read from C:\\Windows\\Minidump: a blue screen whose dump was turned off or cleaned up doesn't show", Count(blueScreenDays, "day")));
             AddIssueTile(HealthIssue.MissingUpdates, "Deployed software updates the client reports as missing");
             AddIssueTile(HealthIssue.NotScanning, string.Format(
-                "The client's last software update scan finished {0} days ago or more, or it has never finished one (its scan history, as List Missing Updates reads it). Not counted where client settings turn software updates off", notScanningDays))
+                "The client's last software update scan finished {0} ago or more, or it has never finished one (its scan history, as List Missing Updates reads it). Not counted where client settings turn software updates off", Count(notScanningDays, "day")))
                 .Fix = new TileFix("Run Update Scan", Named("Software Updates Scan Cycle"));
             AddIssueTile(HealthIssue.WindowsBehind, string.Format(
                 "A workstation on a Windows build older than {0} (set in Layer8 Settings). Servers aren't counted: their builds follow their own line", windowsBuildText));
@@ -402,9 +402,9 @@ namespace Layer8.Device
             // Health Check first; Repair for what's still here once it's had time. They can't be chained: CcmEval runs on its own for minutes.
             clientTile.Fix = new TileFix("Fix Client", Named("Run Client Health Check"), Named("Repair Client"));
             AddIssueTile(HealthIssue.NotReporting, string.Format(
-                "The site hasn't had a policy request from its client in {0} days or more. Read from the site, so offline devices count too", notReportingDays))
+                "The site hasn't had a policy request from its client in {0} or more. Read from the site, so offline devices count too", Count(notReportingDays, "day")))
                 .Fix = new TileFix("Request Policy", Named("Machine Policy Retrieval and Evaluation Cycle"));
-            AddIssueTile(HealthIssue.LongUptime, string.Format("Up {0} days or more since the last restart", longUptimeDays));
+            AddIssueTile(HealthIssue.LongUptime, string.Format("Up {0} or more since the last restart", Count(longUptimeDays, "day")));
             AddTile(HealthCheck.Name(HealthIssue.CouldNotCheck),
                 "Answered, but couldn't be checked (access denied, a WMI error), or one check couldn't be read: the Issues column says which", Tone.Bad,
                 row => row.State == RowState.Failed || row.Has(HealthIssue.CouldNotCheck));

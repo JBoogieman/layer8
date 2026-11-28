@@ -32,7 +32,9 @@
                  without DTDs, the hash and lock on driver packs, Dell's and HP's catalog signatures on the copies
                  their wizards keep (and that every Dell pack has a hash), the list copy and an empty error, and
                  the AD Cleanup Report's attribute list and every one of its tiles and matching rules on made-up
-                 computer objects and site records.
+                 computer objects and site records; and its fixes on made-up ones: which tile offers which, the
+                 objects no fix touches, the second read's rules, the questions and the typed count, AD's refusals
+                 in words, and protection from accidental deletion.
       Settings   Layer8 Settings at their defaults (HKCU\SOFTWARE\Layer8).
       Devices    That the SMS Provider reads names escaped the way Layer8 escapes them. Every member of the
                  collection, read from the same places the Health Dashboard reads: what each column should show,
@@ -44,11 +46,14 @@
                  Restart reads against Windows' own.
       ADCleanup  In 32-bit PowerShell, as the console runs: the AD Cleanup Report's reads of AD and the site and the
                  tile each computer object and device record gets, at Layer8 Settings' days and at 1 day, each
-                 checked against this script's own reading of AD and the site and its own copy of the rules.
+                 checked against this script's own reading of AD and the site and its own copy of the rules. Then
+                 its fixes' reads, all read-only: the domain controller, the site's servers, the Recycle Bin, the
+                 OUs a move can use, and each computer object read again as a fix reads it.
       Log       With -Since: the errors, warnings and slow steps Layer8 logged since then, each fix run from a
                  Health Dashboard tile (the right action for its tile, a restart on 50 devices at most and never on
-                 a server or this computer), and the last Health Dashboard run on the collection compared with the
-                 Devices section.
+                 a server or this computer), each AD Cleanup fix (the right fix for its tile, a delete on 50 at
+                 most, and each changed object looked up in AD now, read-only, to show what the log says), and the
+                 last Health Dashboard run on the collection compared with the Devices section.
       Changes    The files changed since the last commit that changed docs\STATUS.md (the last recorded run), and
                  the sections of docs\REGRESSION.md whose Files lines name them.
 
@@ -1244,6 +1249,178 @@ $libraryChecks = {
         else { Add-Check PASS 'AD Cleanup: every computer object and record once' "$($computers.Count) computer objects and $($records.Count) records, $(@($entries).Count) entries" }
         $servers = @($entries | Where-Object { $_.IsServer } | ForEach-Object { '{0}/{1}' -f $(if ($_.Record) { $_.Record.Name }), $(if ($_.Computer) { $_.Computer.Name }) } | Sort-Object)
         Test-Same 'AD Cleanup: servers by the operating system AD or the site has' '/SERVER1, SRVREC/' ($servers -join ', ')
+
+        # AD Cleanup fixes (1.1.3.30): which tile offers what, the objects no fix touches, the second read's rules,
+        # the questions' text and the typed count, AD's refusals in words, and protection from accidental deletion.
+        $findingType = $device.GetType('Layer8.Device.CleanupFinding', $true)
+        $fixType = $device.GetType('Layer8.Device.CleanupFix', $true)
+        $skipType = $device.GetType('Layer8.Device.CleanupSkip', $true)
+        $entryType = $device.GetType('Layer8.Device.CleanupEntry', $true)
+        $stateType = $device.GetType('Layer8.Device.ADObjectState', $true)
+        $deletedType = $device.GetType('Layer8.Device.DeletedObjects', $true)
+        function Get-Enum($Type, [string]$Name) { [Enum]::Parse($Type, $Name) }
+        $fixName = $cleanup.GetMethod('Name', $flags, $null, [Type[]]@($fixType), $null)
+        $fixesFor = Get-Method $cleanup 'FixesFor'
+        foreach ($finding in [Enum]::GetNames($findingType)) {
+            $expected = switch ($finding) { 'Stale' { 'Disable, Move to OU, Delete' } 'Disabled' { 'Enable, Move to OU, Delete' } default { '' } }
+            # A foreach, not the pipeline: ForEach-Object hands each value on wrapped, and reflection won't take the wrapper.
+            $offered = @(foreach ($each in $fixesFor.Invoke($null, [object[]]@((Get-Enum $findingType $finding)))) { $fixName.Invoke($null, [object[]]@($each)) }) -join ', '
+            Test-Same "AD Cleanup fixes: $finding offers $(if ($expected) { $expected } else { 'none' })" $expected $offered
+        }
+        Test-Same 'AD Cleanup fixes: the second read loads only these, none of them secret' 'name, sAMAccountName, distinguishedName, objectSid, userAccountControl, lastLogonTimestamp, pwdLastSet, whenCreated, operatingSystem, allowedAttributesEffective, nTSecurityDescriptor' (@($cleanup.GetField('StateAttributes', $flags).GetValue($null)) -join ', ')
+        Test-Same 'AD Cleanup fixes: Delete runs on 50 at most' '50' ([string]$cleanup.GetField('DeleteCap', $flags).GetValue($null))
+
+        $domainPath = 'DC=lab,DC=test'
+        $siteSystems = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        [void]$siteSystems.Add('CMSITE')
+        [void]$siteSystems.Add('DPACCOUNT')
+        $guard = Get-Method $cleanup 'Guard'
+        $guardCases = @(
+            @('a domain controller, by its flags (DC01''s 0x82000)', @{ Flags = 0x82000 }, 'DomainController'),
+            @('a read-only domain controller, by its flags', @{ Flags = 0x4001000 }, 'DomainController'),
+            @('anything in the Domain Controllers OU (AzureADKerberos)', @{ Name = 'AzureADKerberos'; Flags = 0x1000; DistinguishedName = "CN=AzureADKerberos,OU=Domain Controllers,$domainPath" }, 'DomainController'),
+            @('the console''s own computer', @{ Name = $env:COMPUTERNAME; AccountName = "$env:COMPUTERNAME$" }, 'ThisComputer'),
+            @('a site system, by name', @{ Name = 'CMSITE'; AccountName = 'CMSITE$' }, 'SiteSystem'),
+            @('a site system, by its account name', @{ Name = 'DP-RENAMED'; AccountName = 'DPACCOUNT$' }, 'SiteSystem'),
+            @('one with no SID', @{ Sid = $null }, 'NoSid'),
+            @('an ordinary workstation', @{ Flags = 0x1000 }, '')
+        )
+        foreach ($case in $guardCases) {
+            $computer = New-Computer 'PLAIN1' '2001' 200 $case[1]
+            Test-Same "AD Cleanup fixes: never touched: $($case[0])" $case[2] ([string]$guard.Invoke($null, [object[]]@($computer, $domainPath, $siteSystems)))
+        }
+
+        # The second read: an entry as the report saw it, and the object as AD has it now.
+        $checkMethod = Get-Method $cleanup 'Check'
+        $target = "OU=Disabled,OU=Old,$domainPath"
+        function New-Entry([string]$Finding, $Computer) { New-Fake $entryType @{ Computer = $Computer; Finding = (Get-Enum $findingType $Finding) } }
+        function New-State($Computer, [hashtable]$More = @{}) {
+            $values = @{ Computer = $Computer; MayWriteFlags = $true }
+            foreach ($key in $More.Keys) { $values[$key] = $More[$key] }
+            New-Fake $stateType $values
+        }
+        $staleNow = New-Computer 'STALEFIX' '2002' 200 @{ Flags = 0x1000; DistinguishedName = "CN=STALEFIX,OU=Old,$domainPath" }
+        $disabledNow = New-Computer 'OFFFIX' '2003' 200 @{ Flags = 0x1002; Disabled = $true; DistinguishedName = "CN=OFFFIX,OU=Old,$domainPath" }
+        $seenSince = New-Computer 'STALEFIX' '2002' 0.5 @{ Flags = 0x1000; DistinguishedName = "CN=STALEFIX,OU=Old,$domainPath" }
+        $disabledSince = New-Computer 'STALEFIX' '2002' 200 @{ Flags = 0x1002; Disabled = $true; DistinguishedName = "CN=STALEFIX,OU=Old,$domainPath" }
+        $inTarget = New-Computer 'STALEFIX' '2002' 200 @{ Flags = 0x1000; DistinguishedName = "CN=STALEFIX,$target" }
+        $checkCases = @(
+            @('gone from AD since', 'Disable', 'Stale', (New-State $null), 'Gone'),
+            @('signed in since: changed', 'Disable', 'Stale', (New-State $seenSince), 'Changed'),
+            @('disabled in ADUC since: changed', 'Disable', 'Stale', (New-State $disabledSince), 'Changed'),
+            @('Enable isn''t a Stale fix', 'Enable', 'Stale', (New-State $staleNow), 'Changed'),
+            @('Disable, allowed', 'Disable', 'Stale', (New-State $staleNow), ''),
+            @('Disable, not allowed to write userAccountControl', 'Disable', 'Stale', (New-State $staleNow @{ MayWriteFlags = $false }), 'NotAllowed'),
+            @('Enable, still disabled', 'Enable', 'Disabled', (New-State $disabledNow), ''),
+            @('Move, protected from accidental deletion', 'Move', 'Stale', (New-State $staleNow @{ Protected = $true }), 'Protected'),
+            @('Move, already in that OU', 'Move', 'Stale', (New-State $inTarget), 'AlreadyThere'),
+            @('Move, allowed', 'Move', 'Disabled', (New-State $disabledNow), ''),
+            @('Delete, a BitLocker recovery key under it', 'Delete', 'Stale', (New-State $staleNow @{ BitLockerKeys = 1; Children = 1 }), 'BitLockerKeys'),
+            @('Delete, protected', 'Delete', 'Disabled', (New-State $disabledNow @{ Protected = $true }), 'Protected'),
+            @('Delete, something else under it', 'Delete', 'Stale', (New-State $staleNow @{ Children = 2 }), ''),
+            @('a domain controller is never touched, even if read again', 'Disable', 'Stale', (New-State (New-Computer 'DCFIX' '2004' 200 @{ Flags = 0x82000 })), 'DomainController')
+        )
+        foreach ($case in $checkCases) {
+            $state = $case[3]
+            $original = $(if ($state.Computer) { $state.Computer } else { $staleNow })
+            $entry = New-Entry $case[2] $original
+            $got = [string]$checkMethod.Invoke($null, [object[]]@((Get-Enum $fixType $case[1]), $entry, $state, $target, $domainPath, $siteSystems, 90, $now))
+            Test-Same "AD Cleanup fixes: second read, $($case[0])" $case[4] $got
+        }
+
+        $skipText = Get-Method $cleanup 'SkipText'
+        Test-Same 'AD Cleanup fixes: one domain controller left out' '1 domain controller' $skipText.Invoke($null, [object[]]@((Get-Enum $skipType 'DomainController'), 1))
+        Test-Same 'AD Cleanup fixes: two domain controllers left out' '2 domain controllers' $skipText.Invoke($null, [object[]]@((Get-Enum $skipType 'DomainController'), 2))
+        Test-Same 'AD Cleanup fixes: one changed since' '1 changed since the report read it' $skipText.Invoke($null, [object[]]@((Get-Enum $skipType 'Changed'), 1))
+        $counts = [Activator]::CreateInstance([Collections.Generic.Dictionary`2].MakeGenericType($skipType, [int]))
+        $counts.Add((Get-Enum $skipType 'BitLockerKeys'), 2)
+        $counts.Add((Get-Enum $skipType 'DomainController'), 1)
+        $counts.Add((Get-Enum $skipType 'Gone'), 0)
+        Test-Same 'AD Cleanup fixes: left out, in the reasons'' order, none for a count of 0' '1 domain controller, 2 with BitLocker recovery keys in AD' (Get-Method $cleanup 'LeftOut').Invoke($null, [object[]]@($counts))
+        $countTyped = Get-Method $cleanup 'CountTyped'
+        Test-Same 'AD Cleanup fixes: Delete asks for the count even for one' 'True' ([string]$countTyped.Invoke($null, [object[]]@((Get-Enum $fixType 'Delete'), 1)))
+        Test-Same 'AD Cleanup fixes: Disable on one doesn''t' 'False' ([string]$countTyped.Invoke($null, [object[]]@((Get-Enum $fixType 'Disable'), 1)))
+        Test-Same 'AD Cleanup fixes: Move on two does' 'True' ([string]$countTyped.Invoke($null, [object[]]@((Get-Enum $fixType 'Move'), 2)))
+        $daysMethod = Get-Method $cleanup 'Days'
+        Test-Same 'AD Cleanup: 1 day, not 1 days' '1 day' $daysMethod.Invoke($null, [object[]]@(1))
+        Test-Same 'AD Cleanup: 90 days' '90 days' $daysMethod.Invoke($null, [object[]]@(90))
+        # The settings pages' log lines: every days setting can be 1 ("not seen in 1 days" was logged, November 27).
+        $utilityDays = Get-Method $utility 'Days'
+        Test-Same 'Settings pages: 1 day, not 1 days' '1 day' $utilityDays.Invoke($null, [object[]]@(1))
+        Test-Same 'Settings pages: 14 days, plain digits' '14 days' $utilityDays.Invoke($null, [object[]]@(14))
+        Test-Same 'Settings pages: 3650 days, no thousands separator' '3650 days' $utilityDays.Invoke($null, [object[]]@(3650))
+
+        $parentOf = Get-Method $cleanup 'ParentOf'
+        Test-Same 'AD Cleanup fixes: the OU above, past an escaped comma' "OU=Old,$domainPath" $parentOf.Invoke($null, [object[]]@("CN=Smith\, J,OU=Old,$domainPath"))
+        Test-Same 'AD Cleanup fixes: nothing above the top' $null $parentOf.Invoke($null, [object[]]@('DC=test'))
+        $displayPath = Get-Method $cleanup 'DisplayPath'
+        Test-Same 'AD Cleanup fixes: an OU''s path, top down' 'Layer8 Test / Disabled' $displayPath.Invoke($null, [object[]]@("OU=Disabled,OU=Layer8 Test,$domainPath", $domainPath))
+        Test-Same 'AD Cleanup fixes: the computers container''s path' 'Computers' $displayPath.Invoke($null, [object[]]@("CN=Computers,$domainPath", $domainPath))
+        Test-Same 'AD Cleanup fixes: escapes undone, \, and \2C' 'A,B / C,D' $displayPath.Invoke($null, [object[]]@("OU=C\2CD,OU=A\,B,$domainPath", $domainPath))
+
+        # The questions: twelve computer objects in two OUs, as a Move and as a Delete with the Recycle Bin off and on.
+        $twelve = New-FakeList $computerType @(foreach ($n in 1..12) { New-Computer ('PC{0:00}' -f $n) ('3{0:000}' -f $n) 200 @{ DistinguishedName = $(if ($n -le 9) { "CN=PC$n,CN=Computers,$domainPath" } else { "CN=PC$n,OU=Old,$domainPath" }) } })
+        $question = Get-Method $cleanup 'Question'
+        $off = New-Fake $deletedType @{ RecycleBin = $false; Days = 180 }
+        $on = New-Fake $deletedType @{ RecycleBin = $true; Days = 180 }
+        $deleteOff = $question.Invoke($null, [object[]]@((Get-Enum $fixType 'Delete'), 'Stale', 'LAB', $domainPath, $twelve, '1 domain controller', $null, $off, 'DC01.lab.test', 'LAB\tester'))
+        $deleteOn = $question.Invoke($null, [object[]]@((Get-Enum $fixType 'Delete'), 'Stale', 'LAB', $domainPath, $twelve, $null, $null, $on, 'DC01.lab.test', 'LAB\tester'))
+        $move = $question.Invoke($null, [object[]]@((Get-Enum $fixType 'Move'), 'Disabled', 'LAB', $domainPath, $twelve, $null, $target, $null, 'DC01.lab.test', 'LAB\tester'))
+        $questionCases = @(
+            @('Delete asks "for good"', $deleteOff, 'Delete 12 computer objects from LAB for good?'),
+            @('ten names, then how many more', $deleteOff, 'PC01, PC02, PC03, PC04, PC05, PC06, PC07, PC08, PC09, PC10 and 2 more'),
+            @('where they are, most first', $deleteOff, 'From: Computers (9), Old (3)'),
+            @('what''s left out', $deleteOff, 'Left out: 1 domain controller.'),
+            @('Recycle Bin off: no way back from Layer8, a stripped tombstone', $deleteOff, 'The AD Recycle Bin is off in LAB: Layer8 can''t undo this, and AD keeps only a tombstone, stripped of most attributes, for 180 days.'),
+            @('Recycle Bin on: AD can restore them', $deleteOn, 'The AD Recycle Bin is on: AD can restore them whole for 180 days (Restore-ADObject). Layer8 can''t undo this.'),
+            @('the domain controller and the account', $deleteOff, 'Writes to DC01.lab.test as LAB\tester.'),
+            @('Move names the OU by path and DN', $move, "Move 12 computer objects to Old / Disabled?`r`n$target"),
+            @('Move says how it''s undone', $move, 'Moving them back undoes it: Layer8''s log keeps where each one was.')
+        )
+        foreach ($case in $questionCases) {
+            if ([string]$case[1] -like "*$($case[2])*") { Add-Check PASS "AD Cleanup fixes: question: $($case[0])" ($case[2] -replace "`r`n", ' / ') }
+            else { Add-Check FAIL "AD Cleanup fixes: question: $($case[0])" "no '$($case[2])' in: $($case[1] -replace "`r`n", ' / ')" }
+        }
+        $one = New-FakeList $computerType @((New-Computer 'SOLO' '2009' 200))
+        $disableOne = $question.Invoke($null, [object[]]@((Get-Enum $fixType 'Disable'), 'Stale', 'LAB', $domainPath, $one, $null, $null, $null, 'DC01.lab.test', 'LAB\tester'))
+        Test-Same 'AD Cleanup fixes: question: Disable on one, by name, no list' "Disable SOLO in LAB (tile Stale)?`r`n`r`nA disabled computer can't sign in to the domain. Enable, on the Disabled tile, undoes it.`r`n`r`nWrites to DC01.lab.test as LAB\tester." $disableOne
+
+        $explain = Get-Method $cleanup 'Explain'
+        $unreachable = Get-Method $cleanup 'IsUnreachable'
+        function New-ComError([string]$Hex) { [Runtime.InteropServices.COMException]::new('from AD', [Convert]::ToInt32($Hex, 16)) }
+        $explainCases = @(
+            @('access denied', [UnauthorizedAccessException]::new('Access is denied.'), 'Disable', 'this account isn''t allowed to disable it'),
+            @('insufficient rights, as the directory says it', (New-ComError '80072098'), 'Delete', 'this account isn''t allowed to delete it'),
+            @('no such object', (New-ComError '80072030'), 'Move', 'it''s gone from AD'),
+            @('a name already in the OU', (New-ComError '80071392'), 'Move', 'that OU already has an object with its name'),
+            @('the domain controller down', (New-ComError '8007203A'), 'Enable', 'the domain controller didn''t answer'),
+            @('anything else, its own words', [InvalidOperationException]::new('The server is unwilling to process the request.'), 'Delete', 'The server is unwilling to process the request.')
+        )
+        foreach ($case in $explainCases) {
+            Test-Same "AD Cleanup fixes: AD's refusal in words: $($case[0])" $case[3] $explain.Invoke($null, [object[]]@($case[1], (Get-Enum $fixType $case[2])))
+        }
+        Test-Same 'AD Cleanup fixes: a domain controller that stops answering stops the run' 'True' ([string]$unreachable.Invoke($null, [object[]]@((New-ComError '8007203A'))))
+        Test-Same 'AD Cleanup fixes: access denied doesn''t stop it' 'False' ([string]$unreachable.Invoke($null, [object[]]@([UnauthorizedAccessException]::new('Access is denied.'))))
+
+        # Protected from accidental deletion: Everyone denied Delete and Delete subtree, as ADUC's box sets it.
+        $deniesDelete = Get-Method $cleanup 'DeniesDelete'
+        $everyone = New-Object Security.Principal.SecurityIdentifier([Security.Principal.WellKnownSidType]::WorldSid, $null)
+        $users = New-Object Security.Principal.SecurityIdentifier([Security.Principal.WellKnownSidType]::AuthenticatedUserSid, $null)
+        function Get-Descriptor($Sid, [string]$Rights, [string]$Type) {
+            $security = New-Object DirectoryServices.ActiveDirectorySecurity
+            if ($Sid) { $security.AddAccessRule((New-Object DirectoryServices.ActiveDirectoryAccessRule($Sid, [DirectoryServices.ActiveDirectoryRights]$Rights, [Security.AccessControl.AccessControlType]$Type))) }
+            $security.GetSecurityDescriptorBinaryForm()
+        }
+        $protectionCases = @(
+            @('Everyone denied Delete and Delete subtree: protected', (Get-Descriptor $everyone 'Delete, DeleteTree' 'Deny'), 'True'),
+            @('Everyone denied Write: not protected', (Get-Descriptor $everyone 'WriteProperty' 'Deny'), 'False'),
+            @('Authenticated Users denied Delete: not ADUC''s box', (Get-Descriptor $users 'Delete' 'Deny'), 'False'),
+            @('Everyone allowed Delete: not protected', (Get-Descriptor $everyone 'Delete' 'Allow'), 'False'),
+            @('no rules: not protected', (Get-Descriptor $null '' ''), 'False')
+        )
+        foreach ($case in $protectionCases) {
+            Test-Same "AD Cleanup fixes: $($case[0])" $case[2] ([string]$deniesDelete.Invoke($null, [object[]]@(, [byte[]]$case[1])))
+        }
 
         # Ctrl+C in a list, and a failure with no message.
         Add-Type -AssemblyName System.Windows.Forms
@@ -2480,7 +2657,8 @@ function Test-Tools {
 $cleanupChecks = {
     param([string]$BuildDir, [string]$ConsoleBin, [string]$Server, [int[]]$DaysList, [long]$NowTicks, [string]$ResolverSource)
     $ErrorActionPreference = 'Stop'
-    $answer = [pscustomobject]@{ Domain = $null; DomainPath = $null; Computers = @(); Records = @(); Obsolete = 0; Entries = @(); ADSeconds = 0; SiteSeconds = 0; Error = $null }
+    $answer = [pscustomobject]@{ Server = $null; Domain = $null; DomainPath = $null; Computers = @(); Records = @(); Obsolete = 0; Entries = @(); ADSeconds = 0; SiteSeconds = 0
+        SiteSystems = @(); RecycleBin = $null; DeletedDays = 0; Containers = @(); States = @(); StateSeconds = 0; Error = $null }
     function Get-Message($Exception) {
         while ($Exception.InnerException -and ($Exception -is [Management.Automation.MethodInvocationException] -or $Exception -is [Reflection.TargetInvocationException])) { $Exception = $Exception.InnerException }
         $Exception.Message
@@ -2495,11 +2673,13 @@ $cleanupChecks = {
         $cleanup = $device.GetType('Layer8.Device.ADCleanup', $true)
         $token = [Threading.CancellationToken]::None
         $watch = [Diagnostics.Stopwatch]::StartNew()
-        [object[]]$arguments = @($token, $null, $null)
+        # The server goes in empty, and comes back as the domain controller that answered.
+        [object[]]$arguments = @($null, $token, $null, $null)
         $computers = $cleanup.GetMethod('ReadComputers', $flags).Invoke($null, $arguments)
         $answer.ADSeconds = $watch.Elapsed.TotalSeconds
-        $answer.Domain = $arguments[1]
-        $answer.DomainPath = $arguments[2]
+        $answer.Server = $arguments[0]
+        $answer.Domain = $arguments[2]
+        $answer.DomainPath = $arguments[3]
 
         # The console's own connection to the SMS Provider, as the Tools section makes it.
         [void][Reflection.Assembly]::LoadFrom((Join-Path $ConsoleBin 'Microsoft.ConfigurationManagement.ManagementProvider.dll'))
@@ -2511,12 +2691,42 @@ $cleanupChecks = {
             # The connection itself: New-Object hands back PowerShell's wrapper, which reflection won't take.
             [object[]]$arguments = @($connection.PSObject.BaseObject, $token, 0)
             $records = $cleanup.GetMethod('ReadRecords', $flags).Invoke($null, $arguments)
+            $siteSystems = $cleanup.GetMethod('ReadSiteSystems', $flags).Invoke($null, [object[]]@($connection.PSObject.BaseObject))
             $answer.SiteSeconds = $watch.Elapsed.TotalSeconds
             $answer.Obsolete = $arguments[2]
+            $answer.SiteSystems = @($siteSystems | Sort-Object)
         }
         finally {
             if ($connection -is [IDisposable]) { $connection.Dispose() }
         }
+
+        # The fixes' reads, all read-only: what AD keeps of a deleted object, the OUs a move can use, and each
+        # computer object read again by its SID, as a fix reads it, with the guard's answer for it.
+        $deleted = $cleanup.GetMethod('ReadDeletedObjects', $flags).Invoke($null, [object[]]@($answer.Server))
+        $answer.RecycleBin = $deleted.RecycleBin
+        $answer.DeletedDays = $deleted.Days
+        $mayCreate = $cleanup.GetMethod('MayCreateComputers', $flags)
+        $answer.Containers = @(foreach ($container in $cleanup.GetMethod('ReadContainers', $flags).Invoke($null, [object[]]@($answer.Server, $answer.DomainPath, $token))) {
+            [pscustomobject]@{ DistinguishedName = $container.DistinguishedName; Path = $container.Path; MayCreate = [bool]$mayCreate.Invoke($null, [object[]]@($answer.Server, $container.DistinguishedName)) }
+        })
+        $readState = $cleanup.GetMethod('ReadState', $flags)
+        $guard = $cleanup.GetMethod('Guard', $flags)
+        $watch.Restart()
+        $answer.States = @(foreach ($computer in $computers) {
+            $state = $readState.Invoke($null, [object[]]@($answer.Server, $computer.Sid, $true))
+            [pscustomobject]@{
+                Sid           = $computer.Sid
+                Name          = $computer.Name
+                Found         = $null -ne $state.Computer
+                Flags         = $(if ($state.Computer) { $state.Computer.Flags })
+                Protected     = $state.Protected
+                Children      = $state.Children
+                BitLockerKeys = $state.BitLockerKeys
+                MayWriteFlags = $state.MayWriteFlags
+                Guard         = [string]$guard.Invoke($null, [object[]]@($computer, $answer.DomainPath, $siteSystems))
+            }
+        })
+        $answer.StateSeconds = $watch.Elapsed.TotalSeconds
 
         $answer.Computers = @(foreach ($computer in $computers) {
             [pscustomobject]@{ Name = $computer.Name; Sid = $computer.Sid; Disabled = $computer.Disabled; LastLogon = Format-Utc $computer.LastLogon; PasswordSet = Format-Utc $computer.PasswordSet; Created = Format-Utc $computer.Created }
@@ -2572,7 +2782,7 @@ function Test-ADCleanup {
     $domainPath = [string]([ADSI]'LDAP://RootDSE').defaultNamingContext
     $search = New-Object DirectoryServices.DirectorySearcher([ADSI]"LDAP://$domainPath", '(&(objectCategory=computer)(objectClass=computer))')
     $search.PageSize = 1000
-    foreach ($name in 'name', 'sAMAccountName', 'objectSid', 'userAccountControl', 'lastLogonTimestamp', 'pwdLastSet', 'whenCreated') { [void]$search.PropertiesToLoad.Add($name) }
+    foreach ($name in 'name', 'sAMAccountName', 'distinguishedName', 'objectSid', 'userAccountControl', 'lastLogonTimestamp', 'pwdLastSet', 'whenCreated') { [void]$search.PropertiesToLoad.Add($name) }
     $fromFileTime = {
         param($Result, [string]$Name)
         if ($Result.Properties[$Name].Count) {
@@ -2591,7 +2801,9 @@ function Test-ADCleanup {
         [pscustomobject]@{
             Name        = [string]$result.Properties['name'][0]
             Account     = [string]$result.Properties['samaccountname'][0]
+            Dn          = [string]$result.Properties['distinguishedname'][0]
             Sid         = (New-Object Security.Principal.SecurityIdentifier($result.Properties['objectsid'][0], 0)).Value
+            Flags       = [int]$result.Properties['useraccountcontrol'][0]
             Disabled    = [bool]([int]$result.Properties['useraccountcontrol'][0] -band 2)
             LastLogon   = $logon
             PasswordSet = $password
@@ -2691,6 +2903,102 @@ function Test-ADCleanup {
             else { Add-Result PASS $check "$($entry.Finding)$(if ($entry.Note) { " ($($entry.Note))" })" }
         }
     }
+
+    Test-ADFixReads $answer $mine $site $domainPath
+}
+
+# The fixes' reads (1.1.3.30), against this script's own, all read-only: the domain controller, the site's servers,
+# what AD keeps of a deleted object, the OUs a move can use and whether this account may create computers there, and
+# each computer object as a fix reads it again: protection, what's under it, the right to write userAccountControl,
+# and whether the guard leaves it alone (DC01 as a domain controller, CM01 as a site system, DEV01 as this computer).
+function Test-ADFixReads($Answer, $Mine, $Site, [string]$DomainPath) {
+    $server = $Answer.Server
+    $located = [string]([ADSI]'LDAP://RootDSE').dnsHostName
+    if ($server -eq $located) { Add-Result PASS 'Fixes: the domain controller' "$server, the one that answers this script too: every read and change in a report window goes to it" }
+    else { Add-Result INFO 'Fixes: the domain controller' "Layer8 got $server, this script ${located}: with several, either can answer first" }
+
+    $mySystems = @(Get-WmiObject -ComputerName $Site.Server -Namespace $Site.Namespace -Class SMS_SystemResourceList |
+        ForEach-Object { ([string]$_.ServerName).TrimStart('\').Split('.')[0] } | Where-Object { $_ } | Sort-Object -Unique)
+    if ((@($Answer.SiteSystems) -join ', ') -eq ($mySystems -join ', ')) { Add-Result PASS 'Fixes: the site''s servers, never touched' ($mySystems -join ', ') }
+    else { Add-Result FAIL 'Fixes: the site''s servers, never touched' "Layer8 read $(@($Answer.SiteSystems) -join ', '); the site has $($mySystems -join ', ')" }
+
+    $config = [string]([ADSI]"LDAP://$server/RootDSE").configurationNamingContext
+    $service = "CN=Directory Service,CN=Windows NT,CN=Services,$config"
+    $recycleBin = ([ADSI]"LDAP://$server/CN=Recycle Bin Feature,CN=Optional Features,$service").Properties['msDS-EnabledFeatureBL'].Count -gt 0
+    $directory = [ADSI]"LDAP://$server/$service"
+    $tombstone = 60
+    if ($directory.Properties['tombstoneLifetime'].Count) { $tombstone = [int]$directory.Properties['tombstoneLifetime'][0] }
+    $kept = $tombstone
+    if ($directory.Properties['msDS-deletedObjectLifetime'].Count) { $kept = [int]$directory.Properties['msDS-deletedObjectLifetime'][0] }
+    $days = $(if ($recycleBin) { $kept } else { $tombstone })
+    $said = "Recycle Bin $(if ($recycleBin) { 'on' } else { 'off' }), $days days"
+    if ([bool]$Answer.RecycleBin -eq $recycleBin -and [int]$Answer.DeletedDays -eq $days) { Add-Result PASS 'Fixes: what AD keeps of a deleted object' "$said, as Delete's question says it" }
+    else { Add-Result FAIL 'Fixes: what AD keeps of a deleted object' "Layer8 read Recycle Bin $($Answer.RecycleBin), $($Answer.DeletedDays) days; AD says $said" }
+
+    # The OUs, and the computers container found by its well-known GUID; the Domain Controllers OU and what's under it left out.
+    $wellKnown = { param([string]$Guid) [string]([ADSI]"LDAP://$server/<WKGUID=$Guid,$DomainPath>").distinguishedName }
+    $computersContainer = & $wellKnown 'AA312825768811D1ADED00C04FD8D5CD'
+    $controllers = & $wellKnown 'A361B2FFFFD211D1AA4B00C04FD7D83A'
+    $ouSearch = New-Object DirectoryServices.DirectorySearcher([ADSI]"LDAP://$server/$DomainPath", '(objectClass=organizationalUnit)', [string[]]@('distinguishedName'))
+    $ouSearch.PageSize = 1000
+    $found = $ouSearch.FindAll()
+    $myContainers = @(@($computersContainer) + @($found | ForEach-Object { [string]$_.Properties['distinguishedname'][0] }) |
+        Where-Object { $_ -and $_ -ne $controllers -and $_ -notlike "*,$controllers" } | Sort-Object -Unique)
+    $found.Dispose()
+    $theirs = @($Answer.Containers | ForEach-Object { $_.DistinguishedName } | Sort-Object -Unique)
+    if (($theirs -join '; ') -eq ($myContainers -join '; ')) { Add-Result PASS 'Fixes: the OUs Move to OU offers' "$($myContainers.Count): $(@($Answer.Containers | ForEach-Object { $_.Path }) -join ', '); not $controllers" }
+    else { Add-Result FAIL 'Fixes: the OUs Move to OU offers' "Layer8 offers $($theirs -join '; '); AD has $($myContainers -join '; ')" }
+    foreach ($container in $Answer.Containers) {
+        $entry = [ADSI]"LDAP://$server/$($container.DistinguishedName)"
+        $entry.RefreshCache([string[]]@('allowedChildClassesEffective'))
+        $may = @($entry.Properties['allowedChildClassesEffective']) -contains 'computer'
+        $label = "Fixes: may create computers in $($container.Path)"
+        if ([bool]$container.MayCreate -eq $may) { Add-Result PASS $label "$may, as AD says for this account" }
+        else { Add-Result FAIL $label "Layer8 says $($container.MayCreate); AD says $may" }
+    }
+
+    # Each computer object read again, as a fix does.
+    $everyone = New-Object Security.Principal.SecurityIdentifier([Security.Principal.WellKnownSidType]::WorldSid, $null)
+    $states = @{}
+    foreach ($state in $Answer.States) { $states[$state.Sid] = $state }
+    foreach ($computer in $Mine) {
+        $theirs = $states[$computer.Sid]
+        $label = "Fixes: second read of $($computer.Name)"
+        if (-not $theirs) { Add-Result FAIL $label "Layer8 didn't read it again"; continue }
+        $entry = [ADSI]"LDAP://$server/<SID=$($computer.Sid)>"
+        $entry.RefreshCache([string[]]@('allowedAttributesEffective'))
+        $mayWrite = @($entry.Properties['allowedAttributesEffective']) -contains 'userAccountControl'
+        $protected = @($entry.ObjectSecurity.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]) | Where-Object {
+            $_.AccessControlType -eq 'Deny' -and $_.IdentityReference -eq $everyone -and ($_.ActiveDirectoryRights -band ([DirectoryServices.ActiveDirectoryRights]'Delete, DeleteTree'))
+        }).Count -gt 0
+        $childSearch = New-Object DirectoryServices.DirectorySearcher($entry, '(objectClass=*)', [string[]]@('objectClass'), [DirectoryServices.SearchScope]::OneLevel)
+        $children = $childSearch.FindAll()
+        $under = $children.Count
+        $keys = @(foreach ($child in $children) { if (@($child.Properties['objectclass']) -contains 'msFVE-RecoveryInformation') { 1 } }).Count
+        $children.Dispose()
+        $guard = ''
+        if (($computer.Flags -band 0x2000) -or ($computer.Flags -band 0x4000000) -or $computer.Dn -like "*,OU=Domain Controllers,$DomainPath") { $guard = 'DomainController' }
+        elseif ($computer.Name -eq $env:COMPUTERNAME -or $computer.Account -eq "$env:COMPUTERNAME$") { $guard = 'ThisComputer' }
+        elseif ($mySystems -contains $computer.Name -or $mySystems -contains ($computer.Account -replace '\$$', '')) { $guard = 'SiteSystem' }
+
+        $differ = @()
+        if (-not $theirs.Found) { $differ += 'Layer8 found nothing by its SID' }
+        if ([bool]$theirs.Protected -ne $protected) { $differ += "protected: Layer8 $($theirs.Protected), AD $protected" }
+        if ([int]$theirs.Children -ne $under) { $differ += "objects under it: Layer8 $($theirs.Children), AD $under" }
+        if ([int]$theirs.BitLockerKeys -ne $keys) { $differ += "BitLocker recovery objects: Layer8 $($theirs.BitLockerKeys), AD $keys" }
+        if ([bool]$theirs.MayWriteFlags -ne $mayWrite) { $differ += "may write userAccountControl: Layer8 $($theirs.MayWriteFlags), AD $mayWrite" }
+        if ([int]$theirs.Flags -ne $computer.Flags) { $differ += ("userAccountControl: Layer8 0x{0:X}, AD 0x{1:X}" -f [int]$theirs.Flags, $computer.Flags) }
+        if ($theirs.Guard -ne $guard) { $differ += "left alone as: Layer8 '$($theirs.Guard)', this script '$guard'" }
+        if ($differ) { Add-Result FAIL $label ($differ -join '; ') }
+        else {
+            $what = @($(if ($guard) { "never touched ($guard)" } else { 'a fix may touch it' }),
+                "$under under it$(if ($keys) { " ($keys BitLocker)" })",
+                $(if ($protected) { 'protected' } else { 'not protected' }),
+                $(if ($mayWrite) { 'may write userAccountControl' } else { 'may not write userAccountControl' }))
+            Add-Result PASS $label ($what -join ', ')
+        }
+    }
+    if (@($Answer.States).Count) { Add-Result INFO 'Fixes: time to read each one again' ("{0:0} ms each, {1} computer objects" -f (1000 * $Answer.StateSeconds / @($Answer.States).Count), @($Answer.States).Count) }
 }
 
 # --- Log ------------------------------------------------------------------------------------------------------------------
@@ -2738,6 +3046,71 @@ function Test-TileFixes($Entries) {
     }
 }
 
+# The AD Cleanup Report's fixes since -Since, from their log lines (ADCleanupDialog.RunLine and ChangeLine):
+#   AD Cleanup Report: tile <tile>: <fix> on <name, or N computer objects>[ to <OU>][ (left out: ...)][: <outcome>]
+#   AD Cleanup Report: <disabled|enabled|moved|deleted> <DN> (<SID>)[ to <OU>][, with N object(s) under it,] on <DC> by <user>
+# Each run is checked against its tile's fixes and Delete's cap. Each changed object is looked up in AD now, by its SID
+# and read-only: the last change logged for it is what AD should show.
+$adFixes = @{ 'Stale' = @('Disable', 'Move to OU', 'Delete'); 'Disabled' = @('Enable', 'Move to OU', 'Delete') }
+$deleteCap = 50
+function Test-ADFixes($Entries) {
+    $runPattern = '^AD Cleanup Report: tile (?<tile>.+?): (?<fix>Disable|Enable|Move to OU|Delete) on (?<target>.+?)(?: to (?<to>(?:OU|CN)=.+?))?(?: \(left out: (?<left>.+?)\))?(?:: (?<outcome>[^()]+))?$'
+    $changePattern = '^AD Cleanup Report: (?<done>disabled|enabled|moved|deleted) (?<dn>.+?) \((?<sid>S-1-[0-9-]+)\)(?: to (?<to>.+?))?(?:, with (?<under>\d+) objects? under it,)? on (?<server>\S+) by (?<user>.+)$'
+    $runs = @($Entries | Where-Object { $_.Text -match $runPattern })
+    $changes = @($Entries | Where-Object { $_.Text -match $changePattern })
+    if (-not $runs -and -not $changes) { Add-Result INFO 'AD Cleanup fixes' 'none logged: section R''s fix steps weren''t run'; return }
+    foreach ($run in $runs) {
+        $null = $run.Text -match $runPattern
+        $tile = $Matches.tile; $fix = $Matches.fix; $target = $Matches.target; $to = $Matches.to; $left = $Matches.left; $outcome = $Matches.outcome
+        $label = "AD fix at {0:T}" -f $run.Time
+        $detail = "$tile`: $fix on $target$(if ($to) { " to $to" })$(if ($left) { " (left out: $left)" }): $(if ($outcome) { $outcome } else { 'asked, and went ahead' })"
+        $count = 1
+        if ($target -match '^([0-9,]+) computer objects$') { $count = [int]($Matches[1] -replace ',', '') }
+        if (-not $adFixes.ContainsKey($tile)) { Add-Result FAIL $label "'$tile' has no fixes: $($run.Text)" }
+        elseif ($adFixes[$tile] -notcontains $fix) { Add-Result FAIL $label "$fix isn't a fix on $tile ($($adFixes[$tile] -join ', '))" }
+        elseif ($fix -eq 'Delete' -and $count -gt $deleteCap -and $outcome -notmatch '^more than \d+, not run$') { Add-Result FAIL $label "Delete went ahead on $count, over $deleteCap" }
+        else { Add-Result PASS $label $detail }
+    }
+    foreach ($entry in $Entries | Where-Object { $_.Text -match '^AD Cleanup Report: left .+ alone: ' }) { Add-Result INFO ("AD fix left one alone at {0:T}" -f $entry.Time) $entry.Text }
+
+    $last = @{}
+    foreach ($change in $changes) {
+        $null = $change.Text -match $changePattern
+        $item = [pscustomobject]@{ Time = $change.Time; Done = $Matches.done; Dn = $Matches.dn; Sid = $Matches.sid; To = $Matches.to; Server = $Matches.server }
+        $name = $item.Dn -replace '^CN=((?:[^,\\]|\\.)*),.*$', '$1'
+        if ($item.Dn -like '*,OU=Domain Controllers,*' -or $name -eq $env:COMPUTERNAME) { Add-Result FAIL ("AD change at {0:T}" -f $item.Time) "$($item.Done) $($item.Dn): a fix must never touch it" }
+        $last[$item.Sid] = $item
+    }
+    $noSuchObject = [Convert]::ToInt32('80072030', 16)
+    foreach ($item in $last.Values | Sort-Object Time) {
+        $label = "AD now, after $($item.Done) at {0:T}" -f $item.Time
+        $entry = [ADSI]"LDAP://$($item.Server)/<SID=$($item.Sid)>"
+        $exists = $true
+        $why = $null
+        try { $entry.RefreshCache([string[]]@('distinguishedName', 'userAccountControl')) }
+        catch {
+            $exists = $false
+            $failure = $_.Exception
+            while ($failure.InnerException) { $failure = $failure.InnerException }
+            if ($failure.HResult -ne $noSuchObject) { $why = $failure.Message }
+        }
+        if ($why) { Add-Result FAIL $label "couldn't read $($item.Sid) from $($item.Server): $why"; continue }
+        $dn = $(if ($exists) { [string]$entry.Properties['distinguishedName'].Value })
+        $disabled = $exists -and ([int]$entry.Properties['userAccountControl'].Value -band 2)
+        switch ($item.Done) {
+            'deleted' { if ($exists) { Add-Result FAIL $label "logged as deleted, but AD still has it at $dn" } else { Add-Result PASS $label "$($item.Dn): gone from AD, as logged" } }
+            'disabled' { if (-not $exists) { Add-Result FAIL $label "$($item.Dn) is gone from AD" } elseif ($disabled) { Add-Result PASS $label "$dn is disabled" } else { Add-Result FAIL $label "$dn is enabled: changed by hand since?" } }
+            'enabled' { if (-not $exists) { Add-Result FAIL $label "$($item.Dn) is gone from AD" } elseif (-not $disabled) { Add-Result PASS $label "$dn is enabled" } else { Add-Result FAIL $label "$dn is disabled: changed by hand since?" } }
+            'moved' {
+                $parent = $(if ($dn) { $dn -replace '^(?:[^,\\]|\\.)*,', '' })
+                if (-not $exists) { Add-Result FAIL $label "$($item.Dn) is gone from AD" }
+                elseif ($parent -eq $item.To) { Add-Result PASS $label "$dn, in $($item.To) as logged (it was $($item.Dn))" }
+                else { Add-Result FAIL $label "$dn isn't in $($item.To)" }
+            }
+        }
+    }
+}
+
 function Test-Log {
     $entries = @(Get-LogEntries | Where-Object { $_.Time -ge $Since })
     Add-Result INFO 'Entries' ("{0} since {1:g}, in {2}" -f $entries.Count, $Since, $logFolder)
@@ -2777,6 +3150,7 @@ function Test-Log {
     foreach ($entry in $entries | Where-Object { $_.Text -like '*settings saved*' }) { Add-Result INFO ("Settings saved at {0:T}" -f $entry.Time) $entry.Text }
 
     Test-TileFixes $entries
+    Test-ADFixes $entries
 
     # The last Health Dashboard run on the collection: every build runs one, and the Devices section says what it should find.
     $scope = [regex]::Escape("Health Dashboard on $Collection")
@@ -2804,8 +3178,10 @@ function Test-Log {
     # The Devices section reads with the current settings. A run made with others (a threshold being tested, not yet
     # set back) can't match it, so say so before the mismatches. HealthDashboardOptionsControl logs every save this way.
     $current = $script:expected.Settings
-    $currentText = 'Health Dashboard settings saved: low disk under {0} GB; long uptime {1} days or more; not reporting after {2} days; blue screens in the last {3} days; not scanning after {4} days; Windows older than build {5}' -f
-        $current.LowDiskGB, $current.LongUptimeDays, $current.NotReportingDays, $current.BlueScreenDays, $current.NotScanningDays, $current.WindowsBuildText
+    # Utility.Days's wording: "1 day", "14 days".
+    $dayText = { param($n) if ([int]$n -eq 1) { '1 day' } else { "$n days" } }
+    $currentText = 'Health Dashboard settings saved: low disk under {0} GB; long uptime {1} or more; not reporting after {2}; blue screens in the last {3}; not scanning after {4}; Windows older than build {5}' -f
+        $current.LowDiskGB, (& $dayText $current.LongUptimeDays), (& $dayText $current.NotReportingDays), (& $dayText $current.BlueScreenDays), (& $dayText $current.NotScanningDays), $current.WindowsBuildText
     $usedLine = Get-LogEntries | Where-Object { $_.Text -like 'Health Dashboard settings saved:*' -and $_.Time -le $entries[$startIndex].Time } | Select-Object -Last 1
     if ($usedLine -and $usedLine.Text -ne $currentText) {
         Add-Result WARN 'Settings the run used' ("other than the current ones, saved {0:T}: {1}. Run the dashboard again at the current settings" -f $usedLine.Time, $usedLine.Text.Substring('Health Dashboard settings saved: '.Length))

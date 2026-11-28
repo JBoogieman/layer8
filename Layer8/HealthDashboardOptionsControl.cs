@@ -159,8 +159,9 @@ namespace Layer8
                 return false;
             }
 
-            log.InfoFormat("Health Dashboard settings saved: low disk under {0} GB; long uptime {1} days or more; not reporting after {2} days; blue screens in the last {3} days; not scanning after {4} days; Windows older than build {5}",
-                (int)numericLowDiskGB.Value, (int)numericLongUptimeDays.Value, (int)numericNotReportingDays.Value, (int)numericBlueScreenDays.Value, (int)numericNotScanningDays.Value, textWindowsBuild.Text.Trim());
+            log.InfoFormat("Health Dashboard settings saved: low disk under {0} GB; long uptime {1} or more; not reporting after {2}; blue screens in the last {3}; not scanning after {4}; Windows older than build {5}",
+                (int)numericLowDiskGB.Value, Utility.Days((int)numericLongUptimeDays.Value), Utility.Days((int)numericNotReportingDays.Value),
+                Utility.Days((int)numericBlueScreenDays.Value), Utility.Days((int)numericNotScanningDays.Value), textWindowsBuild.Text.Trim());
 
             Dirty = false;
 
