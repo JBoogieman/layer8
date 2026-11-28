@@ -24,6 +24,13 @@ namespace Layer8
         public const double BytesPerMegabyte = 1024 * 1024;
 
         /// <summary>
+        /// A number of days as the settings pages' log lines say it: "1 day", "90 days". Every days setting can be 1,
+        /// and the AD Cleanup Report's page logged "not seen in 1 days" (November 27, 2026). Plain digits, as those
+        /// lines always wrote them.
+        /// </summary>
+        public static string Days(int days) => days + (days == 1 ? " day" : " days");
+
+        /// <summary>
         /// A size the way the console shows sizes: 1024-based, in the largest unit the value is at least 1 of,
         /// with up to two decimals by default ("109.56 MB", "5 GB").
         /// </summary>

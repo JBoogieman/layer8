@@ -100,7 +100,7 @@ namespace Layer8
                 return false;
             }
 
-            log.InfoFormat("AD Cleanup Report settings saved: not seen in {0} days", (int)numericNotSeenDays.Value);
+            log.InfoFormat("AD Cleanup Report settings saved: not seen in {0}", Utility.Days((int)numericNotSeenDays.Value));
 
             Dirty = false;
 

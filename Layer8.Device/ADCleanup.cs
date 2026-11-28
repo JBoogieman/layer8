@@ -351,6 +351,9 @@ namespace Layer8.Device
             }
         }
 
+        /// <summary>A number of days the way the tiles, the status line and the log say it: "1 day", "90 days".</summary>
+        internal static string Days(int days) => days.ToString("N0") + (days == 1 ? " day" : " days");
+
         /// <summary>The name each tile and the grid's Finding column use.</summary>
         internal static string Name(CleanupFinding finding)
         {

@@ -89,18 +89,19 @@ namespace Layer8.Device
             };
             allTile = AddTile("Computers", "Every computer object in the domain and every device record on the site, matched where they're the same computer. Click to show them all", Tone.Neutral, row => true);
             allTile.Selected = true;
-            AddTile(CleanupFinding.OK, Tone.Good, string.Format("In AD and on the site, seen by both in the last {0} days", days));
+            string inDays = ADCleanup.Days(days);
+            AddTile(CleanupFinding.OK, Tone.Good, string.Format("In AD and on the site, seen by both in the last {0}", inDays));
             AddTile(CleanupFinding.NotInAD, Tone.Warn,
                 "A device record from this domain whose computer object is gone from AD. The site keeps a record until its Delete Aged Discovery Data task removes it");
             AddTile(CleanupFinding.Disabled, Tone.Warn, "The computer object is disabled in AD");
             AddTile(CleanupFinding.Stale, Tone.Warn, string.Format(
-                "Enabled, but AD hasn't seen the computer in {0} days or more (its last logon or password change), and no client has been heard from in that time either", days));
+                "Enabled, but AD hasn't seen the computer in {0} or more (its last logon or password change), and no client has been heard from in that time either", inDays));
             AddTile(CleanupFinding.ADUnused, Tone.Warn, string.Format(
-                "Its client still reports, but AD hasn't seen the computer's account in {0} days or more: a broken trust relationship, or a computer renamed or joined again under another account", days));
+                "Its client still reports, but AD hasn't seen the computer's account in {0} or more: a broken trust relationship, or a computer renamed or joined again under another account", inDays));
             AddTile(CleanupFinding.ClientSilent, Tone.Warn, string.Format(
-                "Seen by AD in the last {0} days, but the site hasn't heard from its client in {0} days or more", days));
+                "Seen by AD in the last {0}, but the site hasn't heard from its client in {0} or more", inDays));
             AddTile(CleanupFinding.NoClient, Tone.Warn, string.Format(
-                "Seen by AD in the last {0} days, with no ConfigMgr client: the site has no record of it, or its record has no client", days));
+                "Seen by AD in the last {0}, with no ConfigMgr client: the site has no record of it, or its record has no client", inDays));
             AddTile(CleanupFinding.NotChecked, Tone.Muted,
                 "Site records from another domain or a workgroup (only this domain is read), and records two computer objects could be: the Notes column says which");
 
@@ -280,12 +281,12 @@ namespace Layer8.Device
             CountTiles();
             ApplyFilter();
             string elapsed = took.ToString(took.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss");
-            status.Text = string.Format("{0:N0} computer objects in {1} and {2:N0} device records on the site, read in {3}. Not seen in {4} days counts (Layer8 Settings).{5}",
-                read.Computers.Count, read.Domain, read.Records.Count, elapsed, days,
+            status.Text = string.Format("{0:N0} computer objects in {1} and {2:N0} device records on the site, read in {3}. Not seen in {4} counts (Layer8 Settings).{5}",
+                read.Computers.Count, read.Domain, read.Records.Count, elapsed, ADCleanup.Days(days),
                 read.Obsolete > 0 ? string.Format(" {0:N0} obsolete records left out.", read.Obsolete) : string.Empty);
             tips.SetToolTip(status, status.Text + "\n\nSearched " + read.DomainPath);
-            log.InfoFormat("{0}: {1} computer objects in {2}, {3} device records ({4} obsolete left out), not seen in {5} days; {6}",
-                title, read.Computers.Count, read.Domain, read.Records.Count, read.Obsolete, days,
+            log.InfoFormat("{0}: {1} computer objects in {2}, {3} device records ({4} obsolete left out), not seen in {5}; {6}",
+                title, read.Computers.Count, read.Domain, read.Records.Count, read.Obsolete, ADCleanup.Days(days),
                 string.Join(", ", tiles.Where(tile => tile != allTile).Select(tile => tile.Caption + " " + rows.Count(tile.Match))));
         }
 
