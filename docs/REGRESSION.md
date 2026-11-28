@@ -25,6 +25,8 @@ Written for the lab STATUS.md describes: a site server, the client the console r
    - [ ] It finishes in seconds and skips the placeholder records by name.
    - [ ] The tiles, and each device's Issues, are what the script's Devices section lists.
    - [ ] The Windows, Client, BitLocker, Blue screen and C: free columns read what the script lists. Up and Policy request move on with the clock.
+
+   `tools\Test-Layer8Console.ps1` can run this step, and section R's, in the console that's open: it presses what you'd click, reads each window as text through UI Automation and compares it with the script's report. Run it in 32-bit PowerShell between the script's two runs, hands off the keyboard and mouse. It never changes anything; with `-WithFixes` it runs R's fix steps too, and stops at each Yes, typed count and Move to OU list for you.
 5. Run the script again with the time the first run printed:
 
    ```powershell
@@ -295,7 +297,11 @@ Files: `Layer8.Device/ResultClientHealthControl*`, `Layer8/IncrementalCollection
 
 Files: `Layer8.Device/ADCleanup*`, `Layer8.Device/Tile.cs`, `Layer8/ADCleanupOptionsControl.cs`, `Extensions/Actions/*/Layer8Collections.xml`
 
-It only reads: one search of AD and two of the site, and no device is contacted. Every build, the script's Library section puts made-up computer objects and records through every tile and matching rule, and its ADCleanup section checks what the report reads and the tile each lab computer gets, at Layer8 Settings' days and at 1 day, against its own reading.
+The report reads: one search of AD and three of the site, and no device is contacted. Only its Fix button changes anything, and only in AD: Disable, Enable, Move to OU and Delete, on the Stale and Disabled tiles, for the selected rows, after a question. Every build, the script's Library section puts made-up computer objects and records through every tile and matching rule, and through every fix rule (which tile offers which, the objects no fix touches, the second read, the questions, AD's refusals in words, protection from accidental deletion). Its ADCleanup section checks what the report reads and the tile each lab computer gets, at Layer8 Settings' days and at 1 day, and what a fix reads before it changes anything, against its own reading. With `-Since`, the Log section checks each fix the log shows and looks each changed object up in AD, read-only.
+
+The fix steps need test objects, yours to make and to delete after: OU=Layer8 Test with OU=Disabled inside it, L8-TEST-STALE1, -STALE2 and -DUP (enabled) and L8-TEST-OFF and -PROT (disabled, PROT protected from accidental deletion) in Layer8 Test, and a second L8-TEST-DUP (account name L8-TEST-DUP2$, disabled) in Disabled. A new object counts as seen on the day it's made, so the Stale steps work from the next day, at 1 day.
+
+The console runner (`tools\Test-Layer8Console.ps1`) runs the steps below that only read. With `-WithFixes` it runs the fix steps as well (`-FixTile Disabled` or `Stale` for one tile's), selecting the rows and reading AD by SID before and after; each Yes, count and Move to OU list is yours.
 
 - [ ] **Opening it:** right-click All Systems > Layer8 > AD Cleanup Report, and again from Layer8 Dev and from the ribbon: the same report each time, since it covers the whole domain and site.
 - [ ] **Tiles:** each computer is on the tile the script's ADCleanup section lists at 90 days (in the lab, DC01 and CM01 on No client, DEV01 and DEV02 on OK).
@@ -305,10 +311,26 @@ It only reads: one search of AD and two of the site, and no device is contacted.
 - [ ] **Workstations only:** DC01 and CM01 drop out of the grid and the tiles' counts, and come back when it's unticked.
 - [ ] **Rows:** hovering a row shows its Notes ("Matched by name: the site's record has no SID" on CM01). Last seen in AD, Last logon and Client last heard from sort by date both ways, Resource ID by number.
 - [ ] **The status line:** the number of computer objects and records, the domain, the read time and the days; hovering it adds where the search started.
-- [ ] **Layer8 Settings at 1 day:** the next report has DC01 and CM01 on Stale and DEV01 and DEV02 on AD unused, as the script's "At 1 day" lines say. Set back to 90.
+- [ ] **Layer8 Settings at 1 day:** the next report has DC01 and CM01 on Stale and DEV01 and DEV02 on AD unused, as the script's "At 1 day" lines say, and the tiles' rules on hover say "1 day", not "1 days". Set back to 90.
 - [ ] **Copy and Export:** the shown rows in their sort order; the file is UTF-8 with a byte order mark.
 - [ ] **Changes something (AD), yours to make and to delete after:** a disabled computer object and a new one that's never been used. The next report has the first on Disabled and the second on No client ("The site has no record of it"), and the script's ADCleanup section agrees.
 - [ ] **The log:** one line per report with the counts and each tile's number. At Debug, the AD read and the site read with their times; either one over 10 seconds is logged at any level.
+- [ ] **The Fix button:** on Stale and Disabled only. It reads Fix (0)... until rows are selected and counts the selected ones it could run on. Clicking it with none selected says to select some. On any other tile, and on Computers, there's no Fix button.
+- [ ] **Never touched:** at 1 day, select DC01 and CM01 on Stale: Fix says none of them can take a fix, "1 domain controller, 1 with a site system role". Set back to 90. DC01 is on Stale at 1 day only while its last logon in AD is over a day old: AD moves it every 9 to 14 days, and on the other days DC01 is on No client, which has no Fix button.
+- [ ] **Move to OU, three ways at once (Changes something, AD):** on Disabled, select L8-TEST-OFF, L8-TEST-PROT and the L8-TEST-DUP in OU=Disabled, then Fix > Move to OU.
+  - The list has Computers, Layer8 Test and Layer8 Test / Disabled, and no Domain Controllers.
+  - Pick Layer8 Test. The question leaves out 1 already in that OU (OFF) and 1 protected from accidental deletion (PROT), names L8-TEST-DUP, and says it writes to DC01 as you.
+  - Yes. The summary says it couldn't move L8-TEST-DUP: "that OU already has an object with its name". The log has it as a warning.
+- [ ] **Move to OU (Changes something, AD):** select L8-TEST-OFF and L8-TEST-PROT, Move to OU, Layer8 Test / Disabled. PROT is left out, so it moves OFF alone, without the count to type. The report reads again and OFF's location is OU=Disabled. Layer8 Settings' AD Cleanup Report page now offers that OU first.
+- [ ] **Enable (Changes something, AD):** select L8-TEST-OFF, Fix > Enable, Yes. It leaves Disabled for No client.
+- [ ] **Delete, and its question (Changes something, AD):** on Disabled, select L8-TEST-PROT and the L8-TEST-DUP in OU=Disabled, Fix > Delete.
+  - The question leaves out PROT as protected, and says the AD Recycle Bin is off in LAB and AD keeps only a stripped tombstone for 180 days.
+  - Answer No first: nothing changes, and the log says canceled at the question.
+  - Again, Yes, then type 2: "That wasn't 1", nothing deleted.
+  - Again, Yes, type 1: deleted. The report reads again without it.
+- [ ] **Disable, from the next day (Changes something, AD):** at 1 day, select L8-TEST-STALE1 and L8-TEST-STALE2 on Stale, Fix > Disable, Yes, type 2. Both land on Disabled.
+- [ ] **Delete two, from the next day (Changes something, AD):** select both on Disabled, Fix > Delete, Yes, type 2. Then set the days back to 90.
+- [ ] **The log, with -Since:** the Log section lists each fix and passes each changed object against AD now. The test objects left over are yours to delete with the OU.
 
 ### S. Security scans
 
@@ -339,9 +361,9 @@ Everything else is built on these, so a change here can touch any section.
 
 ### W. Version, docs and the regression tools
 
-Files: `SharedAssemblyInfo.cs`, `docs/*`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `LICENSE`, `.github/*`, `*.gitignore`, `*.gitattributes`, `Extensions.Dev/*`, `tools/Test-Layer8Regression.ps1`, `tools/New-Layer8LabTestData.ps1`, `tools/New-Layer8ScaleRecords.ps1`, `tools/Prepare-Layer8LabClient.ps1`
+Files: `SharedAssemblyInfo.cs`, `docs/*`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `LICENSE`, `.github/*`, `*.gitignore`, `*.gitattributes`, `Extensions.Dev/*`, `tools/Test-Layer8Regression.ps1`, `tools/Test-Layer8Console.ps1`, `tools/Layer8Uia.cs`, `tools/New-Layer8LabTestData.ps1`, `tools/New-Layer8ScaleRecords.ps1`, `tools/Prepare-Layer8LabClient.ps1`
 
-Nothing beyond the every-build steps.
+Nothing beyond the every-build steps. When the console runner changes (`Test-Layer8Console.ps1`, `Layer8Uia.cs`), run it once without `-WithFixes`, and with it too when its fix steps changed.
 
 ## Before tagging a release
 
