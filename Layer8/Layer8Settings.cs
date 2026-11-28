@@ -71,6 +71,7 @@ namespace Layer8
         private const string NotScanningDaysValue = "NotScanningDays";
         private const string WindowsBuildValue = "WindowsBuild";
         private const string ADNotSeenDaysValue = "ADNotSeenDays";
+        private const string ADMoveToValue = "ADMoveTo";
 
         /// <summary>How many devices an action on many devices contacts at the same time.</summary>
         public static int DevicesAtOnce
@@ -153,6 +154,27 @@ namespace Layer8
         {
             get { return ReadInt(ADNotSeenDaysValue, DefaultADNotSeenDays, MinADNotSeenDays, MaxADNotSeenDays); }
             set { WriteInt(ADNotSeenDaysValue, Clamp(value, MinADNotSeenDays, MaxADNotSeenDays)); }
+        }
+
+        /// <summary>
+        /// AD Cleanup Report: the OU (a distinguished name) its Move to OU offers first: the last one a move used, or
+        /// one typed on the settings page. Null when there's none. Only a starting point: every move asks.
+        /// </summary>
+        public static string ADMoveTo
+        {
+            get
+            {
+                string text = (ReadValue(ADMoveToValue) as string)?.Trim();
+                return string.IsNullOrEmpty(text) ? null : text;
+            }
+            set
+            {
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(Layer8Log.RegistryKeyPath))
+                {
+                    if (string.IsNullOrWhiteSpace(value)) key.DeleteValue(ADMoveToValue, false);
+                    else key.SetValue(ADMoveToValue, value.Trim(), RegistryValueKind.String);
+                }
+            }
         }
 
         /// <summary>

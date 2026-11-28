@@ -110,6 +110,9 @@
     <Compile Include="ADCleanupDialog.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="ADCleanupOUDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="SystemInfo.cs" />
     <Compile Include="WindowsSecurity.cs" />
     <Compile Include="Device.cs" />
